@@ -1,0 +1,28 @@
+# Network Environment Configuration
+network_environment = "mainnet" # or testnet
+
+# AWS Configuration
+aws_region = "eu-west-1"
+
+# S3 Bucket Configuration
+bucket_prefix   = "coprocessor-bucket"
+
+# Kubernetes Configuration
+cluster_name         = "zws-dev"
+
+# IRSA Configuration (recommended for production)
+create_irsa = true
+
+# Tagging
+owner           = "coprocessor-team"
+additional_tags = {
+  "Project"     = "coprocessor-infrastructure"
+  "Team"        = "security"
+  "Cost-Center" = "engineering"
+}
+
+# RDS Configuration
+enable_rds              = true
+rds_db_name             = "coprocessor"
+rds_username            = "coprocessor"
+rds_deletion_protection = false # Allow deletion of RDS instance
