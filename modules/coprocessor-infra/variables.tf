@@ -72,13 +72,6 @@ variable "service_account_annotations" {
   default     = {}
 }
 
-# IRSA Configuration
-variable "create_irsa" {
-  type        = bool
-  description = "Whether to create IRSA (IAM Roles for Service Accounts) role for secure AWS access"
-  default     = true
-}
-
 variable "coprocessor_role_name" {
   type        = string
   description = "The name of the IAM role for the coprocessor"

@@ -1,10 +1,6 @@
 # ***************************************
 #  Data sources
 # ***************************************
-data "aws_caller_identity" "current" {}
-
-data "aws_region" "current" {}
-
 data "aws_eks_cluster" "cluster" {
   name = var.cluster_name
 }
@@ -30,8 +26,6 @@ locals {
     for subnet_id, subnet in data.aws_subnet.cluster_subnets : subnet.cidr_block
     if subnet.map_public_ip_on_launch == false
   ]
-  region = data.aws_region.current.name
-  account_id = data.aws_caller_identity.current.account_id
   coprocessor_bucket_name = "${var.bucket_prefix}-${random_id.coprocessor_suffix.hex}"
 }
 
@@ -156,7 +150,7 @@ resource "aws_iam_policy" "coprocessor_aws" {
 
 
 module "iam_assumable_role_coprocessor" {
-  source                        = "terraform-aws-modules/iam/aws/modules/iam-assumable-role-with-oidc"
+  source                        = "terraform-aws-modules/iam/aws//modules/iam-assumable-role-with-oidc"
   version                       = "5.48.0"
   provider_url                  = data.aws_eks_cluster.cluster.identity[0].oidc[0].issuer
   create_role                   = true
