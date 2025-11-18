@@ -92,5 +92,9 @@
 
 ## Outputs
 
-No outputs.
+| Name | Description |
+|------|-------------|
+| <a name="output_coprocessor_bucket_storage_summary"></a> [coprocessor\_bucket\_storage\_summary](#output\_coprocessor\_bucket\_storage\_summary) | Summary of the coprocessor bucket storage |
+| <a name="output_k8s_coprocessor_service_account_summary"></a> [k8s\_coprocessor\_service\_account\_summary](#output\_k8s\_coprocessor\_service\_account\_summary) | Summary of the Kubernetes service account for Coprocessor party |
+| <a name="output_rds_summary"></a> [rds\_summary](#output\_rds\_summary) | Aggregated RDS database information |
 <!-- END_TF_DOCS -->
