@@ -1,28 +1,38 @@
 # Network Environment Configuration
-network_environment = "mainnet" # or testnet
-
-# AWS Configuration
-aws_region = "eu-west-1"
+network_environment = "devnet"
 
 # S3 Bucket Configuration
-bucket_prefix   = "coprocessor-bucket"
+bucket_prefix   = "zama-coprocessor-devnet"
 
 # Kubernetes Configuration
-cluster_name         = "zws-dev"
-
-# IRSA Configuration (recommended for production)
-create_irsa = true
+cluster_name             = "zws-dev"
+k8s_coprocessor_namespace            = "coprocessor"
+k8s_coprocessor_service_account_name = "coprocessor"
+create_coprocessor_namespace         = false
 
 # Tagging
-owner           = "coprocessor-team"
-additional_tags = {
+tags = {
   "Project"     = "coprocessor-infrastructure"
   "Team"        = "security"
   "Cost-Center" = "engineering"
+  "Terraform"   = true
 }
 
 # RDS Configuration
-enable_rds              = true
-rds_db_name             = "coprocessor"
-rds_username            = "coprocessor"
-rds_deletion_protection = false # Allow deletion of RDS instance
+enable_rds                          = true
+rds_prefix                          = "zama" # Use your organization prefix here
+rds_db_name                         = "coprocessor"
+rds_username                        = "coprocessor"
+rds_deletion_protection             = true # Allow deletion of RDS instance
+rds_enable_master_password_rotation = false
+rds_parameters = [
+  {
+    name  = "rds.force_ssl"
+    value = "0"
+  },
+]
+
+rds_engine_version              = 17.4
+rds_create_monitoring_role      = true
+rds_create_externalname_service = true
+rds_multi_az                    = true
