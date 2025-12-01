@@ -55,11 +55,6 @@ variable "k8s_coprocessor_service_account_name" {
   description = "The name of the Kubernetes service account for Coprocessor party"
 }
 
-variable "k8s_coprocessor_gw_listener_service_account_name" {
-  type        = string
-  description = "The name of the Kubernetes service account for Coprocessor gw listener"
-}
-
 variable "create_service_account" {
   type        = bool
   description = "Whether to create the Kubernetes service account (should be false when using IRSA as IRSA creates it)"
@@ -86,6 +81,17 @@ variable "coprocessor_role_name" {
     condition     = length(var.coprocessor_role_name) <= 64
     error_message = "Coprocessor role name must be 64 characters or less."
   }
+}
+
+variable "create_coprocessor_gw_listener_service_account" {
+  type        = bool
+  description = "Whether to create the Kubernetes service account for the coprocessor gw listener"
+  default     = true
+}
+
+variable "k8s_coprocessor_gw_listener_service_account_name" {
+  type        = string
+  description = "The name of the Kubernetes service account for Coprocessor gw listener"
 }
 
 variable "coprocessor_gw_listener_role_name" {

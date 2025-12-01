@@ -185,7 +185,8 @@ resource "kubernetes_service_account" "coprocessor_service_account" {
 #  IAM Policy for coprocessor gw listener
 # ***************************************
 resource "aws_iam_policy" "coprocessor_gw_listener_aws" {
-  name = "${var.cluster_name}-coproc-gw-listener-policy"
+  count = var.create_coprocessor_gw_listener_service_account ? 1 : 0
+  name  = "${var.cluster_name}-coproc-gw-listener-policy"
   policy = jsonencode({
     Version   = "2012-10-17"
     Statement = []
@@ -196,15 +197,15 @@ module "iam_assumable_role_coprocessor_gw_listener" {
   source                        = "terraform-aws-modules/iam/aws//modules/iam-assumable-role-with-oidc"
   version                       = "5.48.0"
   provider_url                  = data.aws_eks_cluster.cluster.identity[0].oidc[0].issuer
-  create_role                   = true
-  role_name                     = var.coprocessor_gw_listener_role_name != "" ? var.coprocessor_gw_listener_role_name : aws_iam_policy.coprocessor_gw_listener_aws.name
+  create_role                   = var.create_coprocessor_gw_listener_service_account
+  role_name                     = var.coprocessor_gw_listener_role_name != "" ? var.coprocessor_gw_listener_role_name : aws_iam_policy.coprocessor_gw_listener_aws[0].name
   oidc_fully_qualified_subjects = ["system:serviceaccount:${var.k8s_coprocessor_namespace}:${var.k8s_coprocessor_gw_listener_service_account_name}"]
-  role_policy_arns              = [aws_iam_policy.coprocessor_gw_listener_aws.arn]
+  role_policy_arns              = [aws_iam_policy.coprocessor_gw_listener_aws[0].arn]
   depends_on                    = [kubernetes_namespace.coprocessor_namespace]
 }
 
 resource "kubernetes_service_account" "coprocessor_gw_listener_service_account" {
-  count = var.create_service_account ? 1 : 0
+  count = var.create_coprocessor_gw_listener_service_account ? 1 : 0
 
   metadata {
     name      = var.k8s_coprocessor_gw_listener_service_account_name
@@ -309,45 +310,4 @@ resource "kubernetes_service" "externalname" {
     type          = "ExternalName"
     external_name = split(":", module.rds_instance[0].db_instance_endpoint)[0]
   }
-}
-
-# ***************************************
-# IAM Policies for IRSA
-# ***************************************
-data "aws_iam_policy_document" "coprocessor_irsa_document" {
-  statement {
-  }
-}
-
-resource "aws_iam_policy" "coprocessor_irsa_policy" {
-
-  policy = data.aws_iam_policy_document.coprocessor_irsa_document.json
-}
-
-# ***************************************
-# IRSA IAM Roles
-# ***************************************
-module "irsa_roles" {
-  source  = "terraform-aws-modules/iam/aws//modules/iam-assumable-role-with-oidc"
-  version = "~> 5.0"
-
-  create_role = true
-  role_name   = "${var.cluster_name}-coproc-gw-listener-irsa"
-
-  provider_url = data.aws_eks_cluster.cluster.identity[0].oidc[0].issuer
-
-  oidc_fully_qualified_subjects = [
-    "system:serviceaccount:${var.k8s_coprocessor_namespace}:${var.k8s_coprocessor_service_account_name}"
-  ]
-
-  role_policy_arns = [aws_iam_policy.coprocessor_irsa_policy.arn]
-
-  tags = merge(var.tags, {
-    "Name" = "${var.cluster_name}-coproc-gw-listener-irsa"
-  })
-
-  depends_on = [
-    aws_iam_policy.coprocessor_irsa_policy,
-    kubernetes_namespace.coprocessor_namespace,
-  kubernetes_service_account.coprocessor_service_account]
 }
