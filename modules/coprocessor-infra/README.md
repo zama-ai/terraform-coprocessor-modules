@@ -23,6 +23,8 @@
 | Name | Source | Version |
 |------|--------|---------|
 | <a name="module_iam_assumable_role_coprocessor"></a> [iam\_assumable\_role\_coprocessor](#module\_iam\_assumable\_role\_coprocessor) | terraform-aws-modules/iam/aws//modules/iam-assumable-role-with-oidc | 5.48.0 |
+| <a name="module_iam_assumable_role_coprocessor_gw_listener"></a> [iam\_assumable\_role\_coprocessor\_gw\_listener](#module\_iam\_assumable\_role\_coprocessor\_gw\_listener) | terraform-aws-modules/iam/aws//modules/iam-assumable-role-with-oidc | 5.48.0 |
+| <a name="module_irsa_roles"></a> [irsa\_roles](#module\_irsa\_roles) | terraform-aws-modules/iam/aws//modules/iam-assumable-role-with-oidc | ~> 5.0 |
 | <a name="module_rds_instance"></a> [rds\_instance](#module\_rds\_instance) | terraform-aws-modules/rds/aws | ~> 6.10 |
 | <a name="module_rds_security_group"></a> [rds\_security\_group](#module\_rds\_security\_group) | terraform-aws-modules/security-group/aws | ~> 5.3.0 |
 
@@ -31,6 +33,8 @@
 | Name | Type |
 |------|------|
 | [aws_iam_policy.coprocessor_aws](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/iam_policy) | resource |
+| [aws_iam_policy.coprocessor_gw_listener_aws](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/iam_policy) | resource |
+| [aws_iam_policy.coprocessor_irsa_policy](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/iam_policy) | resource |
 | [aws_s3_bucket.coprocessor_bucket](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/s3_bucket) | resource |
 | [aws_s3_bucket_cors_configuration.coprocessor_bucket_cors](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/s3_bucket_cors_configuration) | resource |
 | [aws_s3_bucket_ownership_controls.coprocessor_bucket](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/s3_bucket_ownership_controls) | resource |
@@ -39,9 +43,11 @@
 | [aws_s3_bucket_versioning.coprocessor_bucket](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/s3_bucket_versioning) | resource |
 | [kubernetes_namespace.coprocessor_namespace](https://registry.terraform.io/providers/hashicorp/kubernetes/latest/docs/resources/namespace) | resource |
 | [kubernetes_service.externalname](https://registry.terraform.io/providers/hashicorp/kubernetes/latest/docs/resources/service) | resource |
+| [kubernetes_service_account.coprocessor_gw_listener_service_account](https://registry.terraform.io/providers/hashicorp/kubernetes/latest/docs/resources/service_account) | resource |
 | [kubernetes_service_account.coprocessor_service_account](https://registry.terraform.io/providers/hashicorp/kubernetes/latest/docs/resources/service_account) | resource |
 | [random_id.coprocessor_suffix](https://registry.terraform.io/providers/hashicorp/random/latest/docs/resources/id) | resource |
 | [aws_eks_cluster.cluster](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/eks_cluster) | data source |
+| [aws_iam_policy_document.coprocessor_irsa_document](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/iam_policy_document) | data source |
 | [aws_subnet.cluster_subnets](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/subnet) | data source |
 
 ## Inputs
@@ -50,10 +56,12 @@
 |------|-------------|------|---------|:--------:|
 | <a name="input_bucket_prefix"></a> [bucket\_prefix](#input\_bucket\_prefix) | The prefix for the S3 bucket names | `string` | `"coprocessor-bucket"` | no |
 | <a name="input_cluster_name"></a> [cluster\_name](#input\_cluster\_name) | The name of the EKS cluster for IRSA configuration | `string` | n/a | yes |
+| <a name="input_coprocessor_gw_listener_role_name"></a> [coprocessor\_gw\_listener\_role\_name](#input\_coprocessor\_gw\_listener\_role\_name) | The name of the IAM role for the coprocessor gw listener | `string` | `""` | no |
 | <a name="input_coprocessor_role_name"></a> [coprocessor\_role\_name](#input\_coprocessor\_role\_name) | The name of the IAM role for the coprocessor | `string` | `""` | no |
 | <a name="input_create_coprocessor_namespace"></a> [create\_coprocessor\_namespace](#input\_create\_coprocessor\_namespace) | Whether to create the Kubernetes namespace | `bool` | `true` | no |
 | <a name="input_create_service_account"></a> [create\_service\_account](#input\_create\_service\_account) | Whether to create the Kubernetes service account (should be false when using IRSA as IRSA creates it) | `bool` | `true` | no |
 | <a name="input_enable_rds"></a> [enable\_rds](#input\_enable\_rds) | Whether to create the RDS instance | `bool` | `true` | no |
+| <a name="input_k8s_coprocessor_gw_listener_service_account_name"></a> [k8s\_coprocessor\_gw\_listener\_service\_account\_name](#input\_k8s\_coprocessor\_gw\_listener\_service\_account\_name) | The name of the Kubernetes service account for Coprocessor gw listener | `string` | n/a | yes |
 | <a name="input_k8s_coprocessor_namespace"></a> [k8s\_coprocessor\_namespace](#input\_k8s\_coprocessor\_namespace) | The Kubernetes namespace for coprocessor resources | `string` | `"coprocessor"` | no |
 | <a name="input_k8s_coprocessor_service_account_name"></a> [k8s\_coprocessor\_service\_account\_name](#input\_k8s\_coprocessor\_service\_account\_name) | The name of the Kubernetes service account for Coprocessor party | `string` | n/a | yes |
 | <a name="input_namespace_annotations"></a> [namespace\_annotations](#input\_namespace\_annotations) | Additional annotations to apply to the namespace | `map(string)` | `{}` | no |
@@ -88,7 +96,7 @@
 | <a name="input_rds_vpc_id"></a> [rds\_vpc\_id](#input\_rds\_vpc\_id) | VPC ID hosting the RDS instance. | `string` | `null` | no |
 | <a name="input_service_account_annotations"></a> [service\_account\_annotations](#input\_service\_account\_annotations) | Additional annotations to apply to the service account (excluding IRSA annotations which are handled automatically) | `map(string)` | `{}` | no |
 | <a name="input_service_account_labels"></a> [service\_account\_labels](#input\_service\_account\_labels) | Additional labels to apply to the service account | `map(string)` | `{}` | no |
-| <a name="input_tags"></a> [tags](#input\_tags) | A map of tags to assign to the resource | `map(string)` | <pre>{<br/>  "module": "coprocessor-infra",<br/>  "terraform": "true"<br/>}</pre> | no |
+| <a name="input_tags"></a> [tags](#input\_tags) | A map of tags to assign to the resource | `map(string)` | <pre>{<br/>  "app.kubernetes.io/name": "coprocessor",<br/>  "module": "coprocessor-infra",<br/>  "terraform": "true"<br/>}</pre> | no |
 
 ## Outputs
 

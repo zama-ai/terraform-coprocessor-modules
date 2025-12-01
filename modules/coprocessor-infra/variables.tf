@@ -13,8 +13,9 @@ variable "tags" {
   type        = map(string)
   description = "A map of tags to assign to the resource"
   default = {
-    "terraform" = "true"
-    "module"    = "coprocessor-infra"
+    "terraform"              = "true"
+    "module"                 = "coprocessor-infra"
+    "app.kubernetes.io/name" = "coprocessor"
   }
 }
 
@@ -54,6 +55,11 @@ variable "k8s_coprocessor_service_account_name" {
   description = "The name of the Kubernetes service account for Coprocessor party"
 }
 
+variable "k8s_coprocessor_gw_listener_service_account_name" {
+  type        = string
+  description = "The name of the Kubernetes service account for Coprocessor gw listener"
+}
+
 variable "create_service_account" {
   type        = bool
   description = "Whether to create the Kubernetes service account (should be false when using IRSA as IRSA creates it)"
@@ -79,6 +85,16 @@ variable "coprocessor_role_name" {
   validation {
     condition     = length(var.coprocessor_role_name) <= 64
     error_message = "Coprocessor role name must be 64 characters or less."
+  }
+}
+
+variable "coprocessor_gw_listener_role_name" {
+  type        = string
+  description = "The name of the IAM role for the coprocessor gw listener"
+  default     = ""
+  validation {
+    condition     = length(var.coprocessor_gw_listener_role_name) <= 64
+    error_message = "Coprocessor gw listener role name must be 64 characters or less."
   }
 }
 
