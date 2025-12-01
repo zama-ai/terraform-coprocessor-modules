@@ -29,7 +29,13 @@ variable "cluster_name" {
 variable "k8s_coprocessor_namespace" {
   type        = string
   description = "The Kubernetes namespace for coprocessor resources"
-  default     = "coprocessor"
+  default     = "coproc"
+}
+
+variable "k8s_coprocessor_gw_listener_namespace" {
+  type        = string
+  description = "The Kubernetes namespace for coprocessor gw-listener"
+  default     = "gw-blockchain"
 }
 
 variable "create_coprocessor_namespace" {
@@ -97,7 +103,6 @@ variable "k8s_coprocessor_gw_listener_service_account_name" {
 variable "coprocessor_gw_listener_role_name" {
   type        = string
   description = "The name of the IAM role for the coprocessor gw listener"
-  default     = ""
   validation {
     condition     = length(var.coprocessor_gw_listener_role_name) <= 64
     error_message = "Coprocessor gw listener role name must be 64 characters or less."

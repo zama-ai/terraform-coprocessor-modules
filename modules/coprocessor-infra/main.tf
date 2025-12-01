@@ -182,25 +182,17 @@ resource "kubernetes_service_account" "coprocessor_service_account" {
 }
 
 # ***************************************
-#  IAM Policy for coprocessor gw listener
+#  IRSA for coprocessor gw listener
 # ***************************************
-resource "aws_iam_policy" "coprocessor_gw_listener_aws" {
-  count = var.create_coprocessor_gw_listener_service_account ? 1 : 0
-  name  = "${var.cluster_name}-coproc-gw-listener-policy"
-  policy = jsonencode({
-    Version   = "2012-10-17"
-    Statement = []
-  })
-}
-
 module "iam_assumable_role_coprocessor_gw_listener" {
   source                        = "terraform-aws-modules/iam/aws//modules/iam-assumable-role-with-oidc"
   version                       = "5.48.0"
   provider_url                  = data.aws_eks_cluster.cluster.identity[0].oidc[0].issuer
   create_role                   = var.create_coprocessor_gw_listener_service_account
-  role_name                     = var.coprocessor_gw_listener_role_name != "" ? var.coprocessor_gw_listener_role_name : aws_iam_policy.coprocessor_gw_listener_aws[0].name
+  role_name                     = var.coprocessor_gw_listener_role_name
   oidc_fully_qualified_subjects = ["system:serviceaccount:${var.k8s_coprocessor_namespace}:${var.k8s_coprocessor_gw_listener_service_account_name}"]
-  role_policy_arns              = [aws_iam_policy.coprocessor_gw_listener_aws[0].arn]
+  # Intentionally not assigned any IAM policy as we only use it to access public buckets
+  role_policy_arns              = []
   depends_on                    = [kubernetes_namespace.coprocessor_namespace]
 }
 
@@ -209,7 +201,7 @@ resource "kubernetes_service_account" "coprocessor_gw_listener_service_account" 
 
   metadata {
     name      = var.k8s_coprocessor_gw_listener_service_account_name
-    namespace = var.k8s_coprocessor_namespace
+    namespace = var.k8s_coprocessor_gw_listener_namespace
 
     labels = merge({
       "app.kubernetes.io/name"       = var.k8s_coprocessor_gw_listener_service_account_name
