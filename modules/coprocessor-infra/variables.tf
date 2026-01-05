@@ -236,6 +236,12 @@ variable "rds_externalname_service_namespace" {
   default     = "coprocessor"
 }
 
+variable "rds_externalname_service_annotations" {
+  description = "Annotations to apply to the Kubernetes ExternalName service for RDS database"
+  type        = map(string)
+  default     = {}
+}
+
 # Optional override for RDS identifier
 variable "rds_identifier_override" {
   type        = string

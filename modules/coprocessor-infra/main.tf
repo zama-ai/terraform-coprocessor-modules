@@ -261,6 +261,7 @@ resource "kubernetes_service" "externalname" {
   metadata {
     name      = var.rds_externalname_service_name
     namespace = var.rds_externalname_service_namespace
+    annotations = var.rds_externalname_service_annotations
   }
   spec {
     type          = "ExternalName"
