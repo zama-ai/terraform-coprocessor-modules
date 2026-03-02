@@ -1,0 +1,46 @@
+partner_name = "zama"
+environment  = "coprocessor-prod"
+
+tags = {
+  "Project"     = "coprocessor-infrastructure"
+  "Team"        = "infra"
+  "Cost-Center" = "engineering"
+  "Terraform"   = "true"
+}
+
+buckets = {
+  coprocessor-mainnet = {
+    purpose       = "coprocessor-storage"
+    force_destroy = true
+    versioning    = true
+
+    public_access = {
+      enabled = true
+    }
+
+    cors = {
+      enabled         = true
+      allowed_origins = ["*"]
+      allowed_methods = ["GET", "HEAD"]
+      allowed_headers = ["Authorization"]
+      expose_headers  = ["Access-Control-Allow-Origin"]
+    }
+
+    policy_statements = [
+      {
+        sid        = "PublicRead"
+        effect     = "Allow"
+        principals = { "*" = [] }
+        actions    = ["s3:GetObject"]
+        resources  = ["objects"]
+      },
+      {
+        sid        = "ZamaList"
+        effect     = "Allow"
+        principals = { "*" = [] }
+        actions    = ["s3:ListBucket"]
+        resources  = ["bucket"]
+      }
+    ]
+  }
+}
