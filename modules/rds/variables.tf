@@ -20,7 +20,7 @@ variable "tags" {
 }
 
 variable "vpc_id" {
-  description = "VPC ID to deploy RDS into. Falls back to EKS cluster VPC if null."
+  description = "VPC ID to deploy RDS into."
   type        = string
   default     = null
 }

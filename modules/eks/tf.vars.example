@@ -1,9 +1,8 @@
 # =============================================================================
-# BASIC CONFIGURATION
+#  Basic
 # =============================================================================
-
-name        = "coprocessor"
 environment = "coprocessor-prod"
+name        = "coprocessor"
 
 tags = {
   Environment = "prod"
@@ -15,148 +14,172 @@ tags = {
 }
 
 # =============================================================================
-# NETWORK INPUTS (FROM VPC MODULE)
+#  Networking
 # =============================================================================
+vpc_cidr = "10.0.0.0/16"
 
-network = {
-  vpc_id             = "vpc-1234567890abcdef0"
-  private_subnet_ids = [
-    "subnet-aaa",
-    "subnet-bbb",
-    "subnet-ccc"
-  ]
+# Auto-detect AZs (limited to first 3). Uncomment to pin explicitly:
+# vpc_availability_zones = ["eu-west-1a", "eu-west-1b", "eu-west-1c"]
 
-  # Optional additional subnets (for karpenter / special pools)
-  additional_subnet_ids = [
-    "subnet-xxx",
-    "subnet-yyy",
-    "subnet-zzz"
-  ]
+use_subnet_calc_v2       = true
+private_subnet_cidr_mask = 20
+public_subnet_cidr_mask  = 24
 
-  node_groups_using_additional_subnets = ["coproc_node_group"]
+vpc_single_nat_gateway   = false
+vpc_flow_log_enabled     = false
+flow_log_destination_arn = "arn:aws:s3:::zama-aws-org-vpc-flow-logs"
+
+# Additional subnets for CNI / specific node groups
+create_additional_subnets         = true
+additional_subnet_cidr_mask       = 20
+expose_additional_subnets_for_eks = true
+additional_subnets_elb_role       = "internal"
+
+# Route zws_pool node group through additional subnets
+node_groups_using_additional_subnets = ["zws_pool"]
+
+additional_subnet_tags = {
+  Purpose = "cni-additional"
 }
 
 # =============================================================================
-# EKS CLUSTER CONFIGURATION
+#  EKS Cluster
+# =============================================================================
+eks_cluster_version                   = "1.32"
+eks_cluster_endpoint_public_access    = false
+eks_cluster_endpoint_private_access   = true
+eks_cluster_creator_admin_permissions = true
+eks_cluster_enable_irsa               = true
+
+# IAM roles granted cluster-admin access
+eks_admin_roles_arns = []
+
+# =============================================================================
+#  EKS Addons
 # =============================================================================
 
-cluster = {
-  version                        = "1.32"
-  endpoint_public_access          = false
-  endpoint_private_access         = true
-  endpoint_public_access_cidrs    = []
-  enable_irsa                     = true
-  enable_creator_admin_permissions = true
-}
+# Default addons (aws-ebs-csi-driver, coredns, vpc-cni, kube-proxy,
+# eks-pod-identity-agent) are enabled by the module automatically.
+# Add extras here if needed:
+# eks_addons = {
+#   aws-efs-csi-driver = { most_recent = true }
+# }
 
-# =============================================================================
-# ADDONS CONFIGURATION
-# =============================================================================
-
-addons = {
-  # Override / extend defaults
-  extra = {
-    aws-efs-csi-driver = {
-      most_recent = true
+eks_default_addons_config_values = {
+  vpc_cni = {
+    init = {
+      env = {
+        DISABLE_TCP_EARLY_DEMUX = "true"
+      }
+    }
+    env = {
+      ENABLE_POD_ENI                    = "true"
+      POD_SECURITY_GROUP_ENFORCING_MODE = "standard"
+      ENABLE_PREFIX_DELEGATION          = "true"
+      WARM_PREFIX_TARGET                = "1"
     }
   }
-
-  # Optional VPC CNI config overrides
-  vpc_cni = {
-    enableNetworkPolicy = "true"
-    warm_ip_target      = "5"
-  }
 }
 
 # =============================================================================
-# NODE GROUPS
+#  Node Groups
 # =============================================================================
+eks_managed_node_group_defaults = {
+  ami_type                   = "AL2023_x86_64_STANDARD"
+  use_custom_launch_template = true
+  disk_size                  = 50
+  disk_type                  = "gp3"
+}
 
-node_groups = {
+eks_managed_node_group_default_iam_role_policies = {
+  AmazonEBSCSIDriverPolicy           = "arn:aws:iam::aws:policy/service-role/AmazonEBSCSIDriverPolicy"
+  AmazonEC2ContainerRegistryReadOnly = "arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly"
+  AmazonEKSWorkerNodePolicy          = "arn:aws:iam::aws:policy/AmazonEKSWorkerNodePolicy"
+  AmazonSSMManagedInstanceCore       = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
+}
 
-  defaults = {
-    ami_type                   = "AL2023_x86_64_STANDARD"
-    capacity_type              = "ON_DEMAND"
-    instance_types             = ["t3.xlarge"]
-    disk_size                  = 50
-    disk_type                  = "gp3"
-    use_custom_launch_template = true
+eks_managed_node_groups = {
+  zws_pool = {
+    capacity_type  = "ON_DEMAND"
+    min_size       = 1
+    max_size       = 10
+    desired_size   = 2
+    instance_types = ["t3.xlarge"]
 
     update_config = {
       max_unavailable = 1
     }
 
-    iam_role_additional_policies = {
-      AmazonEBSCSIDriverPolicy     = "arn:aws:iam::aws:policy/service-role/AmazonEBSCSIDriverPolicy"
-      AmazonSSMManagedInstanceCore = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
+    taints = {
+      dedicated = {
+        key    = "node.kubernetes.io/zwspool"
+        value  = "true"
+        effect = "NO_SCHEDULE"
+      }
+    }
+
+    labels = {
+      Environment = "prod"
+      NodeGroup   = "zwspool"
+    }
+
+    tags = {
+      NodeGroupType = "zwspool"
     }
   }
 
-  groups = {
+  default = {
+    capacity_type  = "ON_DEMAND"
+    min_size       = 1
+    max_size       = 3
+    desired_size   = 3
+    instance_types = ["t3.xlarge"]
 
-    zws_pool = {
-      min_size     = 1
-      max_size     = 10
-      desired_size = 2
-
-      taints = {
-        dedicated = {
-          key    = "node.kubernetes.io/zwspool"
-          value  = "true"
-          effect = "NO_SCHEDULE"
-        }
-      }
-
-      labels = {
-        Environment = "prod"
-        NodeGroup   = "zwspool"
-      }
-
-      tags = {
-        NodeGroupType = "zwspool"
-      }
+    update_config = {
+      max_unavailable = 1
     }
 
-    default = {
-      min_size     = 1
-      max_size     = 3
-      desired_size = 3
+    labels = {
+      Environment = "prod"
+      NodeGroup   = "default"
+    }
 
-      labels = {
-        Environment = "prod"
-        NodeGroup   = "default"
-      }
-
-      tags = {
-        NodeGroupType = "default"
-      }
+    tags = {
+      NodeGroupType = "default"
     }
   }
 }
 
 # =============================================================================
-# CLUSTER ACCESS
+#  Karpenter
 # =============================================================================
+enable_karpenter           = true
+karpenter_rule_name_prefix = "coproc"
 
-access = {
-  admin_role_arns = [
-    "arn:aws:iam::123456789012:role/AdminRole"
-  ]
+enable_karpenter_controller_nodegroup = true
+
+karpenter_controller_nodegroup_config = {
+  capacity_type  = "ON_DEMAND"
+  min_size       = 1
+  max_size       = 2
+  desired_size   = 1
+  instance_types = ["t3.small"]
+  disk_size      = 50
+  disk_type      = "gp3"
+
+  taints = {
+    karpenter = {
+      key    = "karpenter.sh/controller"
+      value  = "true"
+      effect = "NO_SCHEDULE"
+    }
+  }
+
+  labels = {
+    "karpenter.sh/controller" = "true"
+  }
 }
 
-# =============================================================================
-# KARPENTER CONFIGURATION
-# =============================================================================
-
-karpenter = {
-  enabled                                = true
-  namespace                              = "karpenter"
-  service_account                        = "karpenter"
-  enable_controller_nodegroup            = true
-  rule_name_prefix                       = "coproc"
-  queue_name                             = null
-
-  node_iam_role_additional_policies = {
-    AmazonEBSCSIDriverPolicy = "arn:aws:iam::aws:policy/service-role/AmazonEBSCSIDriverPolicy"
-  }
+karpenter_node_iam_role_additional_policies = {
+  AmazonSSMManagedInstanceCore = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
 }

@@ -30,16 +30,13 @@ resource "aws_s3_bucket" "this" {
   bucket        = local.bucket_names[each.key]
   force_destroy = each.value.force_destroy
 
-  tags = merge(
-    var.tags, 
-    {
-      Name        = local.bucket_names[each.key]
-      Type        = "${each.key}-bucket"
-      Purpose     = each.value.purpose
-      Partner     = var.partner_name
-      Environment = var.environment
-    }
-  )
+  tags = {
+    Name        = local.bucket_names[each.key]
+    Type        = "${each.key}-bucket"
+    Purpose     = each.value.purpose
+    Partner     = var.partner_name
+    Environment = var.environment
+  }
 }
 
 resource "aws_s3_bucket_ownership_controls" "this" {

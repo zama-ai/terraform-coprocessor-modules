@@ -8,12 +8,6 @@ variable "environment" {
   type        = string
 }
 
-variable "tags" {
-  description = "Tags to apply to all resources."
-  type        = map(string)
-  default     = {}
-}
-
 variable "buckets" {
   description = <<-EOT
     Map of S3 buckets to create.
@@ -55,26 +49,19 @@ variable "buckets" {
         expose_headers  = []
       })
 
-      policy_statements = optional(
-        list(
-          object({
-            sid    = string
-            effect = string
-            principals = map(list(string))
-            actions = list(string)
-            resources = list(string)
-            conditions = optional(
-              list(object({
-                test     = string
-                variable = string
-                values   = list(string)
-              })),
-              []
-            )
-          })
-        ),
-        []
-      )
+      # Bucket policies
+      policy_statements = optional(list(object({
+        sid        = string
+        effect     = string
+        principals = map(list(string))
+        actions    = list(string)
+        resources  = list(string)
+        conditions = optional(list(object({
+          test     = string
+          variable = string
+          values   = list(string)
+        })), [])
+      })), [])
     })
   )
 }
