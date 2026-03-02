@@ -11,6 +11,9 @@ resource "random_id" "suffix" {
   }
 }
 
+# ***************************************
+#  Local variables
+# ***************************************
 locals {
   bucket_names = {
     for key in keys(var.buckets) :

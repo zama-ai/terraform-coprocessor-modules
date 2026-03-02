@@ -1,0 +1,64 @@
+# ******************************************************
+#  Environment
+# ******************************************************
+network_environment = "mainnet"
+
+# ******************************************************
+#  Tagging
+# ******************************************************
+tags = {
+  "Project"     = "coprocessor-infrastructure"
+  "Team"        = "infra"
+  "Cost-Center" = "engineering"
+  "Terraform"   = "true"
+}
+
+# ******************************************************
+#  Kubernetes
+# ******************************************************
+cluster_name                         = "coprocessor"
+k8s_coprocessor_namespace            = "coproc"
+k8s_coprocessor_service_account_name = "coprocessor"
+create_coprocessor_namespace         = false
+
+# ******************************************************
+#  S3
+# ******************************************************
+bucket_prefix = "zama-coprocessor-mainnet"
+
+# ******************************************************
+#  RDS
+# ******************************************************
+enable_rds                          = true
+rds_prefix                          = "zama"
+rds_db_name                         = "coprocessor"
+rds_username                        = "coprocessor"
+rds_engine_version                  = "17.4"
+rds_instance_class                  = "db.m5.4xlarge"
+rds_allocated_storage               = 2000
+rds_max_allocated_storage           = 3000
+rds_backup_retention_period         = 30
+rds_deletion_protection             = true
+rds_multi_az                        = true
+rds_enable_master_password_rotation = false
+rds_create_monitoring_role          = true
+rds_allowed_cidr_blocks             = ["10.0.16.0/20", "10.0.32.0/20", "10.0.48.0/20"]
+
+rds_parameters = [
+  {
+    name  = "rds.force_ssl"
+    value = "0"
+  }
+]
+
+# ******************************************************
+#  RDS ExternalName Service
+# ******************************************************
+rds_create_externalname_service      = true
+rds_externalname_service_name        = "coprocessor-database"
+rds_externalname_service_namespace   = "coproc"
+rds_externalname_service_annotations = {
+  "tailscale.com/expose"   = "true"
+  "tailscale.com/hostname" = "coprocessor-database-mainnet"
+  "tailscale.com/tags"     = "tag:k8s-coprocessor-prod"
+}
