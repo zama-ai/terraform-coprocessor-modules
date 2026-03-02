@@ -1,0 +1,46 @@
+# =============================================================================
+#  Basic
+# =============================================================================
+environment = "coprocessor-prod"
+name        = "coprocessor"
+
+tags = {
+  Environment = "prod"
+  Project     = "coprocessor"
+  Owner       = "devops-team"
+  CostCenter  = "engineering"
+  Terraform   = "true"
+  ManagedBy   = "terraform"
+}
+
+# =============================================================================
+#  VPC
+# =============================================================================
+vpc_cidr = "10.0.0.0/16"
+
+# Auto-detect AZs (limited to first 3). Uncomment to pin explicitly:
+# vpc_availability_zones = ["eu-west-1a", "eu-west-1b", "eu-west-1c"]
+
+# V2 subnet calculation — private /20 (4096 IPs), public /24 (256 IPs)
+# Private must be a larger block than public to avoid CIDR overlap
+use_subnet_calc_v2       = true
+private_subnet_cidr_mask = 20
+public_subnet_cidr_mask  = 24
+
+# Flow logs — set flow_log_destination_arn when enabling
+vpc_flow_log_enabled = false
+# flow_log_destination_arn = "arn:aws:s3:::your-vpc-flow-logs-bucket"
+
+# =============================================================================
+#  Additional Subnets
+# =============================================================================
+create_additional_subnets         = true
+additional_subnet_cidr_mask       = 20
+expose_additional_subnets_for_eks = true
+additional_subnets_elb_role       = "internal"
+
+node_groups_using_additional_subnets = ["coproc_node_group"]
+
+additional_subnet_tags = {
+  Purpose = "cni-additional"
+}
