@@ -7,11 +7,11 @@ variable "partner_name" {
 }
 
 variable "environment" {
-  description = "Deployment environment (e.g. mainnet, testnet)."
+  description = "Deployment environment (e.g. devnet, mainnet, testnet)."
   type        = string
 
   validation {
-    condition     = contains(["devnet", "testnet", "mainnet"], var.network_environment)
+    condition     = contains(["devnet", "testnet", "mainnet"], var.environment)
     error_message = "environment must be either 'devnet', 'testnet', or 'mainnet'."
   }
 }

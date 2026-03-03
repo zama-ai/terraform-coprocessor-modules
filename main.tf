@@ -16,7 +16,7 @@ module "networking" {
 
   name                = var.partner_name
   environment         = var.environment
-  tags                = var.tags
+  # tags                = var.tags
 
   # VPC
   vpc = var.networking.vpc

@@ -34,8 +34,6 @@ module "rds_security_group" {
       cidr_blocks = join(",", concat(var.rds.allowed_cidr_blocks, var.private_subnet_cidr_blocks))
     }
   ]
-
-  tags = var.tags
 }
 
 # ***************************************
@@ -83,5 +81,4 @@ module "rds_instance" {
   vpc_security_group_ids = [module.rds_security_group[0].security_group_id]
 
   deletion_protection = var.rds.deletion_protection
-  tags                = var.tags
 }

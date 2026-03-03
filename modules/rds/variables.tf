@@ -8,12 +8,6 @@ variable "environment" {
   type        = string
 }
 
-variable "tags" {
-  description = "Tags to apply to all resources."
-  type        = map(string)
-  default     = {}
-}
-
 variable "vpc_id" {
   description = "VPC ID to deploy RDS into."
   type        = string
@@ -39,7 +33,7 @@ variable "rds" {
     enabled = optional(bool, false)
 
     # Naming
-    db_name             = string
+    db_name             = optional(string, null)
     identifier_override = optional(string, null)
 
     # Engine
