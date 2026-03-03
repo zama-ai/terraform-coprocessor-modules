@@ -7,17 +7,12 @@ variable "partner_name" {
 }
 
 variable "environment" {
-  description = "Deployment environment (e.g. prod, staging)."
-  type        = string
-}
-
-variable "network_environment" {
-  description = "Network environment (testnet or mainnet)."
+  description = "Deployment environment (e.g. mainnet, testnet)."
   type        = string
 
   validation {
-    condition     = contains(["testnet", "mainnet"], var.network_environment)
-    error_message = "network_environment must be either 'testnet' or 'mainnet'."
+    condition     = contains(["devnet", "testnet", "mainnet"], var.network_environment)
+    error_message = "environment must be either 'devnet', 'testnet', or 'mainnet'."
   }
 }
 
@@ -115,7 +110,7 @@ variable "eks" {
 # ******************************************************
 variable "rds" {
   description = "RDS instance configuration. Set enabled = false to skip."
-  
+
   type = object({
     enabled = optional(bool, false)
 

@@ -5,7 +5,7 @@ locals {
   identifier = coalesce(
     var.rds.identifier_override,
     substr(
-      lower(replace("${var.partner_name}-${var.network_environment}-${var.rds.db_name}", "/[^a-z0-9-]/", "-")),
+      lower(replace("${var.partner_name}-${var.environment}-${var.rds.db_name}", "/[^a-z0-9-]/", "-")),
       0, 63
     )
   )

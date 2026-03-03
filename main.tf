@@ -51,7 +51,6 @@ module "rds" {
 
   partner_name        = var.partner_name
   environment         = var.environment
-  network_environment = var.network_environment
 
   vpc_id                     = local.rds_vpc_id
   private_subnet_ids         = local.rds_private_subnet_ids
