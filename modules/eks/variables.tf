@@ -4,14 +4,8 @@ variable "name" {
 }
 
 variable "environment" {
-  description = "Deployment environment (e.g. prod, staging)."
+  description = "Deployment environment (e.g. devnet, mainnet, testnet)."
   type        = string
-}
-
-variable "tags" {
-  description = "Tags to apply to all resources."
-  type        = map(string)
-  default     = {}
 }
 
 # ******************************************************

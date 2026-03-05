@@ -98,8 +98,6 @@ module "eks" {
     var.karpenter.enabled ? { "karpenter.sh/discovery" = local.cluster_name } : {},
     { "kubernetes.io/cluster/${local.cluster_name}" = null }
   )
-
-  tags = var.tags
 }
 
 # ***************************************
@@ -110,7 +108,6 @@ resource "aws_eks_access_entry" "admin_roles" {
   cluster_name  = module.eks.cluster_name
   principal_arn = each.value
   type          = "STANDARD"
-  tags          = var.tags
 }
 
 resource "aws_eks_access_policy_association" "admin_roles" {
@@ -152,9 +149,9 @@ module "karpenter" {
   create_pod_identity_association = true
   create_access_entry             = true
 
-  tags = merge(var.tags, {
+  tags = {
     Environment = module.eks.cluster_name
-  })
+  }
 }
 
 # ***************************************
@@ -183,8 +180,6 @@ resource "aws_iam_policy" "karpenter_encryption" {
       }
     }]
   })
-
-  tags = var.tags
 }
 
 resource "aws_iam_policy" "karpenter_instance_profile" {
@@ -205,8 +200,6 @@ resource "aws_iam_policy" "karpenter_instance_profile" {
       Resource = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:instance-profile/karpenter/*"
     }]
   })
-
-  tags = var.tags
 }
 
 resource "aws_iam_service_linked_role" "spot" {

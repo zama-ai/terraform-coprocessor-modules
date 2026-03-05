@@ -31,8 +31,10 @@ variable "aws_region" {
 #  Networking
 # ******************************************************
 variable "networking" {
-  description = "VPC and subnet configuration."
+  description = "VPC and subnet configuration. Set enabled = false to skip all networking resources."
   type = object({
+    enabled = optional(bool, true)
+
     vpc = object({
       cidr                     = string
       availability_zones       = optional(list(string), [])
@@ -71,8 +73,10 @@ variable "networking" {
 #  EKS
 # ******************************************************
 variable "eks" {
-  description = "EKS cluster configuration."
+  description = "EKS cluster configuration. Set enabled = false to skip all EKS resources."
   type = object({
+    enabled = optional(bool, true)
+
     cluster = optional(object({
       version                          = optional(string, "1.32")
       endpoint_public_access           = optional(bool, true)
@@ -179,6 +183,8 @@ variable "eks" {
       }), { enabled = false })
     }), { enabled = false })
   })
+
+  default = { enabled = true }
 }
 
 # ******************************************************
