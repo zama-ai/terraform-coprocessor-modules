@@ -2,6 +2,9 @@
 #  Locals
 # ******************************************************
 locals {
+  # Pre-computed cluster name shared between networking (subnet tags) and EKS
+  eks_cluster_name = "${var.partner_name}-${var.environment}"
+
   # RDS
   rds_vpc_id                     = coalesce(try(var.networking.existing_vpc.vpc_id, null), module.networking.vpc_id)
   rds_private_subnet_ids         = coalesce(try(var.networking.existing_vpc.private_subnet_ids, null), module.networking.private_subnet_ids)
@@ -14,13 +17,31 @@ locals {
 module "networking" {
   source = "./modules/networking"
 
-  name                = var.partner_name
-  environment         = var.environment
-  # tags                = var.tags
+  name = var.partner_name
+  tags = var.default_tags
 
-  # VPC
-  vpc = var.networking.vpc
-  additional_subnets = var.networking.additional_subnets
+  vpc = {
+    cidr                     = var.networking.vpc_cidr
+    availability_zones       = var.networking.vpc_availability_zones
+    single_nat_gateway       = var.networking.vpc_single_nat_gateway
+    use_subnet_calc_v2       = var.networking.use_subnet_calc_v2
+    private_subnet_cidr_mask = var.networking.private_subnet_cidr_mask
+    public_subnet_cidr_mask  = var.networking.public_subnet_cidr_mask
+    flow_log_enabled         = var.networking.vpc_flow_log_enabled
+    flow_log_destination_arn = var.networking.flow_log_destination_arn
+  }
+
+  additional_subnets = {
+    enabled        = var.networking.create_additional_subnets
+    cidr_mask      = var.networking.additional_subnet_cidr_mask
+    expose_for_eks = var.networking.expose_additional_subnets_for_eks
+    elb_role       = var.networking.additional_subnets_elb_role
+    tags           = var.networking.additional_subnet_tags
+    node_groups    = var.networking.node_groups_using_additional_subnets
+  }
+
+  eks_cluster_name = local.eks_cluster_name
+  enable_karpenter = var.eks.enable_karpenter
 }
 
 # ******************************************************

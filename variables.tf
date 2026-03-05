@@ -46,7 +46,7 @@ variable "networking" {
     create_additional_subnets            = optional(bool, false)
     additional_subnet_cidr_mask          = optional(number, 22)
     expose_additional_subnets_for_eks    = optional(bool, false)
-    additional_subnets_elb_role          = optional(string, "none")
+    additional_subnets_elb_role          = optional(string, null)
     additional_subnet_tags               = optional(map(string), {})
     node_groups_using_additional_subnets = optional(list(string), [])
 
