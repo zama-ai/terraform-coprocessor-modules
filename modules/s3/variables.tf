@@ -21,6 +21,9 @@ variable "buckets" {
       # Human-readable description (used for tagging)
       purpose = string
 
+      # Override the computed bucket name (use when importing a pre-existing bucket)
+      name_override = optional(string, null)
+
       # Allow deletion even if objects exist
       force_destroy = optional(bool, false)
 

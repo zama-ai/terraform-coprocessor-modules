@@ -18,7 +18,7 @@ resource "random_id" "suffix" {
 locals {
   bucket_names = {
     for key in keys(var.buckets) :
-    key => "${var.partner_name}-${var.environment}-${key}-${random_id.suffix[key].hex}"
+    key => coalesce(var.buckets[key].name_override, "${var.partner_name}-${var.environment}-${key}-${random_id.suffix[key].hex}")
   }
 }
 
