@@ -1,12 +1,11 @@
-variable "name" {
+variable "partner_name" {
   description = "Name prefix for all networking resources."
   type        = string
 }
 
-variable "tags" {
-  description = "Tags to apply to all resources."
-  type        = map(string)
-  default     = {}
+variable "environment" {
+  description = "Deployment environment (e.g. devnet, mainnet, testnet)."
+  type        = string
 }
 
 variable "vpc" {

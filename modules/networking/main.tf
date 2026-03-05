@@ -60,7 +60,7 @@ module "vpc" {
   source  = "terraform-aws-modules/vpc/aws"
   version = "~> 5.0"
 
-  name = var.name
+  name = "${var.partner_name}-${var.environment}"
   cidr = var.vpc.cidr
 
   azs             = local.availability_zones
@@ -87,8 +87,6 @@ module "vpc" {
     { "kubernetes.io/role/internal-elb" = 1 },
     var.enable_karpenter ? { "karpenter.sh/discovery" = var.eks_cluster_name } : {}
   )
-
-  tags = var.tags
 }
 
 # ***************************************
@@ -102,7 +100,7 @@ resource "aws_subnet" "additional" {
   cidr_block        = local.additional_subnet_cidrs[count.index]
 
   tags = merge(
-    { Name = "${var.name}-additional-${local.availability_zones[count.index]}" },
+    { Name = "${var.partner_name}-${var.environment}-additional-${local.availability_zones[count.index]}" },
     var.additional_subnets.tags,
     local.additional_eks_tags,
     local.additional_elb_tags

@@ -7,6 +7,7 @@ resource "random_id" "suffix" {
   byte_length = 4
   keepers = {
     partner_name = var.partner_name
+    environment  = var.environment
     bucket_key   = each.key
   }
 }
@@ -17,7 +18,7 @@ resource "random_id" "suffix" {
 locals {
   bucket_names = {
     for key in keys(var.buckets) :
-    key => "${var.partner_name}-${key}-${random_id.suffix[key].hex}"
+    key => "${var.partner_name}-${var.environment}-${key}-${random_id.suffix[key].hex}"
   }
 }
 

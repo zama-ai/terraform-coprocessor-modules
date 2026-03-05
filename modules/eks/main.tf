@@ -3,6 +3,11 @@ data "aws_region" "current" {}
 
 locals {
   # ----------------------------------------
+  #  Cluster name
+  # ----------------------------------------
+  cluster_name = "${var.name}-${var.environment}"
+
+  # ----------------------------------------
   #  Addons
   # ----------------------------------------
   vpc_cni_configuration_values = jsonencode(var.addons.vpc_cni_config)
@@ -45,14 +50,14 @@ locals {
   # ----------------------------------------
   #  Karpenter naming
   # ----------------------------------------
-  karpenter_queue_name       = var.karpenter.queue_name != null ? var.karpenter.queue_name : "${var.name}-Karpenter"
-  karpenter_rule_name_prefix = var.karpenter.rule_name_prefix != null ? var.karpenter.rule_name_prefix : substr(var.name, 0, min(20, length(var.name)))
+  karpenter_queue_name       = var.karpenter.queue_name != null ? var.karpenter.queue_name : "${local.cluster_name}-Karpenter"
+  karpenter_rule_name_prefix = var.karpenter.rule_name_prefix != null ? var.karpenter.rule_name_prefix : substr(local.cluster_name, 0, 20)
 
   # ----------------------------------------
   #  IAM policy names
   # ----------------------------------------
-  cluster_encryption_policy_name          = var.karpenter.enabled ? "${var.name}-ClusterEncryptionPolicy" : null
-  instance_profile_management_policy_name = var.karpenter.enabled ? "${var.name}-KarpenterInstanceProfileManagement" : null
+  cluster_encryption_policy_name          = var.karpenter.enabled ? "${local.cluster_name}-ClusterEncryptionPolicy" : null
+  instance_profile_management_policy_name = var.karpenter.enabled ? "${local.cluster_name}-KarpenterInstanceProfileManagement" : null
 }
 
 # ***************************************
@@ -62,7 +67,7 @@ module "eks" {
   source  = "terraform-aws-modules/eks/aws"
   version = "~> 21.0.6"
 
-  name               = var.name
+  name               = local.cluster_name
   kubernetes_version = var.cluster.version
   vpc_id             = var.vpc_id
   subnet_ids         = var.private_subnet_ids
@@ -90,8 +95,8 @@ module "eks" {
   }
 
   node_security_group_tags = merge(
-    var.karpenter.enabled ? { "karpenter.sh/discovery" = var.name } : {},
-    { "kubernetes.io/cluster/${var.name}" = null }
+    var.karpenter.enabled ? { "karpenter.sh/discovery" = local.cluster_name } : {},
+    { "kubernetes.io/cluster/${local.cluster_name}" = null }
   )
 
   tags = var.tags
@@ -149,7 +154,6 @@ module "karpenter" {
 
   tags = merge(var.tags, {
     Environment = module.eks.cluster_name
-    Terragrunt  = "true"
   })
 }
 
