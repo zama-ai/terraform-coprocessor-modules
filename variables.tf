@@ -10,10 +10,7 @@ variable "environment" {
   description = "Deployment environment (e.g. devnet, mainnet, testnet)."
   type        = string
 
-  validation {
-    condition     = contains(["devnet", "testnet", "mainnet"], var.environment)
-    error_message = "environment must be either 'devnet', 'testnet', or 'mainnet'."
-  }
+
 }
 
 variable "default_tags" {
@@ -78,7 +75,8 @@ variable "eks" {
     enabled = optional(bool, true)
 
     cluster = optional(object({
-      version                          = optional(string, "1.32")
+      version       = optional(string, "1.32")
+      name_override = optional(string, null)
       endpoint_public_access           = optional(bool, false)
       endpoint_private_access          = optional(bool, true)
       endpoint_public_access_cidrs     = optional(list(string), [])
@@ -231,6 +229,19 @@ variable "rds" {
   })
 
   default = { enabled = false }
+}
+
+# ******************************************************
+#  Kubernetes
+# ******************************************************
+variable "kubernetes" {
+  description = "Kubernetes provider configuration. When eks.enabled = true these are resolved automatically from the EKS module. Set explicitly when bringing your own cluster."
+  type = object({
+    host                   = optional(string, null)
+    cluster_ca_certificate = optional(string, null)
+    cluster_name           = optional(string, null)
+  })
+  default = {}
 }
 
 # ******************************************************

@@ -1,0 +1,248 @@
+# =============================================================================
+#  Core
+# =============================================================================
+partner_name = "acme"
+environment  = "mainnet"
+aws_region   = "eu-west-1"
+
+default_tags = {
+  Partner     = "acme"
+  Environment = "mainnet"
+  ManagedBy   = "terraform"
+}
+
+# =============================================================================
+#  Networking
+# =============================================================================
+networking = {
+  vpc = {
+    cidr = "10.0.0.0/16"
+
+    # Auto-detect AZs (limited to first 3). Uncomment to pin explicitly:
+    # availability_zones = ["eu-west-1a", "eu-west-1b", "eu-west-1c"]
+
+    # HA NAT (one per AZ). Set to true for cost savings at the expense of availability.
+    single_nat_gateway = false
+
+    # V2 subnet calculation
+    use_subnet_calc_v2       = true
+    private_subnet_cidr_mask = 24
+    public_subnet_cidr_mask  = 24
+
+    # Flow logs — set flow_log_destination_arn when enabling
+    flow_log_enabled = false
+    # flow_log_destination_arn = "arn:aws:s3:::your-vpc-flow-logs-bucket"
+  }
+
+  additional_subnets = {
+    enabled        = true
+    cidr_mask      = 20
+    expose_for_eks = true
+    elb_role       = "internal"
+
+    tags = {
+      Purpose = "cni-additional"
+    }
+  }
+
+  # Uncomment when using an existing VPC instead of creating a new one.
+  # existing_vpc = {
+  #   vpc_id                     = "vpc-0123456789abcdef0"
+  #   private_subnet_ids         = ["subnet-aaa", "subnet-bbb", "subnet-ccc"]
+  #   private_subnet_cidr_blocks = ["10.0.0.0/24", "10.0.1.0/24", "10.0.2.0/24"]
+  # }
+}
+
+# =============================================================================
+#  EKS
+# =============================================================================
+eks = {
+  cluster = {
+    version                          = "1.32"
+    endpoint_public_access           = false
+    endpoint_private_access          = true
+    enable_irsa                      = true
+    enable_creator_admin_permissions = true
+    admin_role_arns                  = []
+
+    # Uncomment to preserve an existing cluster name on import.
+    # name_override = "acme"
+  }
+
+  # Default addons (aws-ebs-csi-driver, coredns, vpc-cni, kube-proxy,
+  # eks-pod-identity-agent) are enabled automatically with most_recent = true.
+  # Override vpc_cni_config or add extras here if needed:
+  # addons = {
+  #   vpc_cni_config = {
+  #     init = { env = { DISABLE_TCP_EARLY_DEMUX = "true" } }
+  #     env  = {
+  #       ENABLE_POD_ENI                    = "true"
+  #       POD_SECURITY_GROUP_ENFORCING_MODE = "standard"
+  #       ENABLE_PREFIX_DELEGATION          = "true"
+  #       WARM_PREFIX_TARGET                = "1"
+  #     }
+  #   }
+  #   extra = {
+  #     aws-efs-csi-driver = { most_recent = true }
+  #   }
+  # }
+
+  node_groups = {
+    defaults = {
+      ami_type                   = "AL2023_x86_64_STANDARD"
+      use_custom_launch_template = true
+      disk_size                  = 50
+      disk_type                  = "gp3"
+    }
+
+    # AmazonSSMManagedInstanceCore added here so it applies to all node groups.
+    default_iam_policies = {
+      AmazonEBSCSIDriverPolicy           = "arn:aws:iam::aws:policy/service-role/AmazonEBSCSIDriverPolicy"
+      AmazonEC2ContainerRegistryReadOnly = "arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly"
+      AmazonEKSWorkerNodePolicy          = "arn:aws:iam::aws:policy/AmazonEKSWorkerNodePolicy"
+      AmazonSSMManagedInstanceCore       = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
+    }
+
+    groups = {
+      zws_pool = {
+        capacity_type          = "ON_DEMAND"
+        min_size               = 1
+        max_size               = 10
+        desired_size           = 2
+        instance_types         = ["t3.xlarge"]
+        use_additional_subnets = true
+
+        update_config = {
+          max_unavailable = 1
+        }
+
+        taints = {
+          dedicated = {
+            key    = "node.kubernetes.io/zwspool"
+            value  = "true"
+            effect = "NO_SCHEDULE"
+          }
+        }
+
+        labels = {
+          NodeGroup = "zwspool"
+        }
+
+        tags = {
+          NodeGroupType = "zwspool"
+        }
+      }
+
+      default = {
+        capacity_type  = "ON_DEMAND"
+        min_size       = 1
+        max_size       = 3
+        desired_size   = 3
+        instance_types = ["t3.xlarge"]
+
+        update_config = {
+          max_unavailable = 1
+        }
+
+        labels = {
+          NodeGroup = "default"
+        }
+
+        tags = {
+          NodeGroupType = "default"
+        }
+      }
+    }
+  }
+
+  karpenter = {
+    enabled          = true
+    rule_name_prefix = "coproc"
+
+    controller_nodegroup = {
+      enabled = true
+    }
+  }
+}
+
+# =============================================================================
+#  RDS
+# =============================================================================
+rds = {
+  enabled        = true
+  db_name        = "coprocessor"
+  engine_version = "17.4"
+
+  username = "coprocessor"
+
+  instance_class        = "db.m5.4xlarge"
+  allocated_storage     = 2000
+  max_allocated_storage = 3000
+
+  multi_az                        = true
+  backup_retention_period         = 30
+  deletion_protection             = true
+  enable_master_password_rotation = false
+
+  # Enhanced monitoring disabled — differs from submodule default of 60.
+  monitoring_interval    = 0
+  create_monitoring_role = true
+
+  allowed_cidr_blocks = ["10.0.16.0/20", "10.0.32.0/20", "10.0.48.0/20"]
+
+  parameters = [
+    {
+      name  = "rds.force_ssl"
+      value = "0"
+    }
+  ]
+
+  # Uncomment when importing a pre-existing RDS instance to preserve its identifier
+  # and prevent resource recreation.
+  # identifier_override = "zama-mainnet-coprocessor"
+}
+
+# =============================================================================
+#  S3
+# =============================================================================
+s3 = {
+  buckets = {
+    coprocessor = {
+      purpose       = "coprocessor-storage"
+      force_destroy = true
+      versioning    = true
+
+      # Uncomment and set to the existing bucket name when importing a pre-existing bucket.
+      # name_override = "zama-coprocessor-mainnet-<hex>"
+
+      public_access = {
+        enabled = true
+      }
+
+      cors = {
+        enabled         = true
+        allowed_origins = ["*"]
+        allowed_methods = ["GET", "HEAD"]
+        allowed_headers = ["Authorization"]
+        expose_headers  = ["Access-Control-Allow-Origin"]
+      }
+
+      policy_statements = [
+        {
+          sid        = "PublicRead"
+          effect     = "Allow"
+          principals = { "*" = [] }
+          actions    = ["s3:GetObject"]
+          resources  = ["objects"]
+        },
+        {
+          sid        = "ZamaList"
+          effect     = "Allow"
+          principals = { "*" = [] }
+          actions    = ["s3:ListBucket"]
+          resources  = ["bucket"]
+        }
+      ]
+    }
+  }
+}

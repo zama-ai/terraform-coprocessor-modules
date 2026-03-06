@@ -22,8 +22,8 @@ module "rds_security_group" {
   source  = "terraform-aws-modules/security-group/aws"
   version = "~> 5.3.0"
 
-  name        = local.identifier
-  description = "Security group for ${local.identifier} RDS ${var.rds.engine} on port ${var.rds.port}"
+  name        = coalesce(var.rds.db_name, "rds-sg")
+  description = "Security group for ${coalesce(var.rds.db_name, "rds-sg")} RDS ${var.rds.engine} on port ${var.rds.port}"
   vpc_id      = var.vpc_id
 
   ingress_with_cidr_blocks = [

@@ -1,10 +1,16 @@
+locals {
+  k8s_host     = coalesce(var.kubernetes.host, one(module.eks[*].cluster_endpoint))
+  k8s_ca_cert  = coalesce(var.kubernetes.cluster_ca_certificate, one(module.eks[*].cluster_certificate_authority_data))
+  k8s_cluster  = coalesce(var.kubernetes.cluster_name, one(module.eks[*].cluster_name))
+}
+
 terraform {
-  required_version = ">= 1.9"
+  required_version = ">= 1.10"
 
   required_providers {
     aws = {
       source  = "hashicorp/aws"
-      version = "~> 5.0"
+      version = "~> 6.0"
     }
     kubernetes = {
       source  = "hashicorp/kubernetes"
@@ -26,12 +32,12 @@ provider "aws" {
 }
 
 provider "kubernetes" {
-  host                   = one(module.eks[*].cluster_endpoint) != null ? one(module.eks[*].cluster_endpoint) : ""
-  cluster_ca_certificate = one(module.eks[*].cluster_certificate_authority_data) != null ? base64decode(one(module.eks[*].cluster_certificate_authority_data)) : ""
+  host                   = local.k8s_host != null ? local.k8s_host : ""
+  cluster_ca_certificate = local.k8s_ca_cert != null ? base64decode(local.k8s_ca_cert) : ""
 
   exec {
     api_version = "client.authentication.k8s.io/v1beta1"
     command     = "aws"
-    args        = ["eks", "get-token", "--cluster-name", one(module.eks[*].cluster_name) != null ? one(module.eks[*].cluster_name) : ""]
+    args        = ["eks", "get-token", "--cluster-name", local.k8s_cluster != null ? local.k8s_cluster : ""]
   }
 }

@@ -5,7 +5,7 @@ locals {
   # ----------------------------------------
   #  Cluster name
   # ----------------------------------------
-  cluster_name = "${var.name}-${var.environment}"
+  cluster_name = coalesce(var.cluster.name_override, "${var.name}-${var.environment}")
 
   # ----------------------------------------
   #  Addons

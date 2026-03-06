@@ -33,7 +33,8 @@ variable "additional_subnet_ids" {
 variable "cluster" {
   description = "EKS cluster configuration."
   type = object({
-    version = optional(string, "1.32")
+    version       = optional(string, "1.32")
+    name_override = optional(string, null)
 
     endpoint_public_access       = optional(bool, false)
     endpoint_private_access      = optional(bool, true)
