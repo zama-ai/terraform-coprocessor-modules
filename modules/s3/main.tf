@@ -102,7 +102,7 @@ data "aws_iam_policy_document" "this" {
       }
 
       dynamic "principals" {
-        for_each = contains(keys(statement.value.principals), "*") ? [] : statement.value.principals
+        for_each = { for k, v in statement.value.principals : k => v if k != "*" }
         content {
           type        = principals.key
           identifiers = principals.value

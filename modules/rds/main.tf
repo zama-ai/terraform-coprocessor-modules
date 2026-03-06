@@ -5,12 +5,19 @@ locals {
   identifier = coalesce(
     var.rds.identifier_override,
     substr(
-      lower(replace("${var.partner_name}-${var.environment}-${var.rds.db_name}", "/[^a-z0-9-]/", "-")),
+      lower(replace(
+        join("-", compact([var.partner_name, var.environment, var.rds.db_name])),
+        "/[^a-z0-9-]/", "-"
+      )),
       0, 63
     )
   )
 
   pg_major_version = floor(tonumber(var.rds.engine_version))
+
+  # Upstream terraform-aws-modules/rds requires a non-null monitoring_role_name
+  # when create_monitoring_role = true. Compute a stable default when not overridden.
+  monitoring_role_name = coalesce(var.rds.monitoring_role_name, "${local.identifier}-monitoring")
 }
 
 # ***************************************
@@ -73,7 +80,7 @@ module "rds_instance" {
 
   monitoring_interval    = var.rds.monitoring_interval
   create_monitoring_role = var.rds.create_monitoring_role
-  monitoring_role_name   = var.rds.monitoring_role_name
+  monitoring_role_name   = local.monitoring_role_name
   monitoring_role_arn    = var.rds.monitoring_role_arn
 
   create_db_subnet_group = true

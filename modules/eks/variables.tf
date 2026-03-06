@@ -115,7 +115,7 @@ variable "node_groups" {
       update_config = optional(object({
         max_unavailable            = optional(number)
         max_unavailable_percentage = optional(number)
-      }), {})
+      }), { max_unavailable = 1 })
       taints = optional(map(object({
         key    = string
         value  = optional(string)
@@ -135,6 +135,7 @@ variable "node_groups" {
         desired_size   = 1
         instance_types = ["t3.medium"]
         disk_size      = 30
+        update_config  = { max_unavailable = 1 }
       }
     })
   })
