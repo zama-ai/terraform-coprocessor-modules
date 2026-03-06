@@ -1,64 +1,48 @@
 # ******************************************************
-#  Environment
+#  Basic
 # ******************************************************
-environment = "mainnet"
+partner_name = "acme"
+environment  = "mainnet"
 
-# ******************************************************
-#  Tagging
-# ******************************************************
-tags = {
-  "Project"     = "coprocessor-infrastructure"
-  "Team"        = "infra"
-  "Cost-Center" = "engineering"
-  "Terraform"   = "true"
-}
-
-# ******************************************************
-#  Kubernetes
-# ******************************************************
-cluster_name                         = "coprocessor"
-k8s_coprocessor_namespace            = "coproc"
-k8s_coprocessor_service_account_name = "coprocessor"
-create_coprocessor_namespace         = false
-
-# ******************************************************
-#  S3
-# ******************************************************
-bucket_prefix = "zama-coprocessor-mainnet"
+# Note: vpc_id, private_subnet_ids, and private_subnet_cidr_blocks are
+# resolved by the root module from the networking module or existing_vpc inputs.
+vpc_id                     = "<vpc-id>"
+private_subnet_ids         = ["<subnet-id-1>", "<subnet-id-2>", "<subnet-id-3>"]
+private_subnet_cidr_blocks = ["<cidr-1>", "<cidr-2>", "<cidr-3>"]
 
 # ******************************************************
 #  RDS
 # ******************************************************
-enable_rds                          = true
-rds_prefix                          = "zama"
-rds_db_name                         = "coprocessor"
-rds_username                        = "coprocessor"
-rds_engine_version                  = "17.4"
-rds_instance_class                  = "db.m5.4xlarge"
-rds_allocated_storage               = 2000
-rds_max_allocated_storage           = 3000
-rds_backup_retention_period         = 30
-rds_deletion_protection             = true
-rds_multi_az                        = true
-rds_enable_master_password_rotation = false
-rds_create_monitoring_role          = true
-rds_allowed_cidr_blocks             = ["10.0.16.0/20", "10.0.32.0/20", "10.0.48.0/20"]
+rds = {
+  enabled        = true
+  db_name        = "coprocessor"
+  engine_version = "17.4"
 
-rds_parameters = [
-  {
-    name  = "rds.force_ssl"
-    value = "0"
-  }
-]
+  username = "coprocessor"
 
-# ******************************************************
-#  RDS ExternalName Service
-# ******************************************************
-rds_create_externalname_service      = true
-rds_externalname_service_name        = "coprocessor-database"
-rds_externalname_service_namespace   = "coproc"
-rds_externalname_service_annotations = {
-  "tailscale.com/expose"   = "true"
-  "tailscale.com/hostname" = "coprocessor-database-mainnet"
-  "tailscale.com/tags"     = "tag:k8s-coprocessor-prod"
+  instance_class        = "db.m5.4xlarge"
+  allocated_storage     = 2000
+  max_allocated_storage = 3000
+
+  multi_az                        = true
+  backup_retention_period         = 30
+  deletion_protection             = true
+  enable_master_password_rotation = false
+
+  # Enhanced monitoring disabled — differs from submodule default of 60.
+  monitoring_interval    = 0
+  create_monitoring_role = true
+
+  allowed_cidr_blocks = ["10.0.16.0/20", "10.0.32.0/20", "10.0.48.0/20"]
+
+  parameters = [
+    {
+      name  = "rds.force_ssl"
+      value = "0"
+    }
+  ]
+
+  # Uncomment when importing a pre-existing RDS instance to preserve its identifier
+  # and prevent resource recreation.
+  # identifier_override = "zama-mainnet-coprocessor"
 }

@@ -1,7 +1,7 @@
 # =============================================================================
 #  Basic
 # =============================================================================
-name        = "coprocessor"
+name        = "acme"
 environment = "mainnet"
 
 # Note: vpc_id, private_subnet_ids, and additional_subnet_ids are resolved

@@ -1,7 +1,7 @@
 # =============================================================================
 #  Basic
 # =============================================================================
-partner_name = "coprocessor"
+partner_name = "acme"
 environment  = "mainnet"
 
 # =============================================================================
@@ -45,5 +45,5 @@ additional_subnets = {
 # =============================================================================
 # When consumed via the root module, these are injected automatically.
 # Required here for standalone use.
-eks_cluster_name = "coprocessor-mainnet"
+eks_cluster_name = "acme-mainnet"
 enable_karpenter = true

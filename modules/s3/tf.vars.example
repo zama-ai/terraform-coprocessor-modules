@@ -1,4 +1,4 @@
-partner_name = "zama"
+partner_name = "acme"
 environment  = "mainnet"
 
 buckets = {
