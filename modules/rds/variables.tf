@@ -17,11 +17,13 @@ variable "vpc_id" {
 variable "private_subnet_ids" {
   description = "List of private subnet IDs for the RDS subnet group."
   type        = list(string)
+  default     = []
 }
 
 variable "private_subnet_cidr_blocks" {
   description = "CIDR blocks of private subnets, merged into RDS security group ingress."
   type        = list(string)
+  default     = []
 }
 
 variable "rds" {
@@ -38,7 +40,7 @@ variable "rds" {
 
     # Engine
     engine         = optional(string, "postgres")
-    engine_version = optional(number, 17)
+    engine_version = optional(string, "17")
 
     # Instance
     instance_class        = optional(string, "db.t4g.medium")

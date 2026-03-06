@@ -79,7 +79,7 @@ variable "eks" {
 
     cluster = optional(object({
       version                          = optional(string, "1.32")
-      endpoint_public_access           = optional(bool, true)
+      endpoint_public_access           = optional(bool, false)
       endpoint_private_access          = optional(bool, true)
       endpoint_public_access_cidrs     = optional(list(string), [])
       enable_irsa                      = optional(bool, true)
@@ -200,7 +200,7 @@ variable "rds" {
     identifier_override = optional(string, null)
 
     engine         = optional(string, "postgres")
-    engine_version = optional(number, 17)
+    engine_version = optional(string, "17")
 
     instance_class        = optional(string, "db.t4g.medium")
     allocated_storage     = optional(number, 20)

@@ -10,7 +10,7 @@ locals {
     )
   )
 
-  pg_major_version = floor(var.rds.engine_version)
+  pg_major_version = floor(tonumber(var.rds.engine_version))
 }
 
 # ***************************************

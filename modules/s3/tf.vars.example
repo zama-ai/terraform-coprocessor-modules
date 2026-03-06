@@ -1,18 +1,14 @@
 partner_name = "zama"
-environment  = "coprocessor-prod"
-
-tags = {
-  "Project"     = "coprocessor-infrastructure"
-  "Team"        = "infra"
-  "Cost-Center" = "engineering"
-  "Terraform"   = "true"
-}
+environment  = "mainnet"
 
 buckets = {
-  coprocessor-mainnet = {
+  coprocessor = {
     purpose       = "coprocessor-storage"
     force_destroy = true
     versioning    = true
+
+    # Uncomment and set to the existing bucket name when importing a pre-existing bucket.
+    # name_override = "zama-coprocessor-mainnet-<hex>"
 
     public_access = {
       enabled = true

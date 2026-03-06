@@ -34,7 +34,6 @@ variable "additional_subnets" {
     expose_for_eks   = optional(bool, false)
     elb_role         = optional(string, null) # "internal" | "public" | null
     tags             = optional(map(string), {})
-    node_groups      = optional(list(string), []) # node groups routed to additional subnets
   })
   default = { enabled = false }
 }
