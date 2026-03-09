@@ -1,3 +1,27 @@
+## Pre-commit
+
+This repo uses [pre-commit](https://pre-commit.com/) to enforce consistency on every commit.
+
+**Setup:**
+
+```bash
+pip install pre-commit
+pre-commit install
+```
+
+**Hooks that run automatically:**
+
+| Hook | What it does |
+|------|-------------|
+| `terraform_fmt` | Formats all `.tf` files |
+| `terraform_validate` | Validates module configuration |
+| `terraform_tflint` | Lints for common mistakes and best practices |
+| `terraform_docs` | Regenerates the `<!-- BEGIN_TF_DOCS -->` sections in all `README.md` files |
+
+To run all hooks manually: `pre-commit run --all-files`
+
+---
+
 <!-- BEGIN_TF_DOCS -->
 ## Requirements
 
