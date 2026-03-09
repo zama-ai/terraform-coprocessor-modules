@@ -2,10 +2,10 @@
 
 This repo uses [pre-commit](https://pre-commit.com/) to enforce consistency on every commit.
 
-**Setup:**
+**Dependencies** — must be on your `PATH`:
 
 ```bash
-pip install pre-commit
+brew install pre-commit terraform-docs tflint
 ```
 
 **Hooks that run automatically:**
@@ -15,7 +15,16 @@ pip install pre-commit
 | `terraform_fmt` | Formats all `.tf` files |
 | `terraform_validate` | Validates module configuration |
 | `terraform_tflint` | Lints for common mistakes and best practices |
-| `terraform_docs` | Regenerates the `<!-- BEGIN_TF_DOCS -->
+| `terraform_docs` | Regenerates the `BEGIN_TF_DOCS` sections in all `README.md` files |
+| `check-merge-conflict` | Blocks commits containing unresolved merge conflict markers |
+| `end-of-file-fixer` | Ensures files end with a newline |
+| `trailing-whitespace` | Removes trailing whitespace |
+
+To run all hooks manually: `pre-commit run --all-files`
+
+---
+
+<!-- BEGIN_TF_DOCS -->
 ## Requirements
 
 | Name | Version |
