@@ -1,3 +1,18 @@
+## Tests
+
+Uses the native [Terraform test framework](https://developer.hashicorp.com/terraform/language/testing) (requires Terraform ≥ 1.10). All tests use mock providers and `command = plan` — no real AWS credentials needed.
+
+**Run all tests:**
+
+```bash
+terraform test                        # root module
+cd modules/<name> && terraform test   # individual submodule
+```
+
+Tests live in `tests/unit.tftest.hcl` within each module directory.
+
+---
+
 ## Pre-commit
 
 This repo uses [pre-commit](https://pre-commit.com/) to enforce consistency on every commit.
