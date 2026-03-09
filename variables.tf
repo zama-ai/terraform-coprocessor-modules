@@ -75,8 +75,8 @@ variable "eks" {
     enabled = optional(bool, true)
 
     cluster = optional(object({
-      version       = optional(string, "1.32")
-      name_override = optional(string, null)
+      version                          = optional(string, "1.32")
+      name_override                    = optional(string, null)
       endpoint_public_access           = optional(bool, false)
       endpoint_private_access          = optional(bool, true)
       endpoint_public_access_cidrs     = optional(list(string), [])
@@ -110,7 +110,7 @@ variable "eks" {
     }), {})
 
     node_groups = optional(object({
-      defaults             = optional(map(any), {})
+      defaults = optional(map(any), {})
       default_iam_policies = optional(map(string), {
         AmazonEBSCSIDriverPolicy           = "arn:aws:iam::aws:policy/service-role/AmazonEBSCSIDriverPolicy"
         AmazonEC2ContainerRegistryReadOnly = "arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly"
@@ -171,7 +171,7 @@ variable "eks" {
           key    = string
           value  = optional(string)
           effect = string
-        })), {
+          })), {
           karpenter = {
             key    = "karpenter.sh/controller"
             value  = "true"
@@ -206,10 +206,10 @@ variable "rds" {
     multi_az              = optional(bool, false)
     port                  = optional(number, 5432)
 
-    username                         = optional(string, "postgres")
-    password                         = optional(string, null)
-    enable_master_password_rotation  = optional(bool, false)
-    master_password_rotation_days    = optional(number, 7)
+    username                        = optional(string, "postgres")
+    password                        = optional(string, null)
+    enable_master_password_rotation = optional(bool, false)
+    master_password_rotation_days   = optional(number, 7)
 
     maintenance_window      = optional(string, "Mon:00:00-Mon:03:00")
     backup_retention_period = optional(number, 7)
@@ -255,23 +255,23 @@ variable "s3" {
       The map key is a short logical name (e.g. "coprocessor", "raw-data").
       Each entry defines configuration and behavior for that bucket.
   EOT
-  
+
   type = object({
     buckets = map(object({
       # Human-readable description (used for tagging)
-      purpose       = string
+      purpose = string
 
       # Allow deletion even if objects exist
       force_destroy = optional(bool, false)
 
       # Enable object versioning
-      versioning    = optional(bool, true)
+      versioning = optional(bool, true)
 
       # Public access configuration
       public_access = optional(object({
         enabled = bool
-      }), {
-        enabled = false 
+        }), {
+        enabled = false
       })
 
       # CORS configuration
@@ -281,7 +281,7 @@ variable "s3" {
         allowed_methods = list(string)
         allowed_headers = list(string)
         expose_headers  = list(string)
-      }), {
+        }), {
         enabled         = false
         allowed_origins = []
         allowed_methods = []

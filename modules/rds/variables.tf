@@ -61,10 +61,10 @@ variable "rds" {
     deletion_protection     = optional(bool, true)
 
     # Monitoring
-    monitoring_interval      = optional(number, 60)
-    create_monitoring_role   = optional(bool, true)
-    monitoring_role_name     = optional(string, null)
-    monitoring_role_arn      = optional(string, null)
+    monitoring_interval    = optional(number, 60)
+    create_monitoring_role = optional(bool, true)
+    monitoring_role_name   = optional(string, null)
+    monitoring_role_arn    = optional(string, null)
 
     # Parameters
     parameters = optional(list(object({

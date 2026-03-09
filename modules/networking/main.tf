@@ -48,7 +48,7 @@ locals {
 
   additional_elb_tags = !var.additional_subnets.expose_for_eks ? {} : (
     var.additional_subnets.elb_role == "internal" ? { "kubernetes.io/role/internal-elb" = "1" } :
-    var.additional_subnets.elb_role == "public"   ? { "kubernetes.io/role/elb"          = "1" } :
+    var.additional_subnets.elb_role == "public" ? { "kubernetes.io/role/elb" = "1" } :
     {}
   )
 }

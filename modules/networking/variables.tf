@@ -21,7 +21,7 @@ variable "vpc" {
     public_subnet_cidr_mask  = optional(number, 24)
 
     # Flow logs
-    flow_log_enabled     = optional(bool, false)
+    flow_log_enabled         = optional(bool, false)
     flow_log_destination_arn = optional(string, null)
   })
 }
@@ -29,11 +29,11 @@ variable "vpc" {
 variable "additional_subnets" {
   description = "Optional additional subnets, e.g. for CNI or specific node groups."
   type = object({
-    enabled          = optional(bool, false)
-    cidr_mask        = optional(number, 22)
-    expose_for_eks   = optional(bool, false)
-    elb_role         = optional(string, null) # "internal" | "public" | null
-    tags             = optional(map(string), {})
+    enabled        = optional(bool, false)
+    cidr_mask      = optional(number, 22)
+    expose_for_eks = optional(bool, false)
+    elb_role       = optional(string, null) # "internal" | "public" | null
+    tags           = optional(map(string), {})
   })
   default = { enabled = false }
 }

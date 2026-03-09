@@ -259,8 +259,8 @@ resource "kubernetes_service" "externalname" {
   count = var.enable_rds && var.rds_create_externalname_service ? 1 : 0
 
   metadata {
-    name      = var.rds_externalname_service_name
-    namespace = var.rds_externalname_service_namespace
+    name        = var.rds_externalname_service_name
+    namespace   = var.rds_externalname_service_namespace
     annotations = var.rds_externalname_service_annotations
   }
   spec {

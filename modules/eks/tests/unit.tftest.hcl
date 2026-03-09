@@ -68,8 +68,8 @@ run "cluster_name_defaults_to_name_dash_env" {
 
   variables {
     karpenter = {
-      enabled          = true
-      rule_name_prefix = "test"
+      enabled              = true
+      rule_name_prefix     = "test"
       controller_nodegroup = { enabled = false }
     }
   }
@@ -86,8 +86,8 @@ run "name_override_changes_cluster_name" {
   variables {
     cluster = { name_override = "acme" }
     karpenter = {
-      enabled          = true
-      rule_name_prefix = "test"
+      enabled              = true
+      rule_name_prefix     = "test"
       controller_nodegroup = { enabled = false }
     }
   }
@@ -156,8 +156,8 @@ run "karpenter_enabled_creates_all_resources" {
 
   variables {
     karpenter = {
-      enabled          = true
-      rule_name_prefix = "coproc"
+      enabled              = true
+      rule_name_prefix     = "coproc"
       controller_nodegroup = { enabled = false }
     }
   }
@@ -188,8 +188,8 @@ run "karpenter_encryption_policy_name_includes_cluster_name" {
 
   variables {
     karpenter = {
-      enabled          = true
-      rule_name_prefix = "coproc"
+      enabled              = true
+      rule_name_prefix     = "coproc"
       controller_nodegroup = { enabled = false }
     }
   }
@@ -292,7 +292,7 @@ run "rejects_karpenter_rule_name_prefix_over_20_chars" {
   variables {
     karpenter = {
       enabled          = true
-      rule_name_prefix = "this-prefix-is-too-long"  # 23 chars
+      rule_name_prefix = "this-prefix-is-too-long" # 23 chars
     }
   }
 
@@ -304,8 +304,8 @@ run "accepts_karpenter_rule_name_prefix_at_20_chars" {
 
   variables {
     karpenter = {
-      enabled          = true
-      rule_name_prefix = "exactly-twenty-chars"  # 20 chars
+      enabled              = true
+      rule_name_prefix     = "exactly-twenty-chars" # 20 chars
       controller_nodegroup = { enabled = false }
     }
   }

@@ -38,7 +38,7 @@ variables {
   aws_region   = "eu-west-1"
 
   networking = {
-    vpc = { cidr = "10.0.0.0/16", availability_zones = ["eu-west-1a", "eu-west-1b"] }
+    vpc     = { cidr = "10.0.0.0/16", availability_zones = ["eu-west-1a", "eu-west-1b"] }
     enabled = false
     existing_vpc = {
       vpc_id                     = "vpc-00000000000000000"
@@ -97,8 +97,8 @@ run "additional_subnet_ids_empty_when_additional_subnets_disabled" {
 
   variables {
     networking = {
-      vpc     = { cidr = "10.0.0.0/16", availability_zones = ["eu-west-1a", "eu-west-1b"] }
-      enabled = true
+      vpc                = { cidr = "10.0.0.0/16", availability_zones = ["eu-west-1a", "eu-west-1b"] }
+      enabled            = true
       additional_subnets = { enabled = false }
     }
   }

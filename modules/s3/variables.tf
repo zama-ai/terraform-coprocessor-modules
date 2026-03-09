@@ -33,7 +33,7 @@ variable "buckets" {
       # Public access configuration
       public_access = optional(object({
         enabled = bool
-      }), {
+        }), {
         enabled = false
       })
 
@@ -44,7 +44,7 @@ variable "buckets" {
         allowed_methods = list(string)
         allowed_headers = list(string)
         expose_headers  = list(string)
-      }), {
+        }), {
         enabled         = false
         allowed_origins = []
         allowed_methods = []

@@ -2,7 +2,7 @@
 #  Stable random suffix per bucket
 # ***************************************
 resource "random_id" "suffix" {
-  for_each    = var.buckets
+  for_each = var.buckets
 
   byte_length = 4
   keepers = {
@@ -26,7 +26,7 @@ locals {
 #  Buckets
 # ***************************************
 resource "aws_s3_bucket" "this" {
-  for_each      = var.buckets
+  for_each = var.buckets
 
   bucket        = local.bucket_names[each.key]
   force_destroy = each.value.force_destroy
@@ -87,7 +87,7 @@ data "aws_iam_policy_document" "this" {
 
       resources = [
         for resource in statement.value.resources : (
-          resource == "bucket"  ? aws_s3_bucket.this[each.key].arn :
+          resource == "bucket" ? aws_s3_bucket.this[each.key].arn :
           resource == "objects" ? "${aws_s3_bucket.this[each.key].arn}/*" :
           resource
         )

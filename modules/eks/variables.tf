@@ -40,8 +40,8 @@ variable "cluster" {
     endpoint_private_access      = optional(bool, true)
     endpoint_public_access_cidrs = optional(list(string), [])
 
-    enable_irsa                        = optional(bool, true)
-    enable_creator_admin_permissions   = optional(bool, true)
+    enable_irsa                      = optional(bool, true)
+    enable_creator_admin_permissions = optional(bool, true)
 
     admin_role_arns = optional(list(string), [])
   })
@@ -127,7 +127,7 @@ variable "node_groups" {
         http_put_response_hop_limit = "2"
         http_tokens                 = "required"
       })
-    })), {
+      })), {
       default = {
         capacity_type  = "ON_DEMAND"
         min_size       = 1
@@ -173,7 +173,7 @@ variable "karpenter" {
         key    = string
         value  = optional(string)
         effect = string
-      })), {
+        })), {
         karpenter = {
           key    = "karpenter.sh/controller"
           value  = "true"
