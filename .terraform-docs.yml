@@ -8,7 +8,7 @@ footer-from: ""
 recursive:
   enabled: true
   path: modules
-  include-main: false
+  include-main: true
 
 sections:
   hide: []
