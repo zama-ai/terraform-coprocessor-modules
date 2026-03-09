@@ -132,7 +132,7 @@ variable "eks" {
         update_config = optional(object({
           max_unavailable            = optional(number)
           max_unavailable_percentage = optional(number)
-        }), {})
+        }), { max_unavailable = 1 })
         taints = optional(map(object({
           key    = string
           value  = optional(string)

@@ -1,7 +1,7 @@
 locals {
-  k8s_host     = coalesce(var.kubernetes.host, one(module.eks[*].cluster_endpoint))
-  k8s_ca_cert  = coalesce(var.kubernetes.cluster_ca_certificate, one(module.eks[*].cluster_certificate_authority_data))
-  k8s_cluster  = coalesce(var.kubernetes.cluster_name, one(module.eks[*].cluster_name))
+  k8s_host    = var.kubernetes.host != null ? var.kubernetes.host : one(module.eks[*].cluster_endpoint)
+  k8s_ca_cert = var.kubernetes.cluster_ca_certificate != null ? var.kubernetes.cluster_ca_certificate : one(module.eks[*].cluster_certificate_authority_data)
+  k8s_cluster = var.kubernetes.cluster_name != null ? var.kubernetes.cluster_name : one(module.eks[*].cluster_name)
 }
 
 terraform {

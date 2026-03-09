@@ -38,7 +38,7 @@ variable "cluster" {
 
     endpoint_public_access       = optional(bool, false)
     endpoint_private_access      = optional(bool, true)
-    endpoint_public_access_cidrs = optional(list(string), ["0.0.0.0/0"])
+    endpoint_public_access_cidrs = optional(list(string), [])
 
     enable_irsa                        = optional(bool, true)
     enable_creator_admin_permissions   = optional(bool, true)

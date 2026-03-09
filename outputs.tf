@@ -77,6 +77,16 @@ output "rds_security_group_id" {
   value       = module.rds.security_group_id
 }
 
+output "rds_db_instance_identifier" {
+  description = "The identifier of the RDS instance."
+  value       = module.rds.db_instance_identifier
+}
+
+output "rds_db_instance_port" {
+  description = "The port the RDS instance is listening on."
+  value       = module.rds.db_instance_port
+}
+
 # ******************************************************
 #  S3
 # ******************************************************

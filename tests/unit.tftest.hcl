@@ -32,8 +32,6 @@ mock_provider "cloudinit" {}
 # - networking.enabled = false with existing_vpc set — keeps the baseline simple
 #   (no networking module, all VPC values come directly from variables).
 # - eks.enabled = false — avoids needing EKS-specific mocks in simple tests.
-# - kubernetes credentials supplied to avoid coalesce(null, null) crash in
-#   versions.tf when both eks is disabled and kubernetes.host is not set.
 variables {
   partner_name = "acme"
   environment  = "mainnet"
@@ -50,12 +48,6 @@ variables {
   }
 
   eks = { enabled = false }
-
-  kubernetes = {
-    host                   = "https://fake-endpoint"
-    cluster_ca_certificate = "ZmFrZQ=="
-    cluster_name           = "fake-cluster"
-  }
 }
 
 # =============================================================================
@@ -225,4 +217,23 @@ run "rejects_invalid_vpc_cidr" {
   }
 
   expect_failures = [var.networking]
+}
+
+# =============================================================================
+#  coalesce(null, null) regression — eks disabled, no kubernetes credentials
+#
+# Before the fix, versions.tf used coalesce() for the kubernetes provider locals.
+# With eks.enabled = false and no kubernetes.host set, both arguments are null
+# and coalesce() errors. The fix uses conditionals instead.
+# =============================================================================
+
+run "eks_disabled_without_kubernetes_credentials_plans_without_error" {
+  command = plan
+
+  # No kubernetes variable override — uses the default (all nulls).
+  # eks.enabled = false from shared variables.
+  assert {
+    condition     = length(module.eks) == 0
+    error_message = "EKS module must not be created when eks.enabled = false."
+  }
 }
