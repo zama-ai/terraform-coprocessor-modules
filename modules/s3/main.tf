@@ -73,8 +73,8 @@ resource "aws_s3_bucket_public_access_block" "this" {
 
 data "aws_iam_policy_document" "this" {
   for_each = {
-    for key, value in var.buckets : key => value
-    if length(value.policy_statements) > 0
+    for key, config in var.buckets : key => config
+    if length(config.policy_statements) > 0
   }
 
   dynamic "statement" {
@@ -102,7 +102,7 @@ data "aws_iam_policy_document" "this" {
       }
 
       dynamic "principals" {
-        for_each = { for k, v in statement.value.principals : k => v if k != "*" }
+        for_each = { for key, value in statement.value.principals : key => value if key != "*" }
         content {
           type        = principals.key
           identifiers = principals.value
@@ -135,8 +135,8 @@ resource "aws_s3_bucket_policy" "this" {
 # ***************************************
 resource "aws_s3_bucket_cors_configuration" "this" {
   for_each = {
-    for key, value in var.buckets : key => value
-    if value.cors.enabled
+    for key, config in var.buckets : key => config
+    if config.cors.enabled
   }
 
   bucket = aws_s3_bucket.this[each.key].id

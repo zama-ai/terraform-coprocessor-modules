@@ -10,6 +10,13 @@ locals {
   # ----------------------------------------
   #  Addons
   # ----------------------------------------
+  # Computed from var inputs (not merged_addons) to avoid a circular reference
+  # when injecting pod_identity_association into the addon configs below.
+  ebs_csi_enabled = (
+    contains(keys(var.addons.defaults), "aws-ebs-csi-driver") ||
+    contains(keys(var.addons.extra), "aws-ebs-csi-driver")
+  )
+
   vpc_cni_configuration_values = jsonencode(var.addons.vpc_cni_config)
 
   merged_addons = merge(
@@ -20,6 +27,17 @@ locals {
         { configuration_values = local.vpc_cni_configuration_values }
       )
     },
+    local.ebs_csi_enabled ? {
+      aws-ebs-csi-driver = merge(
+        lookup(var.addons.defaults, "aws-ebs-csi-driver", { most_recent = true }),
+        {
+          pod_identity_association = [{
+            role_arn        = module.ebs_csi_pod_identity.iam_role_arn
+            service_account = "ebs-csi-controller-sa"
+          }]
+        }
+      )
+    } : {},
     var.addons.extra
   )
 
@@ -27,9 +45,9 @@ locals {
   #  Node Groups
   # ----------------------------------------
   node_groups_with_subnets = {
-    for name, cfg in var.node_groups.groups :
-    name => merge(cfg, {
-      subnet_ids = cfg.use_additional_subnets ? var.additional_subnet_ids : null
+    for key, config in var.node_groups.groups :
+    key => merge(config, {
+      subnet_ids = config.use_additional_subnets && length(var.additional_subnet_ids) > 0 ? var.additional_subnet_ids : null
     })
   }
 
@@ -82,12 +100,12 @@ module "eks" {
   addons = local.merged_addons
 
   eks_managed_node_groups = {
-    for k, v in local.all_node_groups : k => merge(
+    for key, config in local.all_node_groups : key => merge(
       var.node_groups.defaults,
-      v,
+      config,
       {
         iam_role_additional_policies = merge(
-          lookup(v, "iam_role_additional_policies", {}),
+          lookup(config, "iam_role_additional_policies", {}),
           var.node_groups.default_iam_policies
         )
       }
@@ -175,7 +193,7 @@ resource "aws_iam_policy" "karpenter_encryption" {
       Resource = "*"
       Condition = {
         StringEquals = {
-          "kms:ViaService" = "ec2.${data.aws_region.current.name}.amazonaws.com"
+          "kms:ViaService" = "ec2.${data.aws_region.current.region}.amazonaws.com"
         }
       }
     }]
@@ -203,7 +221,7 @@ resource "aws_iam_policy" "karpenter_instance_profile" {
 }
 
 resource "aws_iam_service_linked_role" "spot" {
-  count            = var.karpenter.enabled ? 1 : 0
+  count            = var.karpenter.enabled && var.karpenter.create_spot_service_linked_role ? 1 : 0
   aws_service_name = "spot.amazonaws.com"
 }
 
@@ -217,4 +235,15 @@ resource "aws_iam_role_policy_attachment" "karpenter_instance_profile" {
   count      = var.karpenter.enabled ? 1 : 0
   role       = module.karpenter[0].iam_role_name
   policy_arn = aws_iam_policy.karpenter_instance_profile[0].arn
+}
+
+# ***************************************
+#  Pod Identity — EBS CSI Driver
+# ***************************************
+module "ebs_csi_pod_identity" {
+  source  = "terraform-aws-modules/eks-pod-identity/aws"
+  version = "~> 2.5"
+
+  name                      = "${local.cluster_name}-ebs-csi"
+  attach_aws_ebs_csi_policy = true
 }

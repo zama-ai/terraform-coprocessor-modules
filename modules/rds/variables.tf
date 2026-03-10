@@ -50,10 +50,13 @@ variable "rds" {
     port                  = optional(number, 5432)
 
     # Credentials
-    username                        = optional(string, "postgres")
-    password                        = optional(string, null) # null = Secrets Manager managed
-    enable_master_password_rotation = optional(bool, false)
-    master_password_rotation_days   = optional(number, 7)
+    username                            = optional(string, "postgres")
+    manage_master_user_password         = optional(bool, true)   # true = Secrets Manager managed (recommended)
+    password_wo                         = optional(string, null) # write-only; only used when manage_master_user_password = false
+    password_wo_version                 = optional(number, 1)    # increment to rotate a non-managed password
+    enable_master_password_rotation     = optional(bool, true)
+    master_password_rotation_days       = optional(number, 7)
+    iam_database_authentication_enabled = optional(bool, true)
 
     # Maintenance & backups
     maintenance_window      = optional(string, "Mon:00:00-Mon:03:00")
@@ -73,7 +76,7 @@ variable "rds" {
     })), [])
 
     # Security group
-    allowed_cidr_blocks = optional(list(string), [])
+    additional_allowed_cidr_blocks = optional(list(string), [])
   })
 
   default = { db_name = "", enabled = false }

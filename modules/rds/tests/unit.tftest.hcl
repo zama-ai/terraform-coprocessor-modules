@@ -1,4 +1,19 @@
-mock_provider "aws" {}
+mock_provider "aws" {
+  # aws_db_instance.master_user_secret is needed by aws_secretsmanager_secret_rotation
+  # when manage_master_user_password = true. The mock provider returns [] by default,
+  # which causes an index error. Provide a stub so rotation resource can resolve secret_id.
+  mock_resource "aws_db_instance" {
+    defaults = {
+      master_user_secret = [
+        {
+          kms_key_id    = ""
+          secret_arn    = "arn:aws:secretsmanager:us-east-1:123456789012:secret:rds!db-test"
+          secret_status = "active"
+        }
+      ]
+    }
+  }
+}
 
 # Shared defaults across all runs.
 # vpc_id and subnets are required by the security group and subnet group
@@ -197,41 +212,42 @@ run "identifier_override_is_accepted" {
 # manage_master_user_password = var.rds.password == null
 # =============================================================================
 
-run "null_password_plans_without_error" {
+run "secrets_manager_managed_password_plans_without_error" {
   command = plan
 
   variables {
     rds = {
-      enabled                = true
-      db_name                = "coprocessor"
-      password               = null
-      monitoring_interval    = 0
-      create_monitoring_role = false
+      enabled                     = true
+      db_name                     = "coprocessor"
+      manage_master_user_password = true
+      monitoring_interval         = 0
+      create_monitoring_role      = false
     }
   }
 
   assert {
     condition     = length(module.rds_instance) == 1
-    error_message = "RDS instance must be planned when password is null (Secrets Manager managed)."
+    error_message = "RDS instance must be planned when manage_master_user_password = true (Secrets Manager managed)."
   }
 }
 
-run "explicit_password_plans_without_error" {
+run "explicit_password_wo_plans_without_error" {
   command = plan
 
   variables {
     rds = {
-      enabled                = true
-      db_name                = "coprocessor"
-      password               = "supersecret"
-      monitoring_interval    = 0
-      create_monitoring_role = false
+      enabled                     = true
+      db_name                     = "coprocessor"
+      manage_master_user_password = false
+      password_wo                 = "supersecret"
+      monitoring_interval         = 0
+      create_monitoring_role      = false
     }
   }
 
   assert {
     condition     = length(module.rds_instance) == 1
-    error_message = "RDS instance must be planned when an explicit password is provided."
+    error_message = "RDS instance must be planned when an explicit password_wo is provided."
   }
 }
 
@@ -321,5 +337,89 @@ run "multi_az_enabled_plans_without_error" {
   assert {
     condition     = length(module.rds_instance) == 1
     error_message = "RDS instance must be planned with multi_az = true."
+  }
+}
+
+# =============================================================================
+#  IAM database authentication
+# =============================================================================
+
+run "iam_database_authentication_enabled_by_default" {
+  command = plan
+
+  variables {
+    rds = {
+      enabled                = true
+      db_name                = "coprocessor"
+      monitoring_interval    = 0
+      create_monitoring_role = false
+    }
+  }
+
+  assert {
+    condition     = length(module.rds_instance) == 1
+    error_message = "RDS instance must be planned with iam_database_authentication_enabled = true (default)."
+  }
+}
+
+run "iam_database_authentication_can_be_disabled" {
+  command = plan
+
+  variables {
+    rds = {
+      enabled                             = true
+      db_name                             = "coprocessor"
+      monitoring_interval                 = 0
+      create_monitoring_role              = false
+      iam_database_authentication_enabled = false
+    }
+  }
+
+  assert {
+    condition     = length(module.rds_instance) == 1
+    error_message = "RDS instance must be planned when iam_database_authentication_enabled = false."
+  }
+}
+
+# =============================================================================
+#  Password rotation
+# =============================================================================
+
+run "password_rotation_enabled_by_default_with_managed_password" {
+  command = plan
+
+  variables {
+    rds = {
+      enabled                     = true
+      db_name                     = "coprocessor"
+      manage_master_user_password = true
+      monitoring_interval         = 0
+      create_monitoring_role      = false
+    }
+  }
+
+  assert {
+    condition     = length(module.rds_instance) == 1
+    error_message = "RDS instance must be planned with password rotation enabled by default."
+  }
+}
+
+run "password_rotation_skipped_when_explicit_password_set" {
+  command = plan
+
+  variables {
+    rds = {
+      enabled                     = true
+      db_name                     = "coprocessor"
+      manage_master_user_password = false
+      password_wo                 = "supersecret"
+      monitoring_interval         = 0
+      create_monitoring_role      = false
+    }
+  }
+
+  assert {
+    condition     = length(module.rds_instance) == 1
+    error_message = "RDS instance must plan without rotation when an explicit password_wo is provided."
   }
 }

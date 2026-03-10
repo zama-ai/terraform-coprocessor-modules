@@ -15,7 +15,7 @@ variable "vpc" {
     availability_zones = optional(list(string), [])
     single_nat_gateway = optional(bool, false)
 
-    # V2 subnet calculation (recommended)
+    # V2 subnet calculation
     use_subnet_calc_v2       = optional(bool, true)
     private_subnet_cidr_mask = optional(number, 20)
     public_subnet_cidr_mask  = optional(number, 24)

@@ -38,7 +38,7 @@ module "rds_security_group" {
       from_port   = var.rds.port
       to_port     = var.rds.port
       protocol    = "tcp"
-      cidr_blocks = join(",", concat(var.rds.allowed_cidr_blocks, var.private_subnet_cidr_blocks))
+      cidr_blocks = join(",", concat(var.rds.additional_allowed_cidr_blocks, var.private_subnet_cidr_blocks))
     }
   ]
 }
@@ -50,7 +50,7 @@ module "rds_instance" {
   count = var.rds.enabled ? 1 : 0
 
   source  = "terraform-aws-modules/rds/aws"
-  version = "~> 6.10"
+  version = "~> 7.1"
 
   identifier = local.identifier
 
@@ -67,13 +67,14 @@ module "rds_instance" {
 
   db_name  = var.rds.db_name
   username = var.rds.username
-  password = var.rds.password
 
-  manage_master_user_password                            = var.rds.password == null
-  manage_master_user_password_rotation                   = var.rds.enable_master_password_rotation
+  manage_master_user_password                            = var.rds.manage_master_user_password
+  password_wo                                            = var.rds.manage_master_user_password ? null : var.rds.password_wo
+  password_wo_version                                    = var.rds.manage_master_user_password ? null : var.rds.password_wo_version
+  manage_master_user_password_rotation                   = var.rds.manage_master_user_password && var.rds.enable_master_password_rotation
   master_user_password_rotation_automatically_after_days = var.rds.master_password_rotation_days
 
-  iam_database_authentication_enabled = false
+  iam_database_authentication_enabled = var.rds.iam_database_authentication_enabled
 
   maintenance_window      = var.rds.maintenance_window
   backup_retention_period = var.rds.backup_retention_period

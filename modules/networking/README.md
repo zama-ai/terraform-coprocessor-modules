@@ -3,7 +3,7 @@
 
 | Name | Version |
 |------|---------|
-| <a name="requirement_terraform"></a> [terraform](#requirement\_terraform) | >= 1.10 |
+| <a name="requirement_terraform"></a> [terraform](#requirement\_terraform) | >= 1.11 |
 | <a name="requirement_aws"></a> [aws](#requirement\_aws) | ~> 6.0 |
 
 ## Providers
@@ -35,7 +35,7 @@
 | <a name="input_enable_karpenter"></a> [enable\_karpenter](#input\_enable\_karpenter) | Whether Karpenter is enabled — affects subnet discovery tags. | `bool` | `false` | no |
 | <a name="input_environment"></a> [environment](#input\_environment) | Deployment environment (e.g. devnet, mainnet, testnet). | `string` | n/a | yes |
 | <a name="input_partner_name"></a> [partner\_name](#input\_partner\_name) | Name prefix for all networking resources. | `string` | n/a | yes |
-| <a name="input_vpc"></a> [vpc](#input\_vpc) | VPC and subnet configuration. | <pre>object({<br/>    cidr               = string<br/>    availability_zones = optional(list(string), [])<br/>    single_nat_gateway = optional(bool, false)<br/><br/>    # V2 subnet calculation (recommended)<br/>    use_subnet_calc_v2       = optional(bool, true)<br/>    private_subnet_cidr_mask = optional(number, 20)<br/>    public_subnet_cidr_mask  = optional(number, 24)<br/><br/>    # Flow logs<br/>    flow_log_enabled         = optional(bool, false)<br/>    flow_log_destination_arn = optional(string, null)<br/>  })</pre> | n/a | yes |
+| <a name="input_vpc"></a> [vpc](#input\_vpc) | VPC and subnet configuration. | <pre>object({<br/>    cidr               = string<br/>    availability_zones = optional(list(string), [])<br/>    single_nat_gateway = optional(bool, false)<br/><br/>    # V2 subnet calculation<br/>    use_subnet_calc_v2       = optional(bool, true)<br/>    private_subnet_cidr_mask = optional(number, 20)<br/>    public_subnet_cidr_mask  = optional(number, 24)<br/><br/>    # Flow logs<br/>    flow_log_enabled         = optional(bool, false)<br/>    flow_log_destination_arn = optional(string, null)<br/>  })</pre> | n/a | yes |
 
 ## Outputs
 

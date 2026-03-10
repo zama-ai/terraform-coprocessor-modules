@@ -25,18 +25,18 @@ locals {
   ) : 0
 
   private_subnets = [
-    for k, v in local.availability_zones :
-    cidrsubnet(var.vpc.cidr, local.private_newbits, k)
+    for key, value in local.availability_zones :
+    cidrsubnet(var.vpc.cidr, local.private_newbits, key)
   ]
 
   public_subnets = [
-    for k, v in local.availability_zones :
-    cidrsubnet(var.vpc.cidr, local.public_newbits, local.public_start_index + k)
+    for key, value in local.availability_zones :
+    cidrsubnet(var.vpc.cidr, local.public_newbits, local.public_start_index + key)
   ]
 
   additional_subnet_cidrs = var.additional_subnets.enabled ? [
-    for k, v in local.availability_zones :
-    cidrsubnet(var.vpc.cidr, local.additional_newbits, local.additional_start_index + k)
+    for key, value in local.availability_zones :
+    cidrsubnet(var.vpc.cidr, local.additional_newbits, local.additional_start_index + key)
   ] : []
 
   # Subnet tags for additional subnets

@@ -9,8 +9,6 @@ variable "partner_name" {
 variable "environment" {
   description = "Deployment environment (e.g. devnet, mainnet, testnet)."
   type        = string
-
-
 }
 
 variable "default_tags" {
@@ -91,7 +89,7 @@ variable "eks" {
         coredns                = { most_recent = true }
         vpc-cni                = { most_recent = true, before_compute = true }
         kube-proxy             = { most_recent = true }
-        eks-pod-identity-agent = { most_recent = true }
+        eks-pod-identity-agent = { most_recent = true, before_compute = true }
       })
       extra = optional(map(any), {})
       vpc_cni_config = optional(object({
@@ -115,6 +113,7 @@ variable "eks" {
         AmazonEBSCSIDriverPolicy           = "arn:aws:iam::aws:policy/service-role/AmazonEBSCSIDriverPolicy"
         AmazonEC2ContainerRegistryReadOnly = "arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly"
         AmazonEKSWorkerNodePolicy          = "arn:aws:iam::aws:policy/AmazonEKSWorkerNodePolicy"
+        AmazonEKS_CNI_Policy               = "arn:aws:iam::aws:policy/AmazonEKS_CNI_Policy"
       })
       groups = optional(map(object({
         capacity_type              = optional(string, "ON_DEMAND")
@@ -141,7 +140,7 @@ variable "eks" {
         iam_role_additional_policies = optional(map(string), {})
         metadata_options = optional(map(string), {
           http_endpoint               = "enabled"
-          http_put_response_hop_limit = "2"
+          http_put_response_hop_limit = "1"
           http_tokens                 = "required"
         })
       })), {})
@@ -153,6 +152,9 @@ variable "eks" {
       service_account  = optional(string, "karpenter")
       queue_name       = optional(string, null)
       rule_name_prefix = optional(string, null)
+
+      create_spot_service_linked_role = optional(bool, true)
+
       node_iam_role_additional_policies = optional(map(string), {
         AmazonSSMManagedInstanceCore = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
       })
@@ -225,7 +227,7 @@ variable "rds" {
       value = string
     })), [])
 
-    allowed_cidr_blocks = optional(list(string), [])
+    additional_allowed_cidr_blocks = optional(list(string), [])
   })
 
   default = { enabled = false }
