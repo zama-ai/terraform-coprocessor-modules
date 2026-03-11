@@ -3,7 +3,7 @@ terraform {
 
   # Remote state — replace with your own bucket before applying.
   backend "s3" {
-    bucket       = "copro-tf-example-devnet-complete" # CHANGE ME
+    bucket       = "your-terraform-state-bucket" # CHANGE ME
     key          = "coprocessor/devnet/terraform.tfstate"
     region       = "eu-west-1" # CHANGE ME: match aws_region
     encrypt      = true

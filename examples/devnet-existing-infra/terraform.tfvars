@@ -1,3 +1,11 @@
+# ==============================================================================
+# PLEASE NOTE the variables provided below, in conjunction with module defaults,
+# make for a complete deployment.
+#
+# For additional info on available parameters, see root module variables.tf for
+# full variable schema.
+# ==============================================================================
+
 # =============================================================================
 #  Core
 # =============================================================================
