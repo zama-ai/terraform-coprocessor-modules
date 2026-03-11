@@ -25,6 +25,7 @@ variable "vpc" {
     flow_log_enabled         = optional(bool, false)
     flow_log_destination_arn = optional(string, null)
   })
+  default = null
 }
 
 variable "additional_subnets" {

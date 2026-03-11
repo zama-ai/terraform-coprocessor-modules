@@ -25,6 +25,7 @@ variable "default_tags" {
 variable "networking" {
   description = "VPC and subnet configuration. See root module variables.tf for full schema."
   type        = any
+  default     = { enabled = true }
 }
 
 variable "eks" {
@@ -36,17 +37,11 @@ variable "eks" {
 variable "rds" {
   description = "RDS instance configuration. See root module variables.tf for full schema."
   type        = any
-  default     = { enabled = false }
+  default     = { enabled = true }
 }
 
 variable "s3" {
   description = "S3 bucket configuration. See root module variables.tf for full schema."
   type        = any
   default     = { buckets = {} }
-}
-
-variable "kubernetes" {
-  description = "Override Kubernetes provider credentials. Leave empty when eks.enabled = true."
-  type        = any
-  default     = {}
 }

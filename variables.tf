@@ -23,9 +23,9 @@ variable "aws_region" {
 }
 
 # ******************************************************
-#  Kubernetes
+#  Kubernetes Provider
 # ******************************************************
-variable "kubernetes" {
+variable "kubernetes_provider" {
   description = "Kubernetes provider configuration. When eks.enabled = true these are resolved automatically from the EKS module. Set explicitly when bringing your own cluster."
   type = object({
     host                   = optional(string, null)
@@ -41,9 +41,9 @@ variable "kubernetes" {
 variable "networking" {
   description = "VPC and subnet configuration. Set enabled = false to skip all networking resources."
   type = object({
-    enabled = optional(bool, true)
+    enabled = optional(bool, false)
 
-    vpc = object({
+    vpc = optional(object({
       # Base
       cidr               = string
       availability_zones = optional(list(string), []) # leave empty to auto-discover AZs
@@ -57,7 +57,7 @@ variable "networking" {
       # Flow logs
       flow_log_enabled         = optional(bool, false)
       flow_log_destination_arn = optional(string, null)
-    })
+    }), null)
 
     additional_subnets = optional(object({
       enabled   = optional(bool, false)
@@ -79,7 +79,17 @@ variable "networking" {
   })
 
   validation {
-    condition     = can(cidrhost(var.networking.vpc.cidr, 0))
+    condition     = !var.networking.enabled || var.networking.vpc != null
+    error_message = "networking.vpc is required when networking.enabled = true."
+  }
+
+  validation {
+    condition     = var.networking.enabled || var.networking.existing_vpc != null
+    error_message = "networking.existing_vpc is required when networking.enabled = false."
+  }
+
+  validation {
+    condition     = var.networking.vpc == null || can(cidrhost(var.networking.vpc.cidr, 0))
     error_message = "networking.vpc.cidr must be a valid IPv4 CIDR block."
   }
 }
@@ -89,8 +99,9 @@ variable "networking" {
 # ******************************************************
 variable "eks" {
   description = "EKS cluster configuration. Set enabled = false to skip all EKS resources."
+
   type = object({
-    enabled = optional(bool, true)
+    enabled = optional(bool, false)
 
     cluster = optional(object({
       # Naming
@@ -194,7 +205,7 @@ variable "eks" {
     }), {})
 
     karpenter = optional(object({
-      enabled = optional(bool, false)
+      enabled = optional(bool, true)
 
       # Controller identity
       namespace       = optional(string, "karpenter")
@@ -205,14 +216,12 @@ variable "eks" {
       rule_name_prefix = optional(string, null) # max 20 chars
 
       # Node IAM
-      create_spot_service_linked_role = optional(bool, true)
-      node_iam_role_additional_policies = optional(map(string), {
-        AmazonSSMManagedInstanceCore = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
-      })
+      create_spot_service_linked_role   = optional(bool, true)
+      node_iam_role_additional_policies = optional(map(string), {})
 
       # Dedicated node group for the Karpenter controller pod
       controller_nodegroup = optional(object({
-        enabled        = optional(bool, false)
+        enabled        = optional(bool, true)
         capacity_type  = optional(string, "ON_DEMAND")
         min_size       = optional(number, 1)
         max_size       = optional(number, 2)
@@ -233,11 +242,11 @@ variable "eks" {
             effect = "NO_SCHEDULE"
           }
         })
-      }), { enabled = false })
+      }), { enabled = true })
     }), { enabled = false })
   })
 
-  default = { enabled = true }
+  default = { enabled = false }
 }
 
 # ******************************************************
@@ -294,7 +303,7 @@ variable "rds" {
     additional_allowed_cidr_blocks = optional(list(string), [])
   })
 
-  default = { enabled = false }
+  default = { enabled = true }
 }
 
 # ******************************************************

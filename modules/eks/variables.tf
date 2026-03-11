@@ -180,10 +180,8 @@ variable "karpenter" {
     rule_name_prefix = optional(string, null) # max 20 chars
 
     # Node IAM
-    create_spot_service_linked_role = optional(bool, true)
-    node_iam_role_additional_policies = optional(map(string), {
-      AmazonSSMManagedInstanceCore = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
-    })
+    create_spot_service_linked_role   = optional(bool, true)
+    node_iam_role_additional_policies = optional(map(string), {})
 
     # Dedicated node group for the Karpenter controller pod
     controller_nodegroup = optional(object({

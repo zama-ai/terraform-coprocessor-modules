@@ -10,5 +10,4 @@ module "coprocessor" {
   eks        = var.eks
   rds        = var.rds
   s3         = var.s3
-  kubernetes = var.kubernetes
 }
