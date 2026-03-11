@@ -1,0 +1,52 @@
+variable "partner_name" {
+  description = "Partner identifier — used as a name prefix across all resources."
+  type        = string
+}
+
+variable "environment" {
+  description = "Deployment environment (e.g. devnet, mainnet, testnet)."
+  type        = string
+}
+
+variable "aws_region" {
+  description = "AWS region where resources will be deployed."
+  type        = string
+}
+
+variable "default_tags" {
+  description = "Tags applied to all resources."
+  type        = map(string)
+  default     = {}
+}
+
+# Complex configuration objects use type = any here to avoid duplicating the full
+# type definitions from the root module. Validation is enforced by the module itself.
+
+variable "networking" {
+  description = "VPC and subnet configuration. See root module variables.tf for full schema."
+  type        = any
+}
+
+variable "eks" {
+  description = "EKS cluster configuration. See root module variables.tf for full schema."
+  type        = any
+  default     = { enabled = true }
+}
+
+variable "rds" {
+  description = "RDS instance configuration. See root module variables.tf for full schema."
+  type        = any
+  default     = { enabled = false }
+}
+
+variable "s3" {
+  description = "S3 bucket configuration. See root module variables.tf for full schema."
+  type        = any
+  default     = { buckets = {} }
+}
+
+variable "kubernetes" {
+  description = "Override Kubernetes provider credentials. Leave empty when eks.enabled = true."
+  type        = any
+  default     = {}
+}

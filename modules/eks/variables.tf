@@ -33,17 +33,19 @@ variable "additional_subnet_ids" {
 variable "cluster" {
   description = "EKS cluster configuration."
   type = object({
+    # Naming
     version       = optional(string, "1.32")
-    name_override = optional(string, null)
+    name_override = optional(string, null) # overrides computed "<name>-<env>" cluster name
 
+    # Endpoint access
     endpoint_public_access       = optional(bool, false)
     endpoint_private_access      = optional(bool, true)
     endpoint_public_access_cidrs = optional(list(string), [])
 
+    # Auth
     enable_irsa                      = optional(bool, true)
-    enable_creator_admin_permissions = optional(bool, true)
-
-    admin_role_arns = optional(list(string), [])
+    enable_creator_admin_permissions = optional(bool, true) # grants the Terraform caller admin access
+    admin_role_arns                  = optional(list(string), [])
   })
   default = {}
 
@@ -59,6 +61,7 @@ variable "cluster" {
 variable "addons" {
   description = "EKS addon configuration."
   type = object({
+    # Standard managed addons; each value is passed verbatim to the upstream eks module
     defaults = optional(map(any), {
       aws-ebs-csi-driver     = { most_recent = true }
       coredns                = { most_recent = true }
@@ -66,8 +69,10 @@ variable "addons" {
       kube-proxy             = { most_recent = true }
       eks-pod-identity-agent = { most_recent = true, before_compute = true }
     })
+    # Additional addons merged on top of defaults
     extra = optional(map(any), {})
 
+    # VPC CNI environment tuning
     vpc_cni_config = optional(object({
       init = optional(object({
         env = optional(object({
@@ -91,8 +96,10 @@ variable "addons" {
 variable "node_groups" {
   description = "EKS managed node group configuration."
   type = object({
+    # Defaults merged into every node group (same schema as groups entries)
     defaults = optional(map(any), {})
 
+    # IAM policies attached to every node group's IAM role
     default_iam_policies = optional(map(string), {
       AmazonEBSCSIDriverPolicy           = "arn:aws:iam::aws:policy/service-role/AmazonEBSCSIDriverPolicy"
       AmazonEC2ContainerRegistryReadOnly = "arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly"
@@ -101,28 +108,41 @@ variable "node_groups" {
     })
 
     groups = optional(map(object({
-      capacity_type              = optional(string, "ON_DEMAND")
-      min_size                   = optional(number, 1)
-      max_size                   = optional(number, 3)
-      desired_size               = optional(number, 1)
+      # Capacity
+      capacity_type = optional(string, "ON_DEMAND") # "ON_DEMAND" | "SPOT"
+      min_size      = optional(number, 1)
+      max_size      = optional(number, 3)
+      desired_size  = optional(number, 1)
+
+      # Instance
       instance_types             = optional(list(string), ["t3.medium"])
       ami_type                   = optional(string, "AL2023_x86_64_STANDARD")
-      use_custom_launch_template = optional(bool, false)
-      disk_size                  = optional(number, 30)
-      disk_type                  = optional(string, "gp3")
-      labels                     = optional(map(string), {})
-      tags                       = optional(map(string), {})
-      use_additional_subnets     = optional(bool, false)
+      use_custom_launch_template = optional(bool, true)
+
+      # Storage
+      disk_size = optional(number, 30)
+      disk_type = optional(string, "gp3")
+
+      # Scheduling
+      labels                 = optional(map(string), {})
+      tags                   = optional(map(string), {})
+      use_additional_subnets = optional(bool, false) # place group in additional_subnet_ids instead of private
+      taints = optional(map(object({
+        key    = string
+        value  = optional(string)
+        effect = string # "NO_SCHEDULE" | "NO_EXECUTE" | "PREFER_NO_SCHEDULE"
+      })), {})
+
+      # Rolling updates (AWS requires exactly one of the two fields)
       update_config = optional(object({
         max_unavailable            = optional(number)
         max_unavailable_percentage = optional(number)
       }), { max_unavailable = 1 })
-      taints = optional(map(object({
-        key    = string
-        value  = optional(string)
-        effect = string
-      })), {})
+
+      # IAM
       iam_role_additional_policies = optional(map(string), {})
+
+      # Instance metadata (IMDSv2 enforced by default; hop limit 1 blocks non-hostNetwork pods)
       metadata_options = optional(map(string), {
         http_endpoint               = "enabled"
         http_put_response_hop_limit = "1"
@@ -149,18 +169,23 @@ variable "node_groups" {
 variable "karpenter" {
   description = "Karpenter configuration. Set enabled = false to skip all Karpenter resources."
   type = object({
-    enabled          = optional(bool, false)
-    namespace        = optional(string, "karpenter")
-    service_account  = optional(string, "karpenter")
+    enabled = optional(bool, false)
+
+    # Controller identity
+    namespace       = optional(string, "karpenter")
+    service_account = optional(string, "karpenter")
+
+    # SQS / EventBridge naming (defaults to computed values when null)
     queue_name       = optional(string, null)
-    rule_name_prefix = optional(string, null)
+    rule_name_prefix = optional(string, null) # max 20 chars
 
+    # Node IAM
     create_spot_service_linked_role = optional(bool, true)
-
     node_iam_role_additional_policies = optional(map(string), {
       AmazonSSMManagedInstanceCore = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
     })
 
+    # Dedicated node group for the Karpenter controller pod
     controller_nodegroup = optional(object({
       enabled        = optional(bool, false)
       capacity_type  = optional(string, "ON_DEMAND")

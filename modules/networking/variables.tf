@@ -11,11 +11,12 @@ variable "environment" {
 variable "vpc" {
   description = "VPC and subnet configuration."
   type = object({
+    # Base
     cidr               = string
-    availability_zones = optional(list(string), [])
-    single_nat_gateway = optional(bool, false)
+    availability_zones = optional(list(string), []) # leave empty to auto-discover AZs
+    single_nat_gateway = optional(bool, false)      # true = one NAT GW shared across AZs (cheaper, less resilient)
 
-    # V2 subnet calculation
+    # Subnet CIDR calculation
     use_subnet_calc_v2       = optional(bool, true)
     private_subnet_cidr_mask = optional(number, 20)
     public_subnet_cidr_mask  = optional(number, 24)
@@ -29,9 +30,11 @@ variable "vpc" {
 variable "additional_subnets" {
   description = "Optional additional subnets, e.g. for CNI or specific node groups."
   type = object({
-    enabled        = optional(bool, false)
-    cidr_mask      = optional(number, 22)
-    expose_for_eks = optional(bool, false)
+    enabled   = optional(bool, false)
+    cidr_mask = optional(number, 22)
+
+    # EKS integration
+    expose_for_eks = optional(bool, false)  # add karpenter.sh/discovery tag
     elb_role       = optional(string, null) # "internal" | "public" | null
     tags           = optional(map(string), {})
   })

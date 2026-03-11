@@ -108,6 +108,10 @@ module "eks" {
           lookup(config, "iam_role_additional_policies", {}),
           var.node_groups.default_iam_policies
         )
+        tags = merge(
+          lookup(config, "tags", {}),
+          { Name = key }
+        )
       }
     )
   }

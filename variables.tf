@@ -23,6 +23,19 @@ variable "aws_region" {
 }
 
 # ******************************************************
+#  Kubernetes
+# ******************************************************
+variable "kubernetes" {
+  description = "Kubernetes provider configuration. When eks.enabled = true these are resolved automatically from the EKS module. Set explicitly when bringing your own cluster."
+  type = object({
+    host                   = optional(string, null)
+    cluster_ca_certificate = optional(string, null)
+    cluster_name           = optional(string, null)
+  })
+  default = {}
+}
+
+# ******************************************************
 #  Networking
 # ******************************************************
 variable "networking" {
@@ -31,21 +44,28 @@ variable "networking" {
     enabled = optional(bool, true)
 
     vpc = object({
-      cidr                     = string
-      availability_zones       = optional(list(string), [])
-      single_nat_gateway       = optional(bool, false)
+      # Base
+      cidr               = string
+      availability_zones = optional(list(string), []) # leave empty to auto-discover AZs
+      single_nat_gateway = optional(bool, false)      # true = one NAT GW shared across AZs (cheaper, less resilient)
+
+      # Subnet CIDR calculation
       use_subnet_calc_v2       = optional(bool, true)
       private_subnet_cidr_mask = optional(number, 20)
-      public_subnet_cidr_mask  = optional(number, 24)
+      public_subnet_cidr_mask  = optional(number, 20)
+
+      # Flow logs
       flow_log_enabled         = optional(bool, false)
       flow_log_destination_arn = optional(string, null)
     })
 
     additional_subnets = optional(object({
-      enabled        = optional(bool, false)
-      cidr_mask      = optional(number, 22)
-      expose_for_eks = optional(bool, false)
-      elb_role       = optional(string, null)
+      enabled   = optional(bool, false)
+      cidr_mask = optional(number, 20)
+
+      # EKS integration
+      expose_for_eks = optional(bool, false)  # add karpenter.sh/discovery tag
+      elb_role       = optional(string, null) # "internal" | "public" | null
       tags           = optional(map(string), {})
       node_groups    = optional(list(string), [])
     }), { enabled = false })
@@ -73,17 +93,23 @@ variable "eks" {
     enabled = optional(bool, true)
 
     cluster = optional(object({
-      version                          = optional(string, "1.32")
-      name_override                    = optional(string, null)
-      endpoint_public_access           = optional(bool, false)
-      endpoint_private_access          = optional(bool, true)
-      endpoint_public_access_cidrs     = optional(list(string), [])
+      # Naming
+      version       = optional(string, "1.35")
+      name_override = optional(string, null) # overrides computed "<name>-<env>" cluster name
+
+      # Endpoint access
+      endpoint_public_access       = optional(bool, false)
+      endpoint_private_access      = optional(bool, true)
+      endpoint_public_access_cidrs = optional(list(string), [])
+
+      # Auth
       enable_irsa                      = optional(bool, true)
-      enable_creator_admin_permissions = optional(bool, true)
+      enable_creator_admin_permissions = optional(bool, true) # grants the Terraform caller admin access
       admin_role_arns                  = optional(list(string), [])
     }), {})
 
     addons = optional(object({
+      # Standard managed addons; each value is passed verbatim to the upstream eks module
       defaults = optional(map(any), {
         aws-ebs-csi-driver     = { most_recent = true }
         coredns                = { most_recent = true }
@@ -91,7 +117,11 @@ variable "eks" {
         kube-proxy             = { most_recent = true }
         eks-pod-identity-agent = { most_recent = true, before_compute = true }
       })
+
+      # Additional addons merged on top of defaults
       extra = optional(map(any), {})
+
+      # VPC CNI environment tuning
       vpc_cni_config = optional(object({
         init = optional(object({
           env = optional(object({
@@ -108,36 +138,53 @@ variable "eks" {
     }), {})
 
     node_groups = optional(object({
+      # Defaults merged into every node group (same schema as groups entries)
       defaults = optional(map(any), {})
+
+      # IAM policies attached to every node group's IAM role
       default_iam_policies = optional(map(string), {
         AmazonEBSCSIDriverPolicy           = "arn:aws:iam::aws:policy/service-role/AmazonEBSCSIDriverPolicy"
         AmazonEC2ContainerRegistryReadOnly = "arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly"
         AmazonEKSWorkerNodePolicy          = "arn:aws:iam::aws:policy/AmazonEKSWorkerNodePolicy"
         AmazonEKS_CNI_Policy               = "arn:aws:iam::aws:policy/AmazonEKS_CNI_Policy"
       })
+
       groups = optional(map(object({
-        capacity_type              = optional(string, "ON_DEMAND")
-        min_size                   = optional(number, 1)
-        max_size                   = optional(number, 3)
-        desired_size               = optional(number, 1)
+        # Capacity
+        capacity_type = optional(string, "ON_DEMAND") # "ON_DEMAND" | "SPOT"
+        min_size      = optional(number, 1)
+        max_size      = optional(number, 3)
+        desired_size  = optional(number, 1)
+
+        # Instance
         instance_types             = optional(list(string), ["t3.medium"])
         ami_type                   = optional(string, "AL2023_x86_64_STANDARD")
-        use_custom_launch_template = optional(bool, false)
-        disk_size                  = optional(number, 30)
-        disk_type                  = optional(string, "gp3")
-        labels                     = optional(map(string), {})
-        tags                       = optional(map(string), {})
-        use_additional_subnets     = optional(bool, false)
+        use_custom_launch_template = optional(bool, true)
+
+        # Storage
+        disk_size = optional(number, 30)
+        disk_type = optional(string, "gp3")
+
+        # Scheduling
+        labels                 = optional(map(string), {})
+        tags                   = optional(map(string), {})
+        use_additional_subnets = optional(bool, false) # place group in additional_subnet_ids instead of private
+        taints = optional(map(object({
+          key    = string
+          value  = optional(string)
+          effect = string # "NO_SCHEDULE" | "NO_EXECUTE" | "PREFER_NO_SCHEDULE"
+        })), {})
+
+        # Rolling updates (AWS requires exactly one of the two fields)
         update_config = optional(object({
           max_unavailable            = optional(number)
           max_unavailable_percentage = optional(number)
         }), { max_unavailable = 1 })
-        taints = optional(map(object({
-          key    = string
-          value  = optional(string)
-          effect = string
-        })), {})
+
+        # IAM
         iam_role_additional_policies = optional(map(string), {})
+
+        # Instance metadata (IMDSv2 enforced by default; hop limit 1 blocks non-hostNetwork pods)
         metadata_options = optional(map(string), {
           http_endpoint               = "enabled"
           http_put_response_hop_limit = "1"
@@ -147,17 +194,23 @@ variable "eks" {
     }), {})
 
     karpenter = optional(object({
-      enabled          = optional(bool, false)
-      namespace        = optional(string, "karpenter")
-      service_account  = optional(string, "karpenter")
+      enabled = optional(bool, false)
+
+      # Controller identity
+      namespace       = optional(string, "karpenter")
+      service_account = optional(string, "karpenter")
+
+      # SQS / EventBridge naming (defaults to computed values when null)
       queue_name       = optional(string, null)
-      rule_name_prefix = optional(string, null)
+      rule_name_prefix = optional(string, null) # max 20 chars
 
+      # Node IAM
       create_spot_service_linked_role = optional(bool, true)
-
       node_iam_role_additional_policies = optional(map(string), {
         AmazonSSMManagedInstanceCore = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
       })
+
+      # Dedicated node group for the Karpenter controller pod
       controller_nodegroup = optional(object({
         enabled        = optional(bool, false)
         capacity_type  = optional(string, "ON_DEMAND")
@@ -166,7 +219,7 @@ variable "eks" {
         desired_size   = optional(number, 1)
         instance_types = optional(list(string), ["t3.small"])
         ami_type       = optional(string, "AL2023_x86_64_STANDARD")
-        disk_size      = optional(number, 50)
+        disk_size      = optional(number, 30)
         disk_type      = optional(string, "gp3")
         labels         = optional(map(string), { "karpenter.sh/controller" = "true" })
         taints = optional(map(object({
@@ -196,54 +249,52 @@ variable "rds" {
   type = object({
     enabled = optional(bool, false)
 
+    # Naming
     db_name             = optional(string, null)
     identifier_override = optional(string, null)
 
+    # Engine
     engine         = optional(string, "postgres")
     engine_version = optional(string, "17")
 
+    # Instance
     instance_class        = optional(string, "db.t4g.medium")
     allocated_storage     = optional(number, 20)
     max_allocated_storage = optional(number, 100)
     multi_az              = optional(bool, false)
     port                  = optional(number, 5432)
 
-    username                        = optional(string, "postgres")
-    password                        = optional(string, null)
-    enable_master_password_rotation = optional(bool, false)
-    master_password_rotation_days   = optional(number, 7)
+    # Credentials
+    username                            = optional(string, "postgres")
+    manage_master_user_password         = optional(bool, true)   # true = Secrets Manager managed (recommended)
+    password_wo                         = optional(string, null) # write-only; only used when manage_master_user_password = false
+    password_wo_version                 = optional(number, 1)    # increment to rotate a non-managed password
+    enable_master_password_rotation     = optional(bool, true)
+    master_password_rotation_days       = optional(number, 7)
+    iam_database_authentication_enabled = optional(bool, true)
 
+    # Maintenance & backups
     maintenance_window      = optional(string, "Mon:00:00-Mon:03:00")
     backup_retention_period = optional(number, 7)
     deletion_protection     = optional(bool, true)
 
+    # Monitoring
     monitoring_interval    = optional(number, 60)
     create_monitoring_role = optional(bool, true)
     monitoring_role_name   = optional(string, null)
     monitoring_role_arn    = optional(string, null)
 
+    # Parameters
     parameters = optional(list(object({
       name  = string
       value = string
     })), [])
 
+    # Security group
     additional_allowed_cidr_blocks = optional(list(string), [])
   })
 
   default = { enabled = false }
-}
-
-# ******************************************************
-#  Kubernetes
-# ******************************************************
-variable "kubernetes" {
-  description = "Kubernetes provider configuration. When eks.enabled = true these are resolved automatically from the EKS module. Set explicitly when bringing your own cluster."
-  type = object({
-    host                   = optional(string, null)
-    cluster_ca_certificate = optional(string, null)
-    cluster_name           = optional(string, null)
-  })
-  default = {}
 }
 
 # ******************************************************
@@ -262,6 +313,9 @@ variable "s3" {
     buckets = map(object({
       # Human-readable description (used for tagging)
       purpose = string
+
+      # Override the computed bucket name (use when importing a pre-existing bucket)
+      name_override = optional(string, null)
 
       # Allow deletion even if objects exist
       force_destroy = optional(bool, false)
