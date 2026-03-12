@@ -26,22 +26,24 @@ Infrastructure deployed by the [`examples/devnet-complete`](./examples/devnet-co
 
 ## Usage
 
-Two ready-to-deploy examples are provided:
+Two ready-to-deploy examples are provided. Each is a fully-formed, immediately deployable configuration — not a showcase of every available parameter, but a production-ready starting point that covers the standard Coprocessor deployment.
 
 | Example | Use case |
 |---------|----------|
 | [`examples/devnet-complete`](./examples/devnet-complete) | Greenfield — creates VPC, EKS, RDS, and S3 from scratch |
 | [`examples/devnet-existing-infra`](./examples/devnet-existing-infra) | Bring-your-own VPC and EKS — only deploys RDS and S3 |
 
+For the full set of available inputs and their defaults, see the [Inputs](#inputs) table below or `terraform.tfvars.example` at the repo root.
+
 **Steps:**
 
-1. Copy the relevant example directory to your working directory.
-2. Replace every value marked `# CHANGE ME` in `terraform.tfvars` — primarily `partner_name`, `aws_region`, and any IDs specific to your account.
-3. Update the backend bucket/key/region in `versions.tf`.
-4. All other values are pre-configured with sensible defaults and are deployable as-is.
+1. Copy the relevant example directory into your own infrastructure repository.
+2. Update the `source` in `main.tf` to reference the remote versioned release: `git::https://github.com/zama-ai/terraform-coprocessor-modules.git?ref=<version>`
+3. Replace every value marked `# CHANGE ME` in `terraform.tfvars` — primarily `partner_name`, `aws_region`, and any account-specific IDs.
+4. Update the backend bucket/key/region in `versions.tf`.
+5. All other values are pre-configured with sensible defaults and require no changes for a standard devnet deployment.
 
 ```bash
-cd examples/devnet-complete   # or devnet-existing-infra
 terraform init
 terraform plan
 terraform apply
