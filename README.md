@@ -1,3 +1,112 @@
+## Terraform-Coprocessor-Modules
+
+This repo provides a Terraform Module for deploying the base layer infrastructure for the [Coprocessor](https://docs.zama.org/protocol/protocol/overview/coprocessor#what-is-the-coprocessor) of the [Zama Protocol](https://docs.zama.org/protocol/zama-protocol-litepaper).
+
+---
+
+## Architecture
+
+Infrastructure deployed by the [`examples/devnet-complete`](./examples/devnet-complete) example.
+
+```mermaid
+graph TB
+    Internet((Internet))
+
+    subgraph AWS["AWS Region"]
+        IGW[Internet Gateway]
+
+        subgraph VPC["VPC — 10.1.0.0/16"]
+            NAT[NAT Gateway\nshared across AZs]
+
+            subgraph AZ1["AZ 1"]
+                pub1[Public Subnet]
+                priv1[Private Subnet]
+            end
+            subgraph AZ2["AZ 2"]
+                pub2[Public Subnet]
+                priv2[Private Subnet]
+            end
+            subgraph AZ3["AZ 3"]
+                pub3[Public Subnet]
+                priv3[Private Subnet]
+            end
+
+            subgraph EKS["EKS Cluster"]
+                NG_DEF["Node Group: default\nt3.large · ON_DEMAND"]
+                NG_KARP["Node Group: karpenter-controller\nt3.small · ON_DEMAND"]
+                ADDONS["Addons: vpc-cni · coredns\nkube-proxy · ebs-csi-driver\neks-pod-identity-agent"]
+            end
+
+            RDS[("RDS PostgreSQL\ndb.t4g.medium")]
+        end
+
+        subgraph Karpenter["Karpenter (autoscaler)"]
+            SQS["SQS Queue\nInterruption Handler"]
+            EB["EventBridge Rules\nSpot / Rebalance / AZ Events"]
+        end
+
+        SM["Secrets Manager\nDB Password · 7-day rotation"]
+        S3["S3 Bucket\nPublic Read · CORS · Versioned"]
+
+        subgraph IAM["IAM Roles"]
+            EBS_ROLE["EBS CSI Driver\nPod Identity"]
+            KARP_CTRL["Karpenter Controller\nPod Identity"]
+            KARP_NODE["Karpenter Node\nInstance Profile"]
+        end
+    end
+
+    Internet --> IGW --> NAT
+    NAT --> priv1 & priv2 & priv3
+    pub1 & pub2 & pub3 --> IGW
+    priv1 & priv2 & priv3 --> EKS
+    priv1 & priv2 & priv3 --> RDS
+    EKS --> Karpenter
+    SQS <--> EB
+    EKS --> EBS_ROLE
+    Karpenter --> KARP_CTRL & KARP_NODE
+    RDS --> SM
+    EKS --> S3
+```
+
+---
+
+## Requirements
+
+| Requirement | Notes |
+|-------------|-------|
+| **AWS account** | IAM permissions to create VPC, EKS, RDS, S3, IAM, SQS, and EventBridge resources |
+| **Terraform ≥ 1.11** | Required for write-only variables (`password_wo`) and S3 native state locking |
+| **AWS CLI** | Configured with credentials for the target account (`aws configure` or env vars) |
+| **kubectl** | For post-deployment cluster access (`aws eks update-kubeconfig ...`) |
+| **S3 bucket for remote state** | Pre-created; referenced in the example `versions.tf` backend block |
+
+---
+
+## Usage
+
+Two ready-to-deploy examples are provided:
+
+| Example | Use case |
+|---------|----------|
+| [`examples/devnet-complete`](./examples/devnet-complete) | Greenfield — creates VPC, EKS, RDS, and S3 from scratch |
+| [`examples/devnet-existing-infra`](./examples/devnet-existing-infra) | Bring-your-own VPC and EKS — only deploys RDS and S3 |
+
+**Steps:**
+
+1. Copy the relevant example directory to your working directory.
+2. Replace every value marked `# CHANGE ME` in `terraform.tfvars` — primarily `partner_name`, `aws_region`, and any IDs specific to your account.
+3. Update the backend bucket/key/region in `versions.tf`.
+4. All other values are pre-configured with sensible defaults and are deployable as-is.
+
+```bash
+cd examples/devnet-complete   # or devnet-existing-infra
+terraform init
+terraform plan
+terraform apply
+```
+
+---
+
 ## Tests
 
 Uses the native [Terraform test framework](https://developer.hashicorp.com/terraform/language/testing) (requires Terraform ≥ 1.10). All tests use mock providers and `command = plan` — no real AWS credentials needed.
