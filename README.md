@@ -8,65 +8,7 @@ This repo provides a Terraform Module for deploying the base layer infrastructur
 
 Infrastructure deployed by the [`examples/devnet-complete`](./examples/devnet-complete) example.
 
-```mermaid
-graph TB
-    Internet((Internet))
-
-    subgraph AWS["AWS Region"]
-        IGW[Internet Gateway]
-
-        subgraph VPC["VPC — 10.1.0.0/16"]
-            NAT[NAT Gateway\nshared across AZs]
-
-            subgraph AZ1["AZ 1"]
-                pub1[Public Subnet]
-                priv1[Private Subnet]
-            end
-            subgraph AZ2["AZ 2"]
-                pub2[Public Subnet]
-                priv2[Private Subnet]
-            end
-            subgraph AZ3["AZ 3"]
-                pub3[Public Subnet]
-                priv3[Private Subnet]
-            end
-
-            subgraph EKS["EKS Cluster"]
-                NG_DEF["Node Group: default\nt3.large · ON_DEMAND"]
-                NG_KARP["Node Group: karpenter-controller\nt3.small · ON_DEMAND"]
-                ADDONS["Addons: vpc-cni · coredns\nkube-proxy · ebs-csi-driver\neks-pod-identity-agent"]
-            end
-
-            RDS[("RDS PostgreSQL\ndb.t4g.medium")]
-        end
-
-        subgraph Karpenter["Karpenter (autoscaler)"]
-            SQS["SQS Queue\nInterruption Handler"]
-            EB["EventBridge Rules\nSpot / Rebalance / AZ Events"]
-        end
-
-        SM["Secrets Manager\nDB Password · 7-day rotation"]
-        S3["S3 Bucket\nPublic Read · CORS · Versioned"]
-
-        subgraph IAM["IAM Roles"]
-            EBS_ROLE["EBS CSI Driver\nPod Identity"]
-            KARP_CTRL["Karpenter Controller\nPod Identity"]
-            KARP_NODE["Karpenter Node\nInstance Profile"]
-        end
-    end
-
-    Internet --> IGW --> NAT
-    NAT --> priv1 & priv2 & priv3
-    pub1 & pub2 & pub3 --> IGW
-    priv1 & priv2 & priv3 --> EKS
-    priv1 & priv2 & priv3 --> RDS
-    EKS --> Karpenter
-    SQS <--> EB
-    EKS --> EBS_ROLE
-    Karpenter --> KARP_CTRL & KARP_NODE
-    RDS --> SM
-    EKS --> S3
-```
+![Coprocessor Infrastructure](diagrams/images/coprocessor.drawio.png)
 
 ---
 
