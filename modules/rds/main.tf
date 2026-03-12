@@ -82,7 +82,7 @@ module "rds_instance" {
   monitoring_interval    = var.rds.monitoring_interval
   create_monitoring_role = var.rds.create_monitoring_role
   monitoring_role_name   = local.monitoring_role_name
-  monitoring_role_arn    = var.rds.monitoring_role_arn
+  monitoring_role_arn    = var.rds.existing_monitoring_role_arn
 
   create_db_subnet_group = true
   subnet_ids             = var.private_subnet_ids

@@ -43,9 +43,9 @@ variable "rds" {
     engine_version = optional(string, "17")
 
     # Instance
-    instance_class        = optional(string, "db.t4g.medium")
-    allocated_storage     = optional(number, 20)
-    max_allocated_storage = optional(number, 100)
+    instance_class        = optional(string, "db.m5.4xlarge")
+    allocated_storage     = optional(number, 400)
+    max_allocated_storage = optional(number, 1000)
     multi_az              = optional(bool, false)
     port                  = optional(number, 5432)
 
@@ -64,10 +64,10 @@ variable "rds" {
     deletion_protection     = optional(bool, true)
 
     # Monitoring
-    monitoring_interval    = optional(number, 60)
-    create_monitoring_role = optional(bool, true)
-    monitoring_role_name   = optional(string, null)
-    monitoring_role_arn    = optional(string, null)
+    monitoring_interval          = optional(number, 60)
+    create_monitoring_role       = optional(bool, true)
+    monitoring_role_name         = optional(string, null)
+    existing_monitoring_role_arn = optional(string, null)
 
     # Parameters
     parameters = optional(list(object({

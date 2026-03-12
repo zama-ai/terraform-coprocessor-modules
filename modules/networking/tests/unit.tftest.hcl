@@ -12,7 +12,6 @@ variables {
   vpc = {
     cidr                     = "10.0.0.0/16"
     availability_zones       = ["eu-west-1a", "eu-west-1b"]
-    use_subnet_calc_v2       = true
     private_subnet_cidr_mask = 24
     public_subnet_cidr_mask  = 24
   }
@@ -303,7 +302,6 @@ run "az_auto_detected_from_data_source" {
     vpc = {
       cidr                     = "10.0.0.0/16"
       availability_zones       = []
-      use_subnet_calc_v2       = true
       private_subnet_cidr_mask = 24
       public_subnet_cidr_mask  = 24
     }
@@ -332,7 +330,6 @@ run "az_auto_detection_capped_at_three" {
     vpc = {
       cidr                     = "10.0.0.0/16"
       availability_zones       = []
-      use_subnet_calc_v2       = true
       private_subnet_cidr_mask = 24
       public_subnet_cidr_mask  = 24
     }

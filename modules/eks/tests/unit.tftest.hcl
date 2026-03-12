@@ -273,16 +273,16 @@ run "accepts_eks_version_1_28" {
   }
 }
 
-run "accepts_eks_version_1_32" {
+run "accepts_eks_version_1_35" {
   command = plan
 
   variables {
-    cluster = { version = "1.32" }
+    cluster = { version = "1.35" }
   }
 
   assert {
     condition     = length(module.eks) > 0
-    error_message = "EKS cluster must be planned for version 1.32."
+    error_message = "EKS cluster must be planned for version 1.35."
   }
 }
 

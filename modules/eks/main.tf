@@ -68,8 +68,10 @@ locals {
   # ----------------------------------------
   #  Karpenter naming
   # ----------------------------------------
-  karpenter_queue_name       = var.karpenter.queue_name != null ? var.karpenter.queue_name : "${local.cluster_name}-Karpenter"
-  karpenter_rule_name_prefix = var.karpenter.rule_name_prefix != null ? var.karpenter.rule_name_prefix : substr(local.cluster_name, 0, 20)
+  karpenter_queue_name = var.karpenter.queue_name != null ? var.karpenter.queue_name : "${local.cluster_name}-Karpenter"
+  karpenter_rule_name_prefix = var.karpenter.rule_name_prefix != null ? var.karpenter.rule_name_prefix : substr(
+    "${substr(local.cluster_name, 0, 12)}-${substr(md5(local.cluster_name), 0, 7)}", 0, 20
+  )
 
   # ----------------------------------------
   #  IAM policy names

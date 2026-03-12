@@ -17,7 +17,6 @@ variable "vpc" {
     single_nat_gateway = optional(bool, false)      # true = one NAT GW shared across AZs (cheaper, less resilient)
 
     # Subnet CIDR calculation
-    use_subnet_calc_v2       = optional(bool, true)
     private_subnet_cidr_mask = optional(number, 20)
     public_subnet_cidr_mask  = optional(number, 24)
 

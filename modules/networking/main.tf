@@ -11,13 +11,11 @@ locals {
 
   vpc_cidr_prefix = parseint(split("/", var.vpc.cidr)[1], 10)
 
-  private_newbits    = var.vpc.use_subnet_calc_v2 ? var.vpc.private_subnet_cidr_mask - local.vpc_cidr_prefix : 8
-  public_newbits     = var.vpc.use_subnet_calc_v2 ? var.vpc.public_subnet_cidr_mask - local.vpc_cidr_prefix : 8
+  private_newbits    = var.vpc.private_subnet_cidr_mask - local.vpc_cidr_prefix
+  public_newbits     = var.vpc.public_subnet_cidr_mask - local.vpc_cidr_prefix
   additional_newbits = var.additional_subnets.enabled ? var.additional_subnets.cidr_mask - local.vpc_cidr_prefix : 4
 
-  public_start_index = var.vpc.use_subnet_calc_v2 ? (
-    length(local.availability_zones) * pow(2, local.public_newbits - local.private_newbits)
-  ) : length(local.availability_zones)
+  public_start_index = length(local.availability_zones) * pow(2, local.public_newbits - local.private_newbits)
 
   additional_start_index = var.additional_subnets.enabled ? ceil(
     (local.public_start_index + length(local.availability_zones)) /

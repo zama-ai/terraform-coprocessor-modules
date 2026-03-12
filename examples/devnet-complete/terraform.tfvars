@@ -41,7 +41,7 @@ eks = {
   cluster = {
     # Private-only by default — restrict endpoint_public_access_cidrs to your office / VPN IP range.
     endpoint_public_access       = true
-    endpoint_public_access_cidrs = ["0.0.0.0/0"] # CHANGE ME: restrict to known IPs
+    endpoint_public_access_cidrs = ["x.x.x.x/32"] # CHANGE ME: restrict to known IPs
   }
 
   node_groups = {
@@ -73,8 +73,7 @@ rds = {
 s3 = {
   buckets = {
     coprocessor = {
-      purpose       = "coprocessor-storage"
-      force_destroy = true
+      purpose = "coprocessor-storage"
 
       public_access = {
         enabled = true

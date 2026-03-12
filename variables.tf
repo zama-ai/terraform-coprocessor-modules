@@ -50,7 +50,6 @@ variable "networking" {
       single_nat_gateway = optional(bool, false)      # true = one NAT GW shared across AZs (cheaper, less resilient)
 
       # Subnet CIDR calculation
-      use_subnet_calc_v2       = optional(bool, true)
       private_subnet_cidr_mask = optional(number, 20)
       public_subnet_cidr_mask  = optional(number, 20)
 
@@ -84,13 +83,17 @@ variable "networking" {
   }
 
   validation {
-    condition     = var.networking.enabled || var.networking.existing_vpc != null
-    error_message = "networking.existing_vpc is required when networking.enabled = false."
+    condition     = var.networking.vpc == null || can(cidrhost(var.networking.vpc.cidr, 0))
+    error_message = "networking.vpc.cidr must be a valid IPv4 CIDR block."
   }
 
   validation {
-    condition     = var.networking.vpc == null || can(cidrhost(var.networking.vpc.cidr, 0))
-    error_message = "networking.vpc.cidr must be a valid IPv4 CIDR block."
+    condition = var.networking.enabled || (
+      var.networking.existing_vpc != null &&
+      length(var.networking.existing_vpc.private_subnet_ids) > 0 &&
+      length(var.networking.existing_vpc.private_subnet_cidr_blocks) > 0
+    )
+    error_message = "networking.existing_vpc with non-empty private_subnet_ids and private_subnet_cidr_blocks is required when networking.enabled = false."
   }
 }
 
@@ -158,6 +161,7 @@ variable "eks" {
         AmazonEC2ContainerRegistryReadOnly = "arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly"
         AmazonEKSWorkerNodePolicy          = "arn:aws:iam::aws:policy/AmazonEKSWorkerNodePolicy"
         AmazonEKS_CNI_Policy               = "arn:aws:iam::aws:policy/AmazonEKS_CNI_Policy"
+        AmazonSSMManagedInstanceCore       = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
       })
 
       groups = optional(map(object({
@@ -267,9 +271,9 @@ variable "rds" {
     engine_version = optional(string, "17")
 
     # Instance
-    instance_class        = optional(string, "db.t4g.medium")
-    allocated_storage     = optional(number, 20)
-    max_allocated_storage = optional(number, 100)
+    instance_class        = optional(string, "db.m5.4xlarge")
+    allocated_storage     = optional(number, 400)
+    max_allocated_storage = optional(number, 1000)
     multi_az              = optional(bool, false)
     port                  = optional(number, 5432)
 
@@ -288,10 +292,10 @@ variable "rds" {
     deletion_protection     = optional(bool, true)
 
     # Monitoring
-    monitoring_interval    = optional(number, 60)
-    create_monitoring_role = optional(bool, true)
-    monitoring_role_name   = optional(string, null)
-    monitoring_role_arn    = optional(string, null)
+    monitoring_interval          = optional(number, 60)
+    create_monitoring_role       = optional(bool, true)
+    monitoring_role_name         = optional(string, null)
+    existing_monitoring_role_arn = optional(string, null)
 
     # Parameters
     parameters = optional(list(object({
@@ -371,4 +375,9 @@ variable "s3" {
   })
 
   default = { buckets = {} }
+
+  validation {
+    condition     = length(var.s3.buckets) > 0
+    error_message = "s3.buckets must contain at least one bucket definition."
+  }
 }

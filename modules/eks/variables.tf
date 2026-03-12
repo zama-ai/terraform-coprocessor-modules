@@ -34,7 +34,7 @@ variable "cluster" {
   description = "EKS cluster configuration."
   type = object({
     # Naming
-    version       = optional(string, "1.32")
+    version       = optional(string, "1.35")
     name_override = optional(string, null) # overrides computed "<name>-<env>" cluster name
 
     # Endpoint access
@@ -105,6 +105,7 @@ variable "node_groups" {
       AmazonEC2ContainerRegistryReadOnly = "arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly"
       AmazonEKSWorkerNodePolicy          = "arn:aws:iam::aws:policy/AmazonEKSWorkerNodePolicy"
       AmazonEKS_CNI_Policy               = "arn:aws:iam::aws:policy/AmazonEKS_CNI_Policy"
+      AmazonSSMManagedInstanceCore       = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
     })
 
     groups = optional(map(object({

@@ -75,10 +75,6 @@ networking = {
     private_subnet_cidr_mask = 20
     public_subnet_cidr_mask  = 20
 
-    # Internal subnet calculator version. Leave true unless you have a reason to change it.
-    # Default: true
-    use_subnet_calc_v2 = true
-
     # VPC flow logs.
     # Default: false
     flow_log_enabled         = false
@@ -441,15 +437,15 @@ rds = {
   # ── Instance ────────────────────────────────────────────────────────────────
 
   # Default: "db.t4g.medium"
-  instance_class = "db.t4g.medium"
+  instance_class = "db.m5.4xlarge"
 
   # Initial allocated storage in GiB.
   # Default: 20
-  allocated_storage = 20
+  allocated_storage = 400
 
   # Maximum storage for autoscaling. Set equal to allocated_storage to disable.
   # Default: 100
-  max_allocated_storage = 100
+  max_allocated_storage = 1000
 
   # Deploy a standby replica in a second AZ for automatic failover.
   # Default: false
@@ -514,7 +510,7 @@ rds = {
   monitoring_interval = 60
 
   # Create the IAM role for enhanced monitoring automatically.
-  # Set false to provide an existing role via monitoring_role_arn.
+  # Set false to provide an existing role via existing_monitoring_role_arn.
   # Default: true
   create_monitoring_role = true
 
@@ -524,7 +520,7 @@ rds = {
 
   # ARN of an existing monitoring role. Used when create_monitoring_role = false.
   # Default: null
-  monitoring_role_arn = null
+  existing_monitoring_role_arn = null
 
   # ── Parameters ──────────────────────────────────────────────────────────────
 

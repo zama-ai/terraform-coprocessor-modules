@@ -61,8 +61,7 @@ rds = {
 s3 = {
   buckets = {
     coprocessor = {
-      purpose       = "coprocessor-storage"
-      force_destroy = true
+      purpose = "coprocessor-storage"
 
       public_access = {
         enabled = true

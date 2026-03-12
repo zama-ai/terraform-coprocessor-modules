@@ -32,3 +32,8 @@ output "karpenter_queue_name" {
   description = "SQS queue name for Karpenter interruption handling. Null when Karpenter is disabled."
   value       = var.karpenter.enabled ? module.karpenter[0].queue_name : null
 }
+
+output "karpenter_rule_name_prefix" {
+  description = "EventBridge rule name prefix used by Karpenter. Null when Karpenter is disabled."
+  value       = var.karpenter.enabled ? local.karpenter_rule_name_prefix : null
+}
