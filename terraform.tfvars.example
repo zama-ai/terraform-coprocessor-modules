@@ -1,0 +1,620 @@
+# ==============================================================================
+#  terraform.tfvars.example
+#
+#  Complete reference for all available variables.
+#  Every field is shown with its default value (where one exists) and a note
+#  on valid values and behaviour.
+#
+#  This file is intentionally exhaustive — not all combinations are valid for
+#  a real deployment. See examples/ for opinionated starter configurations.
+# ==============================================================================
+
+
+# ==============================================================================
+#  Core
+# ==============================================================================
+partner_name = "acme"       # Required. Lowercase. Used as a name prefix on all resources.
+environment  = "devnet"     # Required. e.g. "devnet" | "testnet" | "mainnet"
+aws_region   = "eu-west-1"  # Required. AWS region to deploy into.
+
+# Optional. Applied to every resource via the AWS provider default_tags.
+# Default: {}
+default_tags = {
+  Partner     = "acme"
+  Environment = "devnet"
+  ManagedBy   = "terraform"
+}
+
+
+# ==============================================================================
+#  Kubernetes Provider
+#
+#  Only needed when eks.enabled = false and you are bringing your own cluster.
+#  When eks.enabled = true these values are resolved automatically.
+#  Default: {} (all fields null)
+# ==============================================================================
+kubernetes_provider = {
+  host                   = "https://XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX.gr7.eu-west-1.eks.amazonaws.com"
+  cluster_ca_certificate = "LS0tLS1CRUdJTi..."  # base64-encoded CA cert
+  cluster_name           = "my-existing-cluster"
+}
+
+
+# ==============================================================================
+#  Networking
+#
+#  Two mutually exclusive modes:
+#    A) enabled = true  + vpc block        → create a new VPC
+#    B) enabled = false + existing_vpc     → bring your own VPC
+#
+#  Default: networking must always be provided (no top-level default).
+# ==============================================================================
+networking = {
+  # true  = create VPC and all subnet resources
+  # false = skip networking module; existing_vpc is required
+  enabled = true
+
+  # ── Option A: create a new VPC ────────────────────────────────────────────
+  # Required when enabled = true. Omit entirely when enabled = false.
+  vpc = {
+    # Required. Must be a valid IPv4 CIDR block.
+    cidr = "10.0.0.0/16"
+
+    # AZs to deploy subnets into.
+    # Default: [] — auto-discovers the first 3 available AZs in the region.
+    availability_zones = ["eu-west-1a", "eu-west-1b", "eu-west-1c"]
+
+    # false = one NAT GW per AZ (resilient, higher cost)
+    # true  = single shared NAT GW (cheaper, single point of failure)
+    # Default: false
+    single_nat_gateway = false
+
+    # Subnet sizing using CIDR mask notation.
+    # newbits = mask - vpc_cidr_prefix  (e.g. /20 in a /16 VPC = 4096 IPs per subnet)
+    # Default: 20
+    private_subnet_cidr_mask = 20
+    public_subnet_cidr_mask  = 20
+
+    # VPC flow logs.
+    # Default: false
+    flow_log_enabled         = false
+    flow_log_destination_arn = "arn:aws:s3:::my-flow-logs-bucket"  # only used when flow_log_enabled = true
+  }
+
+  # Optional additional subnet range — useful for CNI prefix delegation or
+  # specialized node groups that need isolation from the main private subnets.
+  # Default: { enabled = false }
+  additional_subnets = {
+    enabled   = false
+    cidr_mask = 20  # Default: 20
+
+    # Add karpenter.sh/discovery tag so Karpenter can launch nodes here.
+    # Default: false
+    expose_for_eks = false
+
+    # Tag the subnets for AWS load balancer controller.
+    # "internal" → kubernetes.io/role/internal-elb = 1
+    # "public"   → kubernetes.io/role/elb = 1
+    # null       → no ELB tag
+    # Default: null
+    elb_role = null  # "internal" | "public" | null
+
+    # Arbitrary extra tags merged onto each additional subnet.
+    # Default: {}
+    tags = {
+      Tier = "additional"
+    }
+
+    # Node group keys whose nodes should be placed in additional subnets.
+    # Default: []
+    node_groups = ["gpu-workers"]
+  }
+
+  # ── Option B: bring your own VPC ──────────────────────────────────────────
+  # Required when enabled = false. Used by RDS and EKS in place of module outputs.
+  # Can technically coexist with the vpc block above but only one path is active.
+  existing_vpc = {
+    vpc_id                     = "vpc-0123456789abcdef0"
+    private_subnet_ids         = ["subnet-aaa", "subnet-bbb", "subnet-ccc"]
+    private_subnet_cidr_blocks = ["10.0.1.0/24", "10.0.2.0/24", "10.0.3.0/24"]
+  }
+}
+
+
+# ==============================================================================
+#  EKS
+#
+#  Default: { enabled = false }
+# ==============================================================================
+eks = {
+  # Default: false
+  enabled = true
+
+  # ── Cluster ─────────────────────────────────────────────────────────────────
+  # Default: {} (all fields use their own defaults)
+  cluster = {
+    # Kubernetes version.
+    # Default: "1.35"
+    version = "1.35"
+
+    # Override the computed "<partner_name>-<environment>" cluster name.
+    # Default: null (uses computed name)
+    name_override = null
+
+    # Expose the API server on a public endpoint.
+    # Default: false
+    endpoint_public_access = true
+
+    # Restrict public endpoint to specific CIDRs. Ignored when endpoint_public_access = false.
+    # Default: [] — allows all IPs when public access is enabled; restrict in production.
+    endpoint_public_access_cidrs = ["203.0.113.0/24"]
+
+    # Keep the private endpoint active (required for node → control-plane communication).
+    # Default: true
+    endpoint_private_access = true
+
+    # Enable IAM Roles for Service Accounts (OIDC-based pod identity).
+    # Default: true
+    enable_irsa = true
+
+    # Grant the Terraform caller cluster-admin access automatically.
+    # Default: true
+    enable_creator_admin_permissions = true
+
+    # Additional IAM role ARNs to grant cluster-admin access via EKS access entries.
+    # Default: []
+    admin_role_arns = [
+      "arn:aws:iam::123456789012:role/ops-role",
+    ]
+  }
+
+  # ── Addons ──────────────────────────────────────────────────────────────────
+  # Default: {} (standard addon set applied automatically)
+  addons = {
+    # Full replacement of the default addon map.
+    # Each key is an EKS addon name; the value is passed verbatim to the upstream module.
+    # Default: the five addons shown below.
+    defaults = {
+      aws-ebs-csi-driver     = { most_recent = true }
+      coredns                = { most_recent = true }
+      vpc-cni                = { most_recent = true, before_compute = true }
+      kube-proxy             = { most_recent = true }
+      eks-pod-identity-agent = { most_recent = true, before_compute = true }
+    }
+
+    # Additional addons merged on top of defaults. Use to add extras without
+    # replacing the default set.
+    # Default: {}
+    extra = {
+      aws-efs-csi-driver = { most_recent = true }
+    }
+
+    # VPC CNI environment variable tuning.
+    # Controls pod-level security groups and prefix delegation.
+    # Default: {} (all sub-fields use their own defaults shown below)
+    vpc_cni_config = {
+      init = {
+        env = {
+          # Prevents TCP early demux which can interfere with network policies.
+          # Default: "true"
+          DISABLE_TCP_EARLY_DEMUX = "true"
+        }
+      }
+      env = {
+        # Required for Security Groups for Pods.
+        # Default: "true"
+        ENABLE_POD_ENI = "true"
+
+        # "standard" enforces SGP rules strictly; "strict" drops non-SGP traffic.
+        # Default: "standard"
+        POD_SECURITY_GROUP_ENFORCING_MODE = "standard"
+
+        # Assign /28 IPv4 prefix blocks to ENIs instead of individual IPs.
+        # Dramatically increases pod density per node.
+        # Default: "true"
+        ENABLE_PREFIX_DELEGATION = "true"
+
+        # Number of /28 prefix blocks to keep warm per node.
+        # Default: "1"
+        WARM_PREFIX_TARGET = "1"
+      }
+    }
+  }
+
+  # ── Node Groups ─────────────────────────────────────────────────────────────
+  # Default: {} (no node groups)
+  node_groups = {
+    # Applied to every group via merge — useful for org-wide defaults.
+    # Note: typed object defaults in each group's schema take precedence
+    # over this map for fields defined in the schema.
+    # Default: {}
+    defaults = {
+      ami_type  = "AL2023_x86_64_STANDARD"
+      disk_size = 50
+    }
+
+    # IAM policies attached to every node group's IAM role.
+    # Default: the four policies shown below.
+    default_iam_policies = {
+      AmazonEBSCSIDriverPolicy           = "arn:aws:iam::aws:policy/service-role/AmazonEBSCSIDriverPolicy"
+      AmazonEC2ContainerRegistryReadOnly = "arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly"
+      AmazonEKSWorkerNodePolicy          = "arn:aws:iam::aws:policy/AmazonEKSWorkerNodePolicy"
+      AmazonEKS_CNI_Policy               = "arn:aws:iam::aws:policy/AmazonEKS_CNI_Policy"
+    }
+
+    # Map of node groups. Key becomes the node group name and the EC2 Name tag.
+    # Default: {} (no groups)
+    groups = {
+      default = {
+        # "ON_DEMAND" | "SPOT"
+        # Default: "ON_DEMAND"
+        capacity_type = "ON_DEMAND"
+
+        # ASG sizing. These are bounds only — no autoscaler adjusts desired_size
+        # unless Cluster Autoscaler is deployed separately (not included here).
+        # Defaults: min=1, max=3, desired=1
+        min_size     = 1
+        max_size     = 3
+        desired_size = 1
+
+        # EC2 instance types. First type is preferred; AWS selects from the list for SPOT.
+        # Default: ["t3.medium"]
+        instance_types = ["t3.large"]
+
+        # EKS-optimised AMI family.
+        # Default: "AL2023_x86_64_STANDARD"
+        ami_type = "AL2023_x86_64_STANDARD"
+
+        # Use a custom launch template (required for EC2 Name tag and disk config).
+        # Default: true
+        use_custom_launch_template = true
+
+        # Root volume size in GiB.
+        # Default: 30
+        disk_size = 30
+
+        # Root volume type.
+        # Default: "gp3"
+        disk_type = "gp3"
+
+        # Kubernetes node labels.
+        # Default: {}
+        labels = {
+          NodeGroup = "default"
+        }
+
+        # EC2 resource tags (in addition to the auto-applied Name tag).
+        # Default: {}
+        tags = {
+          NodeGroupType = "system"
+        }
+
+        # Place this node group in additional_subnet_ids instead of the private subnets.
+        # Requires networking.additional_subnets.enabled = true.
+        # Default: false
+        use_additional_subnets = false
+
+        # Kubernetes taints applied to every node in this group.
+        # Default: {}
+        taints = {
+          dedicated = {
+            key    = "dedicated"
+            value  = "system"
+            effect = "NO_SCHEDULE"  # "NO_SCHEDULE" | "NO_EXECUTE" | "PREFER_NO_SCHEDULE"
+          }
+        }
+
+        # Rolling update strategy. AWS requires exactly one of the two fields.
+        # Default: { max_unavailable = 1 }
+        update_config = {
+          max_unavailable            = 1     # absolute node count
+          # max_unavailable_percentage = 25  # mutually exclusive with max_unavailable
+        }
+
+        # Additional IAM policies attached only to this node group's role.
+        # Merged with default_iam_policies.
+        # Default: {}
+        iam_role_additional_policies = {
+          AmazonSSMManagedInstanceCore = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
+        }
+
+        # IMDSv2 configuration. hop_limit = 1 prevents non-hostNetwork pods from
+        # reaching instance metadata (recommended). Raise to 2 only if pods need IMDS.
+        # Default: as shown below.
+        metadata_options = {
+          http_endpoint               = "enabled"
+          http_put_response_hop_limit = "1"
+          http_tokens                 = "required"  # enforces IMDSv2
+        }
+      }
+    }
+  }
+
+  # ── Karpenter ────────────────────────────────────────────────────────────────
+  # Default: { enabled = false }
+  karpenter = {
+    # Default: false
+    enabled = true
+
+    # Kubernetes namespace for the Karpenter controller.
+    # Default: "karpenter"
+    namespace = "karpenter"
+
+    # Karpenter controller service account name.
+    # Default: "karpenter"
+    service_account = "karpenter"
+
+    # Override the SQS queue name used for interruption handling.
+    # Default: null → computed as "<cluster_name>-Karpenter"
+    queue_name = null
+
+    # Prefix for EventBridge rule names. Must be ≤ 20 characters.
+    # Default: null → uses first 20 chars of cluster name.
+    rule_name_prefix = "coproc"
+
+    # Create the EC2 Spot service-linked role.
+    # Set false if it already exists in your account (only one allowed per account).
+    # Default: true
+    create_spot_service_linked_role = true
+
+    # Extra IAM policies attached to Karpenter-provisioned node IAM roles.
+    # Default: {}
+    node_iam_role_additional_policies = {}
+
+    # Dedicated managed node group for the Karpenter controller pod.
+    # Isolates the controller from workload nodes so it survives node drain.
+    # Default: { enabled = true }
+    controller_nodegroup = {
+      # Default: true
+      enabled = true
+
+      # Default: "ON_DEMAND"
+      capacity_type = "ON_DEMAND"
+
+      # Defaults: min=1, max=2, desired=1
+      min_size     = 1
+      max_size     = 2
+      desired_size = 1
+
+      # Default: ["t3.small"]
+      instance_types = ["t3.small"]
+
+      # Default: "AL2023_x86_64_STANDARD"
+      ami_type = "AL2023_x86_64_STANDARD"
+
+      # Default: 30
+      disk_size = 30
+
+      # Default: "gp3"
+      disk_type = "gp3"
+
+      # Default: { "karpenter.sh/controller" = "true" }
+      labels = {
+        "karpenter.sh/controller" = "true"
+      }
+
+      # Default: the karpenter taint shown below.
+      taints = {
+        karpenter = {
+          key    = "karpenter.sh/controller"
+          value  = "true"
+          effect = "NO_SCHEDULE"
+        }
+      }
+    }
+  }
+}
+
+
+# ==============================================================================
+#  RDS (PostgreSQL)
+#
+#  Default: { enabled = false }
+# ==============================================================================
+rds = {
+  # Default: false
+  enabled = true
+
+  # ── Naming ──────────────────────────────────────────────────────────────────
+
+  # Database name created inside the instance.
+  # Default: null (no database created at instance level)
+  db_name = "coprocessor"
+
+  # Override the computed RDS instance identifier "<partner>-<env>-<db_name>".
+  # Default: null (uses computed identifier)
+  identifier_override = null
+
+  # ── Engine ──────────────────────────────────────────────────────────────────
+
+  # Default: "postgres"
+  engine = "postgres"
+
+  # Major or patch version. "17" pins major; "17.2" pins patch.
+  # Default: "17"
+  engine_version = "17"
+
+  # ── Instance ────────────────────────────────────────────────────────────────
+
+  # Default: "db.t4g.medium"
+  instance_class = "db.m5.4xlarge"
+
+  # Initial allocated storage in GiB.
+  # Default: 20
+  allocated_storage = 400
+
+  # Maximum storage for autoscaling. Set equal to allocated_storage to disable.
+  # Default: 100
+  max_allocated_storage = 1000
+
+  # Deploy a standby replica in a second AZ for automatic failover.
+  # Default: false
+  multi_az = false
+
+  # Default: 5432
+  port = 5432
+
+  # ── Credentials ─────────────────────────────────────────────────────────────
+
+  # Master username.
+  # Default: "postgres"
+  username = "coprocessor"
+
+  # true  = AWS Secrets Manager manages the password (recommended).
+  # false = use password_wo below.
+  # Default: true
+  manage_master_user_password = true
+
+  # Write-only password. Only used when manage_master_user_password = false.
+  # Never stored in Terraform state.
+  # Default: null
+  password_wo = null
+
+  # Increment to rotate a static password without changing other config.
+  # Only relevant when manage_master_user_password = false.
+  # Default: 1
+  password_wo_version = 1
+
+  # Automatically rotate the Secrets Manager password.
+  # Only applies when manage_master_user_password = true.
+  # Default: true
+  enable_master_password_rotation = true
+
+  # Rotation interval in days.
+  # Default: 7
+  master_password_rotation_days = 7
+
+  # Allow IAM authentication in addition to password auth.
+  # Default: true
+  iam_database_authentication_enabled = true
+
+  # ── Maintenance & Backups ───────────────────────────────────────────────────
+
+  # Maintenance window (UTC). Format: "ddd:hh:mm-ddd:hh:mm"
+  # Default: "Mon:00:00-Mon:03:00"
+  maintenance_window = "Mon:00:00-Mon:03:00"
+
+  # Days to retain automated backups. 0 disables backups.
+  # Default: 7
+  backup_retention_period = 7
+
+  # Prevent accidental deletion via Terraform destroy.
+  # Default: true
+  deletion_protection = true
+
+  # ── Monitoring ──────────────────────────────────────────────────────────────
+
+  # Enhanced monitoring interval in seconds. 0 disables enhanced monitoring.
+  # Valid values: 0, 1, 5, 10, 15, 30, 60
+  # Default: 60
+  monitoring_interval = 60
+
+  # Create the IAM role for enhanced monitoring automatically.
+  # Set false to provide an existing role via existing_monitoring_role_arn.
+  # Default: true
+  create_monitoring_role = true
+
+  # Override the computed monitoring role name.
+  # Default: null → computed as "<identifier>-monitoring"
+  monitoring_role_name = null
+
+  # ARN of an existing monitoring role. Used when create_monitoring_role = false.
+  # Default: null
+  existing_monitoring_role_arn = null
+
+  # ── Parameters ──────────────────────────────────────────────────────────────
+
+  # Parameter group entries applied to the RDS instance.
+  # Default: []
+  parameters = [
+    {
+      name  = "log_connections"
+      value = "1"
+    },
+  ]
+
+  # ── Security Group ──────────────────────────────────────────────────────────
+
+  # Extra CIDR blocks allowed to reach the RDS port (in addition to private subnets).
+  # Default: []
+  additional_allowed_cidr_blocks = ["10.1.0.0/16"]
+}
+
+
+# ==============================================================================
+#  S3
+#
+#  Default: { buckets = {} }
+# ==============================================================================
+s3 = {
+  # Map of buckets to create. The map key is a short logical name used in
+  # Terraform resource addressing and output maps.
+  buckets = {
+    coprocessor = {
+      # Required. Human-readable description used for tagging.
+      purpose = "coprocessor-storage"
+
+      # Override the computed bucket name "<partner>-<env>-<key>-<random_suffix>".
+      # Use when importing a pre-existing bucket.
+      # Default: null (uses computed name)
+      name_override = null
+
+      # Allow Terraform destroy to delete the bucket even if it contains objects.
+      # Default: false
+      force_destroy = false
+
+      # Enable S3 object versioning.
+      # Default: true
+      versioning = true
+
+      # Public access configuration.
+      # Default: { enabled = false }
+      public_access = {
+        # true  = all four public access block flags set to false (bucket is publicly accessible)
+        # false = bucket is fully private
+        enabled = false
+      }
+
+      # CORS configuration for browser-based access.
+      # Default: { enabled = false, all lists empty }
+      cors = {
+        enabled         = false
+        allowed_origins = ["https://example.com"]
+        allowed_methods = ["GET", "HEAD"]
+        allowed_headers = ["Authorization"]
+        expose_headers  = ["Access-Control-Allow-Origin"]
+      }
+
+      # IAM bucket policy statements.
+      # resources aliases: "bucket" → bucket ARN, "objects" → bucket ARN + "/*"
+      # Default: []
+      policy_statements = [
+        {
+          sid        = "PublicRead"
+          effect     = "Allow"
+          principals = { "*" = ["*"] }  # wildcard principal
+          actions    = ["s3:GetObject"]
+          resources  = ["objects"]
+
+          # Optional conditions on the policy statement.
+          # Default: []
+          conditions = [
+            {
+              test     = "StringEquals"
+              variable = "aws:SourceVpc"
+              values   = ["vpc-0123456789abcdef0"]
+            }
+          ]
+        },
+        {
+          sid        = "AccountAccess"
+          effect     = "Allow"
+          principals = { AWS = ["arn:aws:iam::123456789012:root"] }  # typed principal
+          actions    = ["s3:*"]
+          resources  = ["bucket", "objects"]
+          conditions = []
+        },
+      ]
+    }
+  }
+}

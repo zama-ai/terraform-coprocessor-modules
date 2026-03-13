@@ -1,0 +1,54 @@
+variable "partner_name" {
+  description = "Name prefix for all networking resources."
+  type        = string
+}
+
+variable "environment" {
+  description = "Deployment environment (e.g. devnet, mainnet, testnet)."
+  type        = string
+}
+
+variable "vpc" {
+  description = "VPC and subnet configuration."
+  type = object({
+    # Base
+    cidr               = string
+    availability_zones = optional(list(string), []) # leave empty to auto-discover AZs
+    single_nat_gateway = optional(bool, false)      # true = one NAT GW shared across AZs (cheaper, less resilient)
+
+    # Subnet CIDR calculation
+    private_subnet_cidr_mask = optional(number, 20)
+    public_subnet_cidr_mask  = optional(number, 24)
+
+    # Flow logs
+    flow_log_enabled         = optional(bool, false)
+    flow_log_destination_arn = optional(string, null)
+  })
+  default = null
+}
+
+variable "additional_subnets" {
+  description = "Optional additional subnets, e.g. for CNI or specific node groups."
+  type = object({
+    enabled   = optional(bool, false)
+    cidr_mask = optional(number, 22)
+
+    # EKS integration
+    expose_for_eks = optional(bool, false)  # add karpenter.sh/discovery tag
+    elb_role       = optional(string, null) # "internal" | "public" | null
+    tags           = optional(map(string), {})
+  })
+  default = { enabled = false }
+}
+
+# Passed in from EKS module so networking can tag subnets correctly
+variable "eks_cluster_name" {
+  description = "EKS cluster name, used for subnet discovery tags."
+  type        = string
+}
+
+variable "enable_karpenter" {
+  description = "Whether Karpenter is enabled — affects subnet discovery tags."
+  type        = bool
+  default     = false
+}

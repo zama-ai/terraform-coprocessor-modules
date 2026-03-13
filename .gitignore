@@ -14,6 +14,11 @@ kubeconfig_*
 *.tfstate.*
 *.tfplan
 
+# Terraform variable files — ignore everywhere except example directories
+*.tfvars
+!examples/devnet-complete/terraform.tfvars
+!examples/devnet-existing-infra/terraform.tfvars
+
 cluster-keys.json
 
 .vscode
