@@ -7,7 +7,7 @@ variable "partner_name" {
 }
 
 variable "environment" {
-  description = "Deployment environment (e.g. devnet, mainnet, testnet)."
+  description = "Deployment environment (e.g. testnet, mainnet)."
   type        = string
 }
 

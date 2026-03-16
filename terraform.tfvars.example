@@ -14,14 +14,14 @@
 #  Core
 # ==============================================================================
 partner_name = "acme"       # Required. Lowercase. Used as a name prefix on all resources.
-environment  = "devnet"     # Required. e.g. "devnet" | "testnet" | "mainnet"
+environment  = "testnet"    # Required. e.g. "testnet" | "mainnet"
 aws_region   = "eu-west-1"  # Required. AWS region to deploy into.
 
 # Optional. Applied to every resource via the AWS provider default_tags.
 # Default: {}
 default_tags = {
   Partner     = "acme"
-  Environment = "devnet"
+  Environment = "testnet"
   ManagedBy   = "terraform"
 }
 

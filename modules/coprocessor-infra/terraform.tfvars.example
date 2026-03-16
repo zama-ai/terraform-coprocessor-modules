@@ -1,8 +1,8 @@
 # Network Environment Configuration
-network_environment = "devnet"
+network_environment = "testnet"
 
 # S3 Bucket Configuration
-bucket_prefix   = "zama-coprocessor-devnet"
+bucket_prefix   = "zama-coprocessor-testnet"
 
 # Kubernetes Configuration
 cluster_name             = "zws-dev"
