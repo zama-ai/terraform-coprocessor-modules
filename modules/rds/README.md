@@ -25,7 +25,7 @@ No resources.
 
 | Name | Description | Type | Default | Required |
 |------|-------------|------|---------|:--------:|
-| <a name="input_environment"></a> [environment](#input\_environment) | Deployment environment (e.g. devnet, mainnet, testnet). | `string` | n/a | yes |
+| <a name="input_environment"></a> [environment](#input\_environment) | Deployment environment (e.g. testnet, mainnet). | `string` | n/a | yes |
 | <a name="input_partner_name"></a> [partner\_name](#input\_partner\_name) | Partner identifier, used for resource naming. | `string` | n/a | yes |
 | <a name="input_private_subnet_cidr_blocks"></a> [private\_subnet\_cidr\_blocks](#input\_private\_subnet\_cidr\_blocks) | CIDR blocks of private subnets, merged into RDS security group ingress. | `list(string)` | `[]` | no |
 | <a name="input_private_subnet_ids"></a> [private\_subnet\_ids](#input\_private\_subnet\_ids) | List of private subnet IDs for the RDS subnet group. | `list(string)` | `[]` | no |

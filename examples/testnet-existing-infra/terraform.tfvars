@@ -10,12 +10,12 @@
 #  Core
 # =============================================================================
 partner_name = "acme" # CHANGE ME: lowercase, used as a prefix in resource names
-environment  = "devnet"
+environment  = "testnet"
 aws_region   = "eu-west-1" # CHANGE ME: AWS region to deploy into
 
 default_tags = {
   Partner     = "acme" # CHANGE ME: match partner_name
-  Environment = "devnet"
+  Environment = "testnet"
   ManagedBy   = "terraform"
 }
 
