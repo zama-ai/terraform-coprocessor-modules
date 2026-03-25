@@ -311,6 +311,75 @@ variable "rds" {
 }
 
 # ******************************************************
+#  ElastiCache
+# ******************************************************
+variable "elasticache" {
+  description = <<-EOT
+    ElastiCache (Valkey/Redis) replication group configuration.
+    Set enabled = false to skip all ElastiCache resources.
+
+    Two deployment profiles:
+      Testnet: node_type = cache.r7g.large,   data_tiering_enabled = false (default)
+      Mainnet: node_type = cache.r6gd.xlarge,  data_tiering_enabled = true
+  EOT
+
+  type = object({
+    enabled = optional(bool, false)
+
+    # Naming
+    replication_group_id = optional(string, null)
+
+    # Engine
+    engine         = optional(string, "valkey")
+    engine_version = optional(string, "7.2")
+
+    # Instance
+    node_type            = optional(string, "cache.r7g.large")
+    num_cache_clusters   = optional(number, 3)
+    port                 = optional(number, 6379)
+    data_tiering_enabled = optional(bool, false)
+
+    # High availability
+    multi_az_enabled           = optional(bool, true)
+    automatic_failover_enabled = optional(bool, true)
+
+    # Encryption
+    at_rest_encryption_enabled = optional(bool, true)
+    transit_encryption_enabled = optional(bool, true)
+
+    # Auth
+    auth_token_wo         = optional(string, null)
+    auth_token_wo_version = optional(number, 1)
+
+    # Maintenance & backups
+    maintenance_window       = optional(string, "Mon:00:00-Mon:03:00")
+    snapshot_retention_limit = optional(number, 7)
+    snapshot_window          = optional(string, "03:00-05:00")
+
+    # Parameters
+    parameters = optional(list(object({
+      name  = string
+      value = string
+    })), [])
+
+    # Security group
+    additional_allowed_cidr_blocks = optional(list(string), [])
+  })
+
+  default = { enabled = false }
+
+  validation {
+    condition     = !var.elasticache.data_tiering_enabled || can(regex("r6gd", var.elasticache.node_type))
+    error_message = "data_tiering_enabled = true requires an r6gd node type (e.g. cache.r6gd.xlarge). Only the r6gd family supports data tiering."
+  }
+
+  validation {
+    condition     = !var.elasticache.automatic_failover_enabled || var.elasticache.num_cache_clusters >= 2
+    error_message = "automatic_failover_enabled requires at least 2 cache clusters (1 primary + 1 replica)."
+  }
+}
+
+# ******************************************************
 #  S3
 # ******************************************************
 variable "s3" {
