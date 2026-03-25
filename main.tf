@@ -123,6 +123,22 @@ resource "aws_vpc_security_group_ingress_rule" "node_from_rds_client" {
 }
 
 # ******************************************************
+#  ElastiCache
+# ******************************************************
+module "elasticache" {
+  source = "./modules/elasticache"
+
+  partner_name = var.partner_name
+  environment  = var.environment
+
+  vpc_id                     = local.vpc_id
+  private_subnet_ids         = local.private_subnet_ids
+  private_subnet_cidr_blocks = local.private_subnet_cidr_blocks
+
+  elasticache = var.elasticache
+}
+
+# ******************************************************
 #  S3
 # ******************************************************
 module "s3" {
