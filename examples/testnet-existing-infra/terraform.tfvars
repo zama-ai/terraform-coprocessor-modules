@@ -56,6 +56,17 @@ rds = {
 }
 
 # =============================================================================
+#  ElastiCache (Valkey) — listener v2 broker
+# =============================================================================
+elasticache = {
+  enabled = true
+  # Testnet defaults: cache.r7g.large, no data tiering
+  # For mainnet, override with:
+  #   node_type            = "cache.r6gd.xlarge"
+  #   data_tiering_enabled = true
+}
+
+# =============================================================================
 #  S3
 # =============================================================================
 s3 = {

@@ -88,6 +88,39 @@ output "rds_db_instance_port" {
 }
 
 # ******************************************************
+#  ElastiCache
+# ******************************************************
+output "elasticache_replication_group_id" {
+  description = "The ID of the ElastiCache replication group."
+  value       = module.elasticache.replication_group_id
+}
+
+output "elasticache_replication_group_arn" {
+  description = "The ARN of the ElastiCache replication group."
+  value       = module.elasticache.replication_group_arn
+}
+
+output "elasticache_primary_endpoint_address" {
+  description = "The primary endpoint address of the ElastiCache replication group."
+  value       = module.elasticache.primary_endpoint_address
+}
+
+output "elasticache_reader_endpoint_address" {
+  description = "The reader endpoint address of the ElastiCache replication group."
+  value       = module.elasticache.reader_endpoint_address
+}
+
+output "elasticache_port" {
+  description = "The port the ElastiCache replication group is listening on."
+  value       = module.elasticache.port
+}
+
+output "elasticache_security_group_id" {
+  description = "The ID of the ElastiCache security group."
+  value       = module.elasticache.security_group_id
+}
+
+# ******************************************************
 #  S3
 # ******************************************************
 output "s3_bucket_names" {
