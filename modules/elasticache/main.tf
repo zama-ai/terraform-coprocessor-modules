@@ -59,8 +59,8 @@ module "elasticache" {
   at_rest_encryption_enabled = var.elasticache.at_rest_encryption_enabled
   transit_encryption_enabled = var.elasticache.transit_encryption_enabled
 
-  # Auth
-  auth_token = var.elasticache.auth_token_wo
+  # Auth (stored in state until AWS provider supports auth_token_wo)
+  auth_token = var.elasticache.auth_token
 
   # Maintenance & backups
   maintenance_window       = var.elasticache.maintenance_window
