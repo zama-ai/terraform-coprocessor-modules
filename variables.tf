@@ -348,8 +348,9 @@ variable "elasticache" {
     transit_encryption_enabled = optional(bool, true)
 
     # Auth
-    auth_token_wo         = optional(string, null)
-    auth_token_wo_version = optional(number, 1)
+    # NOTE: stored in state until AWS provider supports write-only auth_token_wo
+    # https://github.com/hashicorp/terraform-provider-aws/pull/44260
+    auth_token = optional(string, null)
 
     # Maintenance & backups
     maintenance_window       = optional(string, "Mon:00:00-Mon:03:00")

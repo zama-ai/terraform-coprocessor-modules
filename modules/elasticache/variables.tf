@@ -61,8 +61,10 @@ variable "elasticache" {
     transit_encryption_enabled = optional(bool, true)
 
     # Auth
-    auth_token_wo         = optional(string, null) # write-only; TF 1.11+ (requires transit_encryption_enabled = true)
-    auth_token_wo_version = optional(number, 1)    # increment to rotate
+    # NOTE: auth_token is stored in state as the AWS provider does not yet support write-only
+    # auth_token_wo for aws_elasticache_replication_group. Track upstream progress:
+    # https://github.com/hashicorp/terraform-provider-aws/pull/44260
+    auth_token = optional(string, null) # requires transit_encryption_enabled = true
 
     # Maintenance & backups
     maintenance_window       = optional(string, "Mon:00:00-Mon:03:00")
