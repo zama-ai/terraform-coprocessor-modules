@@ -6,7 +6,7 @@ locals {
     var.elasticache.replication_group_id,
     substr(
       lower(replace(
-        "${var.partner_name}-${var.environment}",
+        "${var.partner_name}-${var.environment}-redis",
         "/[^a-z0-9-]/", "-"
       )),
       0, 40 # ElastiCache replication group ID max length
