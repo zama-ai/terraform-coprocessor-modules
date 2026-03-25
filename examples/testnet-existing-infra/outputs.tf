@@ -63,6 +63,24 @@ output "rds_master_secret_arn" {
 }
 
 # ******************************************************
+#  ElastiCache
+# ******************************************************
+output "elasticache_primary_endpoint" {
+  description = "ElastiCache primary endpoint address."
+  value       = module.coprocessor.elasticache_primary_endpoint_address
+}
+
+output "elasticache_reader_endpoint" {
+  description = "ElastiCache reader endpoint address."
+  value       = module.coprocessor.elasticache_reader_endpoint_address
+}
+
+output "elasticache_port" {
+  description = "ElastiCache port."
+  value       = module.coprocessor.elasticache_port
+}
+
+# ******************************************************
 #  S3
 # ******************************************************
 output "s3_bucket_names" {

@@ -13,4 +13,5 @@ module "coprocessor" {
   kms                  = var.kms
   k8s_coprocessor_deps = var.k8s_coprocessor_deps
   kubernetes_provider  = var.kubernetes_provider
+  elasticache = var.elasticache
 }
