@@ -1,4 +1,9 @@
 # ***************************************
+#  Data
+# ***************************************
+data "aws_region" "current" {}
+
+# ***************************************
 #  Locals
 # ***************************************
 locals {
@@ -169,7 +174,7 @@ resource "kubernetes_manifest" "additional" {
   for_each = merge([
     for app_key, app in local.manifests_apps : {
       for name, yaml in app.additional_manifests.manifests :
-      "${app_key}/${name}" => yamldecode(yaml)
+      "${app_key}/${name}" => yamldecode(replace(yaml, "__region__", data.aws_region.current.id))
     }
   ]...)
 

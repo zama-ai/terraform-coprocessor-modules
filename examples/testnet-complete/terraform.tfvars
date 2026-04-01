@@ -240,7 +240,7 @@ k8s_charts = {
       helm_chart = {
         repository = "https://charts.external-secrets.io"
         chart      = "external-secrets"
-        version    = "0.14.0"
+        version    = "2.2.0"
 
         values = <<-YAML
           installCRDs: true
@@ -255,7 +255,7 @@ k8s_charts = {
         enabled = true
         manifests = {
           cluster-secret-store = <<-YAML
-            apiVersion: external-secrets.io/v1beta1
+            apiVersion: external-secrets.io/v1
             kind: ClusterSecretStore
             metadata:
               name: aws-secrets-manager
@@ -263,7 +263,7 @@ k8s_charts = {
               provider:
                 aws:
                   service: SecretsManager
-                  region: eu-west-1
+                  region: __region__
                   auth:
                     jwt:
                       serviceAccountRef:

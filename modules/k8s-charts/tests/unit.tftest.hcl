@@ -1,6 +1,5 @@
 mock_provider "helm" {}
 
-mock_provider "kubernetes" {}
 
 mock_provider "aws" {
   mock_data "aws_iam_policy_document" {
@@ -183,7 +182,7 @@ run "service_account_create_true_creates_resource" {
           create = true
           name   = "external-secrets"
         }
-        helm_chart = { repository = "https://charts.external-secrets.io", chart = "external-secrets", version = "0.14.0" }
+        helm_chart = { repository = "https://charts.external-secrets.io", chart = "external-secrets", version = "2.2.0" }
       }
     }
   }
@@ -259,12 +258,13 @@ run "irsa_enabled_creates_role_policy_and_attachment" {
           enabled = true
           policy_statements = [
             {
+              effect    = "Allow"
               actions   = ["secretsmanager:GetSecretValue", "secretsmanager:DescribeSecret"]
               resources = ["*"]
             }
           ]
         }
-        helm_chart = { repository = "https://charts.external-secrets.io", chart = "external-secrets", version = "0.14.0" }
+        helm_chart = { repository = "https://charts.external-secrets.io", chart = "external-secrets", version = "2.2.0" }
       }
     }
   }
@@ -306,12 +306,13 @@ run "irsa_role_name_override_is_respected" {
           role_name = "my-custom-eso-role"
           policy_statements = [
             {
+              effect    = "Allow"
               actions   = ["secretsmanager:GetSecretValue"]
               resources = ["*"]
             }
           ]
         }
-        helm_chart = { repository = "https://charts.external-secrets.io", chart = "external-secrets", version = "0.14.0" }
+        helm_chart = { repository = "https://charts.external-secrets.io", chart = "external-secrets", version = "2.2.0" }
       }
     }
   }

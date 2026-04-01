@@ -61,7 +61,7 @@ variable "applications" {
       role_name = optional(string, null) # defaults to "<app_key>-<partner_name>-<environment>"
       policy_statements = optional(list(object({
         sid       = optional(string, "")
-        effect    = optional(string, "Allow")
+        effect    = string
         actions   = list(string)
         resources = list(string)
       })), [])
@@ -83,6 +83,8 @@ variable "applications" {
 
     # Raw YAML manifests applied after the Helm chart.
     # Map key is a logical name; value is raw YAML content (single Kubernetes resource per entry).
+    # Use the placeholder __region__ anywhere a region string is needed — it is substituted
+    # with the current AWS provider region at apply time.
     additional_manifests = optional(object({
       enabled   = optional(bool, false)
       manifests = optional(map(string), {})

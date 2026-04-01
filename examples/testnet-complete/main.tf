@@ -10,4 +10,6 @@ module "coprocessor" {
   eks        = var.eks
   rds        = var.rds
   s3         = var.s3
+  k8s        = var.k8s
+  k8s_charts = var.k8s_charts
 }

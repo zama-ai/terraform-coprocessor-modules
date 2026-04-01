@@ -74,7 +74,7 @@ variable "k8s" {
       # IAM policy statements for the IRSA role.
       iam_policy_statements = optional(list(object({
         sid       = optional(string, "")
-        effect    = optional(string, "Allow")
+        effect    = string
         actions   = list(string)
         resources = list(string)
         conditions = optional(list(object({

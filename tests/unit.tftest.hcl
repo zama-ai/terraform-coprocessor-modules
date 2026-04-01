@@ -21,13 +21,6 @@ mock_provider "aws" {
     }
   }
 }
-mock_provider "kubernetes" {}
-mock_provider "helm" {}
-mock_provider "random" {}
-mock_provider "tls" {}
-mock_provider "time" {}
-mock_provider "null" {}
-mock_provider "cloudinit" {}
 
 # Shared defaults across all runs.
 # - networking.enabled = false with existing_vpc set — keeps the baseline simple

@@ -1,5 +1,4 @@
 mock_provider "aws" {}
-mock_provider "random" {}
 
 # Shared defaults across all runs — individual runs may override.
 variables {

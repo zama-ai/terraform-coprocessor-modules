@@ -9,7 +9,6 @@ mock_provider "aws" {
   }
 }
 
-mock_provider "kubernetes" {}
 
 # Shared defaults across all runs.
 variables {
@@ -142,6 +141,7 @@ run "one_set_of_iam_resources_per_service_account" {
           name = "sns-worker"
           iam_policy_statements = [
             {
+              effect    = "Allow"
               actions   = ["sns:Publish"]
               resources = ["arn:aws:sns:eu-west-1:123456789012:my-topic"]
             }
@@ -151,6 +151,7 @@ run "one_set_of_iam_resources_per_service_account" {
           name = "coprocessor"
           iam_policy_statements = [
             {
+              effect    = "Allow"
               actions   = ["s3:GetObject"]
               resources = ["arn:aws:s3:::my-bucket/*"]
             }
@@ -192,6 +193,7 @@ run "iam_role_name_defaults_to_key_partner_env" {
           name = "sns-worker"
           iam_policy_statements = [
             {
+              effect    = "Allow"
               actions   = ["sns:Publish"]
               resources = ["arn:aws:sns:eu-west-1:123456789012:my-topic"]
             }
@@ -224,6 +226,7 @@ run "iam_role_name_override_is_respected" {
           iam_role_name_override = "my-custom-role-name"
           iam_policy_statements = [
             {
+              effect    = "Allow"
               actions   = ["sns:Publish"]
               resources = ["arn:aws:sns:eu-west-1:123456789012:my-topic"]
             }
@@ -255,6 +258,7 @@ run "sa_without_namespace_uses_default_namespace" {
           name = "sns-worker"
           iam_policy_statements = [
             {
+              effect    = "Allow"
               actions   = ["sns:Publish"]
               resources = ["arn:aws:sns:eu-west-1:123456789012:my-topic"]
             }
@@ -283,6 +287,7 @@ run "sa_with_namespace_override_uses_its_own_namespace" {
           namespace = "coprocessor-workers"
           iam_policy_statements = [
             {
+              effect    = "Allow"
               actions   = ["sns:Publish"]
               resources = ["arn:aws:sns:eu-west-1:123456789012:my-topic"]
             }

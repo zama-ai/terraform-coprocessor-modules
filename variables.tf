@@ -407,7 +407,7 @@ variable "k8s" {
       })), {})
       iam_policy_statements = optional(list(object({
         sid       = optional(string, "")
-        effect    = optional(string, "")
+        effect    = string
         actions   = list(string)
         resources = list(string)
         conditions = optional(list(object({
@@ -431,7 +431,7 @@ variable "k8s" {
     })), {})
 
     external_name_services = optional(map(object({
-      endpoint    = string
+      endpoint    = optional(string, null)
       namespace   = optional(string, null)
       annotations = optional(map(string), {})
     })), {})
@@ -462,7 +462,7 @@ variable "k8s_charts" {
         role_name = optional(string, null)
         policy_statements = optional(list(object({
           sid       = optional(string, "")
-          effect    = optional(string, "Allow")
+          effect    = string
           actions   = list(string)
           resources = list(string)
         })), [])
