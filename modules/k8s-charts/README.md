@@ -27,6 +27,7 @@ No modules.
 | Name | Description | Type | Default | Required |
 |------|-------------|------|---------|:--------:|
 | <a name="input_applications"></a> [applications](#input\_applications) | Map of Helm chart releases to deploy. The map key becomes the Helm release name<br/>(e.g. "karpenter", "metrics-server", "external-secrets"). | <pre>map(object({<br/>    repository       = string<br/>    chart            = string<br/>    version          = string<br/>    namespace        = optional(string, "default")<br/>    create_namespace = optional(bool, true)<br/>    values           = optional(string, "")      # raw YAML values passed to the chart<br/>    set              = optional(map(string), {}) # individual key=value overrides<br/>    atomic           = optional(bool, true)<br/>    wait             = optional(bool, true)<br/>    timeout          = optional(number, 300)<br/>  }))</pre> | `{}` | no |
+| <a name="input_set_computed"></a> [set\_computed](#input\_set\_computed) | Per-application set overrides injected by the root module from computed values (e.g. cluster name, queue ARN). Merged on top of applications[*].set — not intended to be set in tfvars. | `map(map(string))` | `{}` | no |
 
 ## Outputs
 

@@ -121,6 +121,18 @@ k8s = {
 }
 
 # =============================================================================
+#  k8s Charts — not managed here
+#
+#  Partners using an existing cluster are expected to operate their own
+#  system-level Helm releases. This module does not deploy:
+#    - metrics-server  (assumed present in the existing cluster)
+#    - karpenter       (assumed present; IAM/SQS resources are partner-managed)
+#
+#  To adopt these releases into Terraform management, set k8s_charts.enabled = true
+#  and add the relevant application entries (see testnet-complete for reference).
+# =============================================================================
+
+# =============================================================================
 #  S3
 # =============================================================================
 s3 = {

@@ -14,5 +14,5 @@ resource "helm_release" "this" {
   # Only pass values when non-empty; avoids feeding an empty YAML string to Helm.
   values = each.value.values != "" ? [each.value.values] : []
 
-  set = [for key, value in each.value.set : { name = key, value = value }]
+  set = [for key, value in merge(each.value.set, lookup(var.set_computed, each.key, {})) : { name = key, value = value }]
 }

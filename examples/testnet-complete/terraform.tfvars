@@ -123,6 +123,76 @@ k8s = {
 }
 
 # =============================================================================
+#  k8s Charts
+# =============================================================================
+k8s_charts = {
+  enabled = true
+
+  applications = {
+    metrics-server = {
+      repository       = "https://kubernetes-sigs.github.io/metrics-server"
+      chart            = "metrics-server"
+      version          = "3.13.0"
+      namespace        = "kube-system"
+      create_namespace = false
+    }
+
+    karpenter = {
+      repository       = "oci://public.ecr.aws/karpenter"
+      chart            = "karpenter"
+      version          = "1.8.2"
+      namespace        = "karpenter"
+      create_namespace = true
+
+      # settings.clusterName, settings.interruptionQueue, and settings.eksControlPlane
+      # are injected automatically from the eks submodule — no set block needed.
+
+      values = <<-YAML
+        logLevel: info
+
+        replicas: 1
+        dnsPolicy: Default
+
+        # Pin the controller pod to the dedicated karpenter controller node group.
+        nodeSelector:
+          karpenter.sh/controller: "true"
+        tolerations:
+          - key: "karpenter.sh/controller"
+            operator: "Equal"
+            value: "true"
+            effect: "NoSchedule"
+
+        serviceAccount:
+          create: true
+          name: karpenter
+
+        controller:
+          resources:
+            requests:
+              cpu: 1
+              memory: 1Gi
+            limits:
+              cpu: 1
+              memory: 1Gi
+          healthProbe:
+            port: 8081
+          startupProbe:
+            httpGet:
+              path: /healthz
+              port: 8081
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 18
+
+        webhook:
+          enabled: true
+      YAML
+    }
+  }
+}
+
+# =============================================================================
 #  S3
 # =============================================================================
 s3 = {

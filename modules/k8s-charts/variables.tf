@@ -1,3 +1,9 @@
+variable "set_computed" {
+  description = "Per-application set overrides injected by the root module from computed values (e.g. cluster name, queue ARN). Merged on top of applications[*].set — not intended to be set in tfvars."
+  type        = map(map(string))
+  default     = {}
+}
+
 variable "applications" {
   description = <<-EOT
     Map of Helm chart releases to deploy. The map key becomes the Helm release name

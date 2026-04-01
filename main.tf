@@ -110,4 +110,12 @@ module "k8s_charts" {
   source = "./modules/k8s-charts"
 
   applications = var.k8s_charts.applications
+
+  set_computed = {
+    karpenter = {
+      "settings.clusterName"       = local.eks_cluster_name
+      "settings.interruptionQueue" = one(module.eks[*].karpenter_queue_name) != null ? one(module.eks[*].karpenter_queue_name) : ""
+      "settings.eksControlPlane"   = "true"
+    }
+  }
 }
