@@ -130,64 +130,148 @@ k8s_charts = {
 
   applications = {
     metrics-server = {
-      repository       = "https://kubernetes-sigs.github.io/metrics-server"
-      chart            = "metrics-server"
-      version          = "3.13.0"
-      namespace        = "kube-system"
-      create_namespace = false
+      namespace = {
+        name   = "kube-system"
+        create = false # kube-system already exists
+      }
+
+      helm_chart = {
+        repository = "https://kubernetes-sigs.github.io/metrics-server"
+        chart      = "metrics-server"
+        version    = "3.13.0"
+      }
     }
 
     karpenter = {
-      repository       = "oci://public.ecr.aws/karpenter"
-      chart            = "karpenter"
-      version          = "1.8.2"
-      namespace        = "karpenter"
-      create_namespace = true
+      namespace = {
+        name   = "karpenter"
+        create = true
+      }
 
-      # settings.clusterName, settings.interruptionQueue, and settings.eksControlPlane
-      # are injected automatically from the eks submodule — no set block needed.
+      service_account = {
+        create = false # Let Helm chart create it
+        name   = "karpenter"
+      }
 
-      values = <<-YAML
-        logLevel: info
+      helm_chart = {
+        repository = "oci://public.ecr.aws/karpenter"
+        chart      = "karpenter"
+        version    = "1.8.2"
 
-        replicas: 1
-        dnsPolicy: Default
+        # settings.clusterName, settings.interruptionQueue, and settings.eksControlPlane
+        # are injected automatically from the eks submodule — no set block needed.
 
-        # Pin the controller pod to the dedicated karpenter controller node group.
-        nodeSelector:
-          karpenter.sh/controller: "true"
-        tolerations:
-          - key: "karpenter.sh/controller"
-            operator: "Equal"
-            value: "true"
-            effect: "NoSchedule"
+        values = <<-YAML
+          logLevel: info
 
-        serviceAccount:
-          create: true
-          name: karpenter
+          replicas: 1
+          dnsPolicy: Default
 
-        controller:
-          resources:
-            requests:
-              cpu: 1
-              memory: 1Gi
-            limits:
-              cpu: 1
-              memory: 1Gi
-          healthProbe:
-            port: 8081
-          startupProbe:
-            httpGet:
-              path: /healthz
+          # Pin the controller pod to the dedicated karpenter controller node group.
+          nodeSelector:
+            karpenter.sh/controller: "true"
+          tolerations:
+            - key: "karpenter.sh/controller"
+              operator: "Equal"
+              value: "true"
+              effect: "NoSchedule"
+
+          serviceAccount:
+            create: true
+            name: karpenter
+
+          controller:
+            resources:
+              requests:
+                cpu: 1
+                memory: 1Gi
+              limits:
+                cpu: 1
+                memory: 1Gi
+            healthProbe:
               port: 8081
-            initialDelaySeconds: 30
-            periodSeconds: 10
-            timeoutSeconds: 5
-            failureThreshold: 18
+            startupProbe:
+              httpGet:
+                path: /healthz
+                port: 8081
+              initialDelaySeconds: 30
+              periodSeconds: 10
+              timeoutSeconds: 5
+              failureThreshold: 18
 
-        webhook:
-          enabled: true
-      YAML
+          webhook:
+            enabled: true
+        YAML
+      }
+    }
+
+    external-secrets = {
+      namespace = {
+        name   = "external-secrets"
+        create = true
+      }
+
+      service_account = {
+        create = true
+        name   = "external-secrets"
+        annotations = {
+          "meta.helm.sh/release-name"      = "external-secrets"
+          "meta.helm.sh/release-namespace" = "external-secrets"
+        }
+      }
+
+      irsa = {
+        enabled = true
+        policy_statements = [
+          {
+            effect = "Allow"
+            actions = [
+              "secretsmanager:GetResourcePolicy",
+              "secretsmanager:GetSecretValue",
+              "secretsmanager:DescribeSecret",
+              "secretsmanager:ListSecrets",
+              "secretsmanager:ListSecretVersionIds",
+            ]
+            resources = ["*"] # CHANGE ME: restrict to specific secret ARNs for tighter scoping
+          }
+        ]
+      }
+
+      helm_chart = {
+        repository = "https://charts.external-secrets.io"
+        chart      = "external-secrets"
+        version    = "0.14.0"
+
+        values = <<-YAML
+          installCRDs: true
+          replicaCount: 1
+          serviceAccount:
+            create: false  # created and annotated by terraform above
+            name: external-secrets
+        YAML
+      }
+
+      additional_manifests = {
+        enabled = true
+        manifests = {
+          cluster-secret-store = <<-YAML
+            apiVersion: external-secrets.io/v1beta1
+            kind: ClusterSecretStore
+            metadata:
+              name: aws-secrets-manager
+            spec:
+              provider:
+                aws:
+                  service: SecretsManager
+                  region: eu-west-1
+                  auth:
+                    jwt:
+                      serviceAccountRef:
+                        name: external-secrets
+                        namespace: external-secrets
+          YAML
+        }
+      }
     }
   }
 }

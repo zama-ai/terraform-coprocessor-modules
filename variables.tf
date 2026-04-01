@@ -443,20 +443,46 @@ variable "k8s" {
 #  k8s Charts
 # ******************************************************
 variable "k8s_charts" {
-  description = "Kubernetes system level applications to be deployed via Helm Charts"
+  description = "Kubernetes system-level applications to deploy (namespaces, service accounts, IRSA, Helm charts, additional manifests)."
   type = object({
     enabled = optional(bool, false)
     applications = optional(map(object({
-      repository       = string
-      chart            = string
-      version          = string
-      namespace        = optional(string, "default")
-      create_namespace = optional(bool, true)
-      values           = optional(string, "")
-      set              = optional(map(string), {})
-      atomic           = optional(bool, true)
-      wait             = optional(bool, true)
-      timeout          = optional(number, 300)
+      namespace = object({
+        name   = string
+        create = optional(bool, false)
+      })
+      service_account = optional(object({
+        create      = optional(bool, false)
+        name        = optional(string, null)
+        labels      = optional(map(string), {})
+        annotations = optional(map(string), {})
+      }), null)
+      irsa = optional(object({
+        enabled   = optional(bool, false)
+        role_name = optional(string, null)
+        policy_statements = optional(list(object({
+          sid       = optional(string, "")
+          effect    = optional(string, "Allow")
+          actions   = list(string)
+          resources = list(string)
+        })), [])
+      }), { enabled = false })
+      helm_chart = optional(object({
+        enabled          = optional(bool, true)
+        repository       = string
+        chart            = string
+        version          = string
+        values           = optional(string, "")
+        set              = optional(map(string), {})
+        create_namespace = optional(bool, false)
+        atomic           = optional(bool, true)
+        wait             = optional(bool, true)
+        timeout          = optional(number, 300)
+      }), null)
+      additional_manifests = optional(object({
+        enabled   = optional(bool, false)
+        manifests = optional(map(string), {})
+      }), { enabled = false })
     })), {})
   })
   default = { enabled = false }

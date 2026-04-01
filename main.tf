@@ -109,6 +109,17 @@ module "k8s_charts" {
   count  = var.k8s_charts.enabled ? 1 : 0
   source = "./modules/k8s-charts"
 
+  partner_name = var.partner_name
+  environment  = var.environment
+
+  oidc_provider_arn = (
+    var.kubernetes_provider.oidc_provider_arn != null
+    ? var.kubernetes_provider.oidc_provider_arn
+    : one(module.eks[*].oidc_provider_arn) != null
+    ? one(module.eks[*].oidc_provider_arn)
+    : ""
+  )
+
   applications = var.k8s_charts.applications
 
   set_computed = {

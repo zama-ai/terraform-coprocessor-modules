@@ -261,9 +261,8 @@ run "k8s_charts_enabled_creates_one_module" {
       enabled = true
       applications = {
         metrics-server = {
-          repository = "https://kubernetes-sigs.github.io/metrics-server/"
-          chart      = "metrics-server"
-          version    = "3.12.0"
+          namespace  = { name = "kube-system" }
+          helm_chart = { repository = "https://kubernetes-sigs.github.io/metrics-server/", chart = "metrics-server", version = "3.12.0" }
         }
       }
     }
