@@ -16,7 +16,6 @@ variable "oidc_provider_arn" {
   type        = string
 }
 
-
 # ******************************************************
 #  Module configuration
 # ******************************************************
@@ -68,6 +67,17 @@ variable "k8s" {
 
       labels      = optional(map(string), {})
       annotations = optional(map(string), {})
+    })), {})
+
+    # Map of StorageClass resources. The map key is the storage class name.
+    storage_classes = optional(map(object({
+      provisioner            = string
+      reclaim_policy         = optional(string, "Delete")
+      volume_binding_mode    = optional(string, "WaitForFirstConsumer")
+      allow_volume_expansion = optional(bool, true)
+      parameters             = optional(map(string), {})
+      annotations            = optional(map(string), {})
+      labels                 = optional(map(string), {})
     })), {})
 
     # Map of ExternalName services — one per external dependency (RDS, ElastiCache, etc.).

@@ -20,6 +20,10 @@ terraform {
       source  = "hashicorp/random"
       version = "~> 3.0"
     }
+    helm = {
+      source  = "hashicorp/helm"
+      version = "~> 3.0"
+    }
   }
 }
 
@@ -39,5 +43,18 @@ provider "kubernetes" {
     api_version = "client.authentication.k8s.io/v1beta1"
     command     = "aws"
     args        = ["eks", "get-token", "--cluster-name", local.k8s_cluster != null ? local.k8s_cluster : ""]
+  }
+}
+
+provider "helm" {
+  kubernetes = {
+    host                   = local.k8s_host != null ? local.k8s_host : ""
+    cluster_ca_certificate = local.k8s_ca_cert != null ? base64decode(local.k8s_ca_cert) : ""
+
+    exec = {
+      api_version = "client.authentication.k8s.io/v1beta1"
+      command     = "aws"
+      args        = ["eks", "get-token", "--cluster-name", local.k8s_cluster != null ? local.k8s_cluster : ""]
+    }
   }
 }

@@ -78,3 +78,33 @@ module "s3" {
 
   buckets = var.s3.buckets
 }
+
+# ******************************************************
+#  k8s
+# ******************************************************
+module "k8s" {
+  source = "./modules/k8s"
+
+  partner_name = var.partner_name
+  environment  = var.environment
+
+  oidc_provider_arn = (
+    var.kubernetes_provider.oidc_provider_arn != null
+    ? var.kubernetes_provider.oidc_provider_arn
+    : one(module.eks[*].oidc_provider_arn) != null
+    ? one(module.eks[*].oidc_provider_arn)
+    : ""
+  )
+
+  k8s = var.k8s
+}
+
+# ******************************************************
+#  k8s Charts
+# ******************************************************
+module "k8s_charts" {
+  count  = var.k8s_charts.enabled ? 1 : 0
+  source = "./modules/k8s-charts"
+
+  applications = var.k8s_charts.applications
+}

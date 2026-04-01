@@ -31,6 +31,7 @@ variable "kubernetes_provider" {
     host                   = optional(string, null)
     cluster_ca_certificate = optional(string, null)
     cluster_name           = optional(string, null)
+    oidc_provider_arn      = optional(string, null)
   })
   default = {}
 }
@@ -380,4 +381,80 @@ variable "s3" {
     condition     = length(var.s3.buckets) > 0
     error_message = "s3.buckets must contain at least one bucket definition."
   }
+}
+
+# ******************************************************
+#  k8s
+# ******************************************************
+variable "k8s" {
+  description = "Kubernetes coprocessor resource configuration (namespaces, service accounts, storage classes, ExternalName services)."
+  type = object({
+    enabled = optional(bool, false)
+
+    namespaces = optional(map(object({
+      labels      = optional(map(string), {})
+      annotations = optional(map(string), {})
+    })), {})
+
+    default_namespace = optional(string, "coprocessor")
+
+    service_accounts = optional(map(object({
+      name                   = string
+      namespace              = optional(string, null)
+      iam_role_name_override = optional(string, null)
+      iam_policy_statements = optional(list(object({
+        sid       = optional(string, "")
+        effect    = optional(string, "")
+        actions   = list(string)
+        resources = list(string)
+        conditions = optional(list(object({
+          test     = string
+          variable = string
+          values   = list(string)
+        })), [])
+      })), [])
+      labels      = optional(map(string), {})
+      annotations = optional(map(string), {})
+    })), {})
+
+    storage_classes = optional(map(object({
+      provisioner            = string
+      reclaim_policy         = optional(string, "Delete")
+      volume_binding_mode    = optional(string, "WaitForFirstConsumer")
+      allow_volume_expansion = optional(bool, true)
+      parameters             = optional(map(string), {})
+      annotations            = optional(map(string), {})
+      labels                 = optional(map(string), {})
+    })), {})
+
+    external_name_services = optional(map(object({
+      endpoint    = string
+      namespace   = optional(string, null)
+      annotations = optional(map(string), {})
+    })), {})
+  })
+  default = { enabled = false }
+}
+
+# ******************************************************
+#  k8s Charts
+# ******************************************************
+variable "k8s_charts" {
+  description = "Kubernetes system level applications to be deployed via Helm Charts"
+  type = object({
+    enabled = optional(bool, false)
+    applications = optional(map(object({
+      repository       = string
+      chart            = string
+      version          = string
+      namespace        = optional(string, "default")
+      create_namespace = optional(bool, true)
+      values           = optional(string, "")
+      set              = optional(map(string), {})
+      atomic           = optional(bool, true)
+      wait             = optional(bool, true)
+      timeout          = optional(number, 300)
+    })), {})
+  })
+  default = { enabled = false }
 }

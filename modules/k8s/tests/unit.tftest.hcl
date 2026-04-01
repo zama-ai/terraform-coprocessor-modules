@@ -53,6 +53,11 @@ run "disabled_creates_no_resources" {
     condition     = length(kubernetes_service.external_name) == 0
     error_message = "No ExternalName services must be created when k8s.enabled = false."
   }
+
+  assert {
+    condition     = length(kubernetes_storage_class_v1.this) == 0
+    error_message = "No storage classes must be created when k8s.enabled = false."
+  }
 }
 
 # =============================================================================
@@ -372,5 +377,93 @@ run "external_name_service_namespace_override_is_respected" {
   assert {
     condition     = kubernetes_service.external_name["coprocessor-db"].metadata[0].namespace == "data-plane"
     error_message = "ExternalName service with explicit namespace must use its own namespace, not default_namespace."
+  }
+}
+
+# =============================================================================
+#  Storage classes
+# =============================================================================
+
+run "one_storage_class_per_map_entry" {
+  command = plan
+
+  variables {
+    k8s = {
+      enabled = true
+      storage_classes = {
+        gp3  = { provisioner = "ebs.csi.aws.com" }
+        gp3i = { provisioner = "ebs.csi.aws.com", parameters = { type = "gp3", iops = "16000" } }
+      }
+    }
+  }
+
+  assert {
+    condition     = length(kubernetes_storage_class_v1.this) == 2
+    error_message = "One storage class must be created per storage_classes map entry."
+  }
+}
+
+run "storage_class_name_matches_map_key" {
+  command = plan
+
+  variables {
+    k8s = {
+      enabled = true
+      storage_classes = {
+        gp3 = { provisioner = "ebs.csi.aws.com" }
+      }
+    }
+  }
+
+  assert {
+    condition     = kubernetes_storage_class_v1.this["gp3"].metadata[0].name == "gp3"
+    error_message = "Storage class name must match the map key."
+  }
+}
+
+run "storage_class_provisioner_and_parameters_are_set" {
+  command = plan
+
+  variables {
+    k8s = {
+      enabled = true
+      storage_classes = {
+        gp3 = {
+          provisioner = "ebs.csi.aws.com"
+          parameters  = { type = "gp3", encrypted = "true", fsType = "ext4" }
+        }
+      }
+    }
+  }
+
+  assert {
+    condition     = kubernetes_storage_class_v1.this["gp3"].storage_provisioner == "ebs.csi.aws.com"
+    error_message = "Storage class provisioner must match the configured value."
+  }
+
+  assert {
+    condition     = kubernetes_storage_class_v1.this["gp3"].parameters["type"] == "gp3"
+    error_message = "Storage class parameters must be passed through."
+  }
+}
+
+run "storage_class_default_annotation_is_applied" {
+  command = plan
+
+  variables {
+    k8s = {
+      enabled = true
+      storage_classes = {
+        gp3 = {
+          provisioner = "ebs.csi.aws.com"
+          annotations = { "storageclass.kubernetes.io/is-default-class" = "true" }
+        }
+      }
+    }
+  }
+
+  assert {
+    condition     = kubernetes_storage_class_v1.this["gp3"].metadata[0].annotations["storageclass.kubernetes.io/is-default-class"] == "true"
+    error_message = "Storage class default annotation must be applied."
   }
 }
