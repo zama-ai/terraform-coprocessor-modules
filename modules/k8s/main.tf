@@ -78,6 +78,26 @@ data "aws_iam_policy_document" "service_account" {
       }
     }
   }
+
+  # Auto-generated S3 statements from s3_bucket_access.
+  # One statement per bucket entry; actions and ARN resolved from var.s3_bucket_arns.
+  dynamic "statement" {
+    for_each = {
+      for bucket_key, bucket_cfg in each.value.s3_bucket_access : bucket_key => {
+        arn     = var.s3_bucket_arns[bucket_key]
+        actions = bucket_cfg.actions
+      }
+      if contains(keys(var.s3_bucket_arns), bucket_key)
+    }
+    iterator = bucket
+
+    content {
+      sid       = "AllowS3${replace(title(bucket.key), "-", "")}"
+      effect    = "Allow"
+      actions   = bucket.value.actions
+      resources = [bucket.value.arn, "${bucket.value.arn}/*"]
+    }
+  }
 }
 
 data "aws_iam_policy_document" "service_account_assume_role" {
@@ -168,7 +188,7 @@ resource "kubernetes_service" "external_name" {
 
   spec {
     type          = "ExternalName"
-    external_name = split(":", each.value.endpoint)[0]
+    external_name = split(":", coalesce(each.value.endpoint, var.rds_endpoint))[0]
   }
 
   depends_on = [kubernetes_namespace.this]

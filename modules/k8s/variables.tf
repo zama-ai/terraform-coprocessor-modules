@@ -9,11 +9,23 @@ variable "environment" {
 }
 
 # ******************************************************
-#  Cross-module wiring (from eks / rds outputs)
+#  Cross-module wiring (from eks / rds / s3 outputs)
 # ******************************************************
 variable "oidc_provider_arn" {
   description = "ARN of the EKS cluster OIDC provider, used to build IRSA trust policies."
   type        = string
+}
+
+variable "rds_endpoint" {
+  description = "RDS instance hostname. Used as the external_name for any ExternalName service whose endpoint is null."
+  type        = string
+  default     = null
+}
+
+variable "s3_bucket_arns" {
+  description = "Map of logical bucket key to ARN from the s3 module. Referenced by service_accounts[*].s3_bucket_access to generate S3 IAM statements automatically."
+  type        = map(string)
+  default     = {}
 }
 
 # ******************************************************
@@ -52,6 +64,13 @@ variable "k8s" {
       # IAM role name override; defaults to "<key>-<partner_name>-<environment>"
       iam_role_name_override = optional(string, null)
 
+      # Map of logical bucket key → S3 actions to grant on that bucket.
+      # ARNs are resolved from var.s3_bucket_arns — no need to hardcode them in tfvars.
+      # Default actions: ["s3:*Object", "s3:ListBucket"]. Override per bucket as needed.
+      s3_bucket_access = optional(map(object({
+        actions = list(string)
+      })), {})
+
       # IAM policy statements for the IRSA role.
       iam_policy_statements = optional(list(object({
         sid       = optional(string, "")
@@ -83,8 +102,9 @@ variable "k8s" {
     # Map of ExternalName services — one per external dependency (RDS, ElastiCache, etc.).
     # The map key becomes the Kubernetes service name (e.g. "coprocessor-db", "coprocessor-redis").
     # The endpoint port is stripped automatically; the app connects on its own configured port.
+    # endpoint may be null to fall back to var.rds_endpoint (injected from the rds submodule).
     external_name_services = optional(map(object({
-      endpoint    = string                 # host:port or bare hostname
+      endpoint    = optional(string, null) # host:port or bare hostname; null = use var.rds_endpoint
       namespace   = optional(string, null) # defaults to k8s.default_namespace
       annotations = optional(map(string), {})
     })), {})

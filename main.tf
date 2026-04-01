@@ -96,6 +96,9 @@ module "k8s" {
     : ""
   )
 
+  rds_endpoint   = module.rds.db_instance_address
+  s3_bucket_arns = module.s3.bucket_arns
+
   k8s = var.k8s
 }
 

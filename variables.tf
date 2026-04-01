@@ -402,6 +402,9 @@ variable "k8s" {
       name                   = string
       namespace              = optional(string, null)
       iam_role_name_override = optional(string, null)
+      s3_bucket_access = optional(map(object({
+        actions = list(string)
+      })), {})
       iam_policy_statements = optional(list(object({
         sid       = optional(string, "")
         effect    = optional(string, "")

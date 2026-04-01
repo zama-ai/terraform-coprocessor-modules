@@ -92,20 +92,9 @@ k8s = {
     coprocessor = {
       name      = "coprocessor"
       namespace = "coproc"
-      iam_policy_statements = [
-        {
-          sid       = "AllowObjectActions"
-          effect    = "Allow"
-          actions   = ["s3:*Object"]
-          resources = ["arn:aws:s3:::acme-testnet-coprocessor-*/*"] # CHANGE ME: match your bucket ARN
-        },
-        {
-          sid       = "AllowListBucket"
-          effect    = "Allow"
-          actions   = ["s3:ListBucket"]
-          resources = ["arn:aws:s3:::acme-testnet-coprocessor-*"] # CHANGE ME: match your bucket ARN
-        },
-      ]
+      s3_bucket_access = {
+        coprocessor = { actions = ["s3:*Object", "s3:ListBucket"] }
+      }
     }
   }
 
@@ -125,10 +114,9 @@ k8s = {
     }
   }
 
-  # Populate endpoint from output.rds_db_instance_address after first apply.
   external_name_services = {
     coprocessor-database = {
-      endpoint  = "CHANGE ME" # e.g. "acme-testnet-coprocessor.xyz.eu-west-1.rds.amazonaws.com"
+      # endpoint omitted — injected automatically from the rds submodule
       namespace = "coproc"
     }
   }
