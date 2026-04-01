@@ -22,6 +22,7 @@ mock_provider "aws" {
   }
 }
 mock_provider "kubernetes" {}
+mock_provider "helm" {}
 mock_provider "random" {}
 mock_provider "tls" {}
 mock_provider "time" {}
@@ -51,7 +52,7 @@ variables {
 }
 
 # =============================================================================
-#  existing_vpc path
+# existing_vpc path
 #
 # When networking.enabled = false but existing_vpc is supplied, the networking
 # module is skipped entirely and local.vpc_id falls through to the existing_vpc
@@ -74,7 +75,7 @@ run "existing_vpc_bypasses_networking_module" {
 }
 
 # =============================================================================
-#  additional_subnet_ids guard
+# additional_subnet_ids guard
 #
 # local.additional_subnet_ids is [] unless both:
 #   - networking.enabled = true, AND
@@ -235,5 +236,99 @@ run "eks_disabled_without_kubernetes_credentials_plans_without_error" {
   assert {
     condition     = length(module.eks) == 0
     error_message = "EKS module must not be created when eks.enabled = false."
+  }
+}
+
+# =============================================================================
+#  k8s Charts module count wiring
+# =============================================================================
+
+run "k8s_charts_disabled_creates_no_module" {
+  command = plan
+
+  # k8s_charts.enabled defaults to false — no helm releases created.
+  assert {
+    condition     = length(module.k8s_charts) == 0
+    error_message = "k8s_charts module must not be created when k8s_charts.enabled = false."
+  }
+}
+
+run "k8s_charts_enabled_creates_one_module" {
+  command = plan
+
+  variables {
+    k8s_charts = {
+      enabled = true
+      applications = {
+        metrics-server = {
+          repository = "https://kubernetes-sigs.github.io/metrics-server/"
+          chart      = "metrics-server"
+          version    = "3.12.0"
+        }
+      }
+    }
+  }
+
+  assert {
+    condition     = length(module.k8s_charts) == 1
+    error_message = "k8s_charts module must be created when k8s_charts.enabled = true."
+  }
+}
+
+# =============================================================================
+#  k8s module
+# =============================================================================
+
+run "k8s_enabled_plans_without_error" {
+  command = plan
+
+  variables {
+    k8s = {
+      enabled           = true
+      default_namespace = "coprocessor"
+      namespaces = {
+        coprocessor = {}
+      }
+    }
+  }
+
+  assert {
+    condition     = module.k8s.namespace == "coprocessor"
+    error_message = "k8s.namespace must match default_namespace when k8s.enabled = true."
+  }
+}
+
+# =============================================================================
+#  BYOC: kubernetes_provider.oidc_provider_arn takes precedence
+#
+# When a partner brings their own EKS cluster (eks.enabled = false) and supplies
+# kubernetes_provider.oidc_provider_arn explicitly, the plan must succeed without
+# errors (no coalesce(null, null) failure and no empty OIDC ARN silently used).
+# =============================================================================
+
+run "byoc_oidc_provider_arn_plans_without_error" {
+  command = plan
+
+  variables {
+    kubernetes_provider = {
+      host                   = "https://byoc.example.com"
+      cluster_ca_certificate = "dGVzdA=="
+      cluster_name           = "byoc-cluster"
+      oidc_provider_arn      = "arn:aws:iam::123456789012:oidc-provider/oidc.eks.eu-west-1.amazonaws.com/id/EXAMPLED539D4633E53DE1B716D3041E"
+    }
+    k8s = {
+      enabled           = true
+      default_namespace = "coprocessor"
+    }
+  }
+
+  assert {
+    condition     = length(module.eks) == 0
+    error_message = "EKS module must not be created when eks.enabled = false."
+  }
+
+  assert {
+    condition     = module.k8s.namespace == "coprocessor"
+    error_message = "k8s module must plan successfully with a BYOC OIDC provider ARN."
   }
 }

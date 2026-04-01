@@ -68,6 +68,73 @@ rds = {
 }
 
 # =============================================================================
+#  k8s
+# =============================================================================
+k8s = {
+  enabled           = true
+  default_namespace = "coproc"
+
+  namespaces = {
+    coproc = {
+      labels = {
+        "app.kubernetes.io/name"       = "coprocessor"
+        "app.kubernetes.io/component"  = "storage"
+        "app.kubernetes.io/part-of"    = "zama-protocol"
+        "app.kubernetes.io/managed-by" = "terraform"
+      }
+      annotations = {
+        "terraform.io/module" = "coprocessor"
+      }
+    }
+  }
+
+  service_accounts = {
+    coprocessor = {
+      name      = "coprocessor"
+      namespace = "coproc"
+      iam_policy_statements = [
+        {
+          sid       = "AllowObjectActions"
+          effect    = "Allow"
+          actions   = ["s3:*Object"]
+          resources = ["arn:aws:s3:::acme-testnet-coprocessor-*/*"] # CHANGE ME: match your bucket ARN
+        },
+        {
+          sid       = "AllowListBucket"
+          effect    = "Allow"
+          actions   = ["s3:ListBucket"]
+          resources = ["arn:aws:s3:::acme-testnet-coprocessor-*"] # CHANGE ME: match your bucket ARN
+        },
+      ]
+    }
+  }
+
+  storage_classes = {
+    gp3 = {
+      provisioner         = "ebs.csi.aws.com"
+      reclaim_policy      = "Delete"
+      volume_binding_mode = "WaitForFirstConsumer"
+      parameters = {
+        type      = "gp3"
+        fsType    = "ext4"
+        encrypted = "true"
+      }
+      annotations = {
+        "storageclass.kubernetes.io/is-default-class" = "true"
+      }
+    }
+  }
+
+  # Populate endpoint from output.rds_db_instance_address after first apply.
+  external_name_services = {
+    coprocessor-database = {
+      endpoint  = "CHANGE ME" # e.g. "acme-testnet-coprocessor.xyz.eu-west-1.rds.amazonaws.com"
+      namespace = "coproc"
+    }
+  }
+}
+
+# =============================================================================
 #  S3
 # =============================================================================
 s3 = {

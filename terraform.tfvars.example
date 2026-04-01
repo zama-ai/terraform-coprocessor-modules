@@ -37,6 +37,11 @@ kubernetes_provider = {
   host                   = "https://XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX.gr7.eu-west-1.eks.amazonaws.com"
   cluster_ca_certificate = "LS0tLS1CRUdJTi..."  # base64-encoded CA cert
   cluster_name           = "my-existing-cluster"
+
+  # OIDC provider ARN for IRSA. Only needed when eks.enabled = false and k8s
+  # service accounts with iam_policy_statements are used.
+  # Default: null (resolved automatically from the EKS module when eks.enabled = true)
+  oidc_provider_arn = "arn:aws:iam::123456789012:oidc-provider/oidc.eks.eu-west-1.amazonaws.com/id/EXAMPLED539D4633E53DE1B716D3041E"
 }
 
 
@@ -538,6 +543,306 @@ rds = {
   # Extra CIDR blocks allowed to reach the RDS port (in addition to private subnets).
   # Default: []
   additional_allowed_cidr_blocks = ["10.1.0.0/16"]
+}
+
+
+# ==============================================================================
+#  S3
+#
+#  Default: { buckets = {} }
+# ==============================================================================
+# ==============================================================================
+#  k8s
+#
+#  Kubernetes-native resources: namespaces, service accounts (with IRSA),
+#  storage classes, and ExternalName services.
+#
+#  Default: { enabled = false }
+# ==============================================================================
+k8s = {
+  # Default: false
+  enabled = true
+
+  # Fallback namespace for service accounts and ExternalName services that do
+  # not specify their own namespace. Does not need to be a key in namespaces
+  # (may reference a pre-existing namespace).
+  # Default: "coprocessor"
+  default_namespace = "coprocessor"
+
+  # ── Namespaces ───────────────────────────────────────────────────────────────
+  # Map of Kubernetes namespaces to create. The map key is the namespace name.
+  # Default: {}
+  namespaces = {
+    coprocessor = {
+      # Default: {}
+      labels = {
+        "app.kubernetes.io/managed-by" = "terraform"
+      }
+
+      # Default: {}
+      annotations = {
+        "owner" = "platform-team"
+      }
+    }
+
+    coprocessor-jobs = {
+      labels      = {}
+      annotations = {}
+    }
+  }
+
+  # ── Service Accounts ─────────────────────────────────────────────────────────
+  # Map of Kubernetes service accounts. The map key is a short logical name used
+  # in Terraform resource addressing and output maps.
+  # Service accounts with iam_policy_statements get a dedicated IRSA role;
+  # those without are created as plain service accounts with no role annotation.
+  # Default: {}
+  service_accounts = {
+    coprocessor = {
+      # Required. Kubernetes service account name.
+      name = "coprocessor"
+
+      # Namespace override. Defaults to k8s.default_namespace when null.
+      # Default: null
+      namespace = "coprocessor"
+
+      # Override the computed IAM role name "<key>-<partner_name>-<environment>".
+      # Default: null (uses computed name)
+      iam_role_name_override = null
+
+      # IAM policy statements granted to this service account via IRSA.
+      # An empty list creates a plain service account with no IAM role.
+      # Default: []
+      iam_policy_statements = [
+        {
+          # Default: ""
+          sid    = "AllowSQSAccess"
+          # Default: "Allow"
+          effect = "Allow"
+          actions = [
+            "sqs:SendMessage",
+            "sqs:ReceiveMessage",
+            "sqs:DeleteMessage",
+            "sqs:GetQueueAttributes",
+          ]
+          resources = ["arn:aws:sqs:eu-west-1:123456789012:coprocessor-queue"]
+
+          # Optional IAM condition blocks.
+          # Default: []
+          conditions = [
+            {
+              test     = "StringEquals"
+              variable = "aws:SourceVpc"
+              values   = ["vpc-0123456789abcdef0"]
+            }
+          ]
+        },
+        {
+          sid       = "AllowSecretsRead"
+          effect    = "Allow"
+          actions   = ["secretsmanager:GetSecretValue"]
+          resources = ["arn:aws:secretsmanager:eu-west-1:123456789012:secret:coprocessor/*"]
+          conditions = []
+        },
+      ]
+
+      # Default: {}
+      labels = {
+        "app.kubernetes.io/component" = "coprocessor"
+      }
+
+      # Default: {}
+      annotations = {}
+    }
+
+    sns-worker = {
+      name      = "sns-worker"
+      namespace = null  # falls back to default_namespace
+      iam_role_name_override = null
+      iam_policy_statements = [
+        {
+          sid       = "AllowSNSPublish"
+          effect    = "Allow"
+          actions   = ["sns:Publish"]
+          resources = ["arn:aws:sns:eu-west-1:123456789012:coprocessor-topic"]
+          conditions = []
+        },
+      ]
+      labels      = {}
+      annotations = {}
+    }
+  }
+
+  # ── Storage Classes ──────────────────────────────────────────────────────────
+  # Map of Kubernetes StorageClass resources. The map key becomes the storage
+  # class name.
+  # Default: {}
+  storage_classes = {
+    gp3 = {
+      # Required. CSI driver name.
+      provisioner = "ebs.csi.aws.com"
+
+      # "Retain" | "Delete"
+      # Default: "Delete"
+      reclaim_policy = "Delete"
+
+      # "WaitForFirstConsumer" | "Immediate"
+      # Default: "WaitForFirstConsumer"
+      volume_binding_mode = "WaitForFirstConsumer"
+
+      # Default: true
+      allow_volume_expansion = true
+
+      # Driver-specific parameters passed verbatim to the StorageClass.
+      # Default: {}
+      parameters = {
+        type      = "gp3"
+        encrypted = "true"
+      }
+
+      # Default: {}
+      annotations = {
+        "storageclass.kubernetes.io/is-default-class" = "true"
+      }
+
+      # Default: {}
+      labels = {}
+    }
+
+    gp3-retain = {
+      provisioner            = "ebs.csi.aws.com"
+      reclaim_policy         = "Retain"
+      volume_binding_mode    = "WaitForFirstConsumer"
+      allow_volume_expansion = true
+      parameters             = { type = "gp3", encrypted = "true" }
+      annotations            = {}
+      labels                 = {}
+    }
+  }
+
+  # ── ExternalName Services ─────────────────────────────────────────────────────
+  # Map of Kubernetes ExternalName services that proxy to external dependencies
+  # (e.g. RDS, ElastiCache). The map key becomes the Kubernetes service name.
+  # The port is stripped from the endpoint automatically; the app connects on
+  # its own configured port.
+  # Default: {}
+  external_name_services = {
+    coprocessor-db = {
+      # Required. host:port or bare hostname of the external endpoint.
+      endpoint = "acme-testnet-coprocessor.cxyz.eu-west-1.rds.amazonaws.com:5432"
+
+      # Namespace override. Defaults to k8s.default_namespace when null.
+      # Default: null
+      namespace = null
+
+      # Default: {}
+      annotations = {
+        "description" = "RDS PostgreSQL instance"
+      }
+    }
+
+    coprocessor-redis = {
+      endpoint    = "acme-testnet.abc123.0001.euw1.cache.amazonaws.com:6379"
+      namespace   = null
+      annotations = {}
+    }
+  }
+}
+
+
+# ==============================================================================
+#  k8s Charts
+#
+#  System-level Helm chart deployments (e.g. metrics-server, karpenter,
+#  external-secrets). Requires eks.enabled = true or a valid kubernetes_provider
+#  configuration.
+#
+#  Default: { enabled = false }
+# ==============================================================================
+k8s_charts = {
+  # Default: false
+  enabled = true
+
+  # ── Applications ─────────────────────────────────────────────────────────────
+  # Map of Helm releases to deploy. The map key becomes the Helm release name.
+  # Default: {}
+  applications = {
+    metrics-server = {
+      # Required. Helm chart repository URL.
+      repository = "https://kubernetes-sigs.github.io/metrics-server/"
+
+      # Required. Chart name within the repository.
+      chart = "metrics-server"
+
+      # Required. Chart version to pin.
+      version = "3.12.0"
+
+      # Kubernetes namespace to deploy into.
+      # Default: "default"
+      namespace = "kube-system"
+
+      # Create the namespace if it does not already exist.
+      # Default: true
+      create_namespace = false
+
+      # Raw YAML values string passed to the chart (equivalent to a values.yaml file).
+      # Default: ""
+      values = ""
+
+      # Individual key=value overrides merged on top of values.
+      # Default: {}
+      set = {
+        "replicas" = "2"
+      }
+
+      # Roll back the release automatically on failed install/upgrade.
+      # Default: true
+      atomic = true
+
+      # Wait for all resources to become ready before marking the release successful.
+      # Default: true
+      wait = true
+
+      # Seconds to wait before considering the release failed.
+      # Default: 300
+      timeout = 300
+    }
+
+    karpenter = {
+      repository       = "oci://public.ecr.aws/karpenter"
+      chart            = "karpenter"
+      version          = "1.3.3"
+      namespace        = "karpenter"
+      create_namespace = true
+      values           = <<-YAML
+        controller:
+          resources:
+            requests:
+              cpu: 250m
+              memory: 512Mi
+      YAML
+      set = {
+        "settings.clusterName"     = "acme-testnet"
+        "settings.interruptionQueue" = "acme-testnet-Karpenter"
+      }
+      atomic  = true
+      wait    = true
+      timeout = 600
+    }
+
+    external-secrets = {
+      repository       = "https://charts.external-secrets.io"
+      chart            = "external-secrets"
+      version          = "0.14.4"
+      namespace        = "external-secrets"
+      create_namespace = true
+      values           = ""
+      set              = {}
+      atomic           = true
+      wait             = true
+      timeout          = 300
+    }
+  }
 }
 
 
