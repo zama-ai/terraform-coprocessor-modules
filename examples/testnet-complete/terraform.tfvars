@@ -129,6 +129,23 @@ k8s_charts = {
   enabled = true
 
   applications = {
+    prometheus-operator-crds = {
+      # Cluster-scoped CRDs required by coprocessor app ServiceMonitors and the exporters.
+      # Must be applied before any chart that creates ServiceMonitor resources.
+      # NOTE: on a net-new cluster, apply this first or accept a two-phase apply.
+      namespace = {
+        name   = "monitoring"
+        create = false # created by k8s-monitoring
+      }
+
+      helm_chart = {
+        repository = "https://prometheus-community.github.io/helm-charts"
+        chart      = "prometheus-operator-crds"
+        version    = "28.0.1"
+        atomic     = false # CRDs are cluster-scoped; atomic rollback is not dangerous here
+      }
+    }
+
     metrics-server = {
       namespace = {
         name   = "kube-system"
@@ -149,7 +166,7 @@ k8s_charts = {
       }
 
       service_account = {
-        create = false # Let Helm chart create it
+        create = false
         name   = "karpenter"
       }
 
@@ -157,9 +174,6 @@ k8s_charts = {
         repository = "oci://public.ecr.aws/karpenter"
         chart      = "karpenter"
         version    = "1.8.2"
-
-        # settings.clusterName, settings.interruptionQueue, and settings.eksControlPlane
-        # are injected automatically from the eks submodule — no set block needed.
 
         values = <<-YAML
           logLevel: info
@@ -205,72 +219,234 @@ k8s_charts = {
       }
     }
 
-    external-secrets = {
+    k8s-monitoring = {
       namespace = {
-        name   = "external-secrets"
+        name   = "monitoring"
         create = true
+      }
+
+      helm_chart = {
+        repository = "https://grafana.github.io/helm-charts"
+        chart      = "k8s-monitoring"
+        version    = "3.8.1"
+
+        # Credentials must be created manually before first deploy:
+        # kubectl create secret generic grafana-cloud-credentials -n monitoring \
+        #   --from-literal=prometheus-username=<id> --from-literal=prometheus-password=<token> \
+        #   --from-literal=loki-username=<id>       --from-literal=loki-password=<token>
+        values = <<-YAML
+          global:
+            scrapeInterval: 5m  # CHANGE ME: increase to 10m to further reduce ingestion costs
+
+          clusterMetrics:
+            enabled: true
+
+          prometheusOperatorObjects:
+            enabled: true
+            serviceMonitors:
+              enabled: true
+              namespaces:
+                - monitoring
+                - coproc
+                - gw-blockchain
+                - eth-blockchain
+                - kube-system
+
+          podLogs:
+            enabled: true
+            namespaces:
+              - coproc
+              - gw-blockchain
+              - eth-blockchain
+
+          destinations:
+            - name: grafana-cloud-metrics
+              type: prometheus
+              auth:
+                type: basic
+                usernameKey: prometheus-username
+                passwordKey: prometheus-password
+              secret:
+                create: false
+                name: grafana-cloud-credentials
+                namespace: monitoring
+
+            - name: grafana-cloud-logs
+              type: loki
+              tenantIdKey: loki-username
+              auth:
+                type: basic
+                usernameKey: loki-username
+                passwordKey: loki-password
+              secret:
+                create: false
+                name: grafana-cloud-credentials
+                namespace: monitoring
+        YAML
+
+        set = {
+          # CHANGE ME: your Grafana Cloud Prometheus remote_write URL
+          "destinations[0].url" = "https://prometheus-prod-xx-yyyy.grafana.net/api/prom/push"
+          # CHANGE ME: your Grafana Cloud Loki push URL
+          "destinations[1].url" = "https://logs-prod-xx-yyyy.grafana.net/loki/api/v1/push"
+        }
+      }
+    }
+
+    prometheus-rds-exporter = {
+      namespace = {
+        name   = "monitoring"
+        create = false # created by k8s-monitoring
       }
 
       service_account = {
         create = true
-        name   = "external-secrets"
-        annotations = {
-          "meta.helm.sh/release-name"      = "external-secrets"
-          "meta.helm.sh/release-namespace" = "external-secrets"
-        }
+        name   = "prometheus-rds-exporter"
       }
 
       irsa = {
         enabled = true
         policy_statements = [
           {
-            effect = "Allow"
-            actions = [
-              "secretsmanager:GetResourcePolicy",
-              "secretsmanager:GetSecretValue",
-              "secretsmanager:DescribeSecret",
-              "secretsmanager:ListSecrets",
-              "secretsmanager:ListSecretVersionIds",
-            ]
-            resources = ["*"] # CHANGE ME: restrict to specific secret ARNs for tighter scoping
-          }
+            effect    = "Allow"
+            actions   = ["tag:GetResources"]
+            resources = ["*"]
+          },
+          {
+            effect    = "Allow"
+            actions   = ["rds:DescribeDBInstances", "rds:DescribeDBLogFiles"]
+            resources = ["arn:aws:rds:*:*:db:*"]
+          },
+          {
+            effect    = "Allow"
+            actions   = ["rds:DescribeDBClusters"]
+            resources = ["arn:aws:rds:*:*:cluster:*"]
+          },
+          {
+            effect    = "Allow"
+            actions   = ["rds:DescribePendingMaintenanceActions"]
+            resources = ["*"]
+          },
+          {
+            effect    = "Allow"
+            actions   = ["rds:DescribeAccountAttributes"]
+            resources = ["*"]
+          },
+          {
+            effect    = "Allow"
+            actions   = ["cloudwatch:GetMetricData"]
+            resources = ["*"]
+          },
+          {
+            effect    = "Allow"
+            actions   = ["servicequotas:GetServiceQuota"]
+            resources = ["*"]
+          },
+          {
+            effect    = "Allow"
+            actions   = ["ec2:DescribeInstanceTypes"]
+            resources = ["*"]
+          },
         ]
       }
 
       helm_chart = {
-        repository = "https://charts.external-secrets.io"
-        chart      = "external-secrets"
-        version    = "2.2.0"
+        repository = "oci://hub.zama.org/ghcr/zama-zws/helm-charts"
+        chart      = "prometheus-rds-exporter"
+        version    = "1.1.0"
 
         values = <<-YAML
-          installCRDs: true
-          replicaCount: 1
-          serviceAccount:
-            create: false  # created and annotated by terraform above
-            name: external-secrets
+          irsa:
+            create: false  # managed by terraform above
+
+          prometheus-rds-exporter-chart:
+            enabled: true
+            replicaCount: 1
+            resources:
+              requests:
+                cpu: 1000m
+                memory: 1000Mi
+              limits:
+                cpu: 1000m
+                memory: 1000Mi
+            serviceAccount:
+              create: false
+              name: prometheus-rds-exporter
+            serviceMonitor:
+              enabled: true
+              relabelings:
+                - action: replace
+                  targetLabel: network
+                  # replacement injected from var.environment via set_computed
+            config:
+              metrics-path: /metrics
+              listen-address: ":9043"
+              enable-otel-traces: false
+              collect-instance-metrics: true
+              collect-instance-tags: true
+              collect-instance-types: true
+              collect-logs-size: true
+              collect-serverless-logs-size: false
+              collect-maintenances: true
+              collect-quotas: true
+              collect-usages: true
         YAML
       }
+    }
 
-      additional_manifests = {
-        enabled = true
-        manifests = {
-          cluster-secret-store = <<-YAML
-            apiVersion: external-secrets.io/v1
-            kind: ClusterSecretStore
-            metadata:
-              name: aws-secrets-manager
-            spec:
-              provider:
-                aws:
-                  service: SecretsManager
-                  region: __region__
-                  auth:
-                    jwt:
-                      serviceAccountRef:
-                        name: external-secrets
-                        namespace: external-secrets
-          YAML
-        }
+    prometheus-postgres-exporter = {
+      namespace = {
+        name   = "monitoring"
+        create = false # created by k8s-monitoring
+      }
+
+      # kubectl create secret generic postgres-exporter-config -n monitoring \
+      #   --from-literal=DATA_SOURCE_NAME="postgresql://coproc:<password>@coprocessor-database.coproc.svc.cluster.local:5432/coprocessor?sslmode=require"
+
+      helm_chart = {
+        repository = "https://prometheus-community.github.io/helm-charts"
+        chart      = "prometheus-postgres-exporter"
+        version    = "7.3.0"
+
+        # network relabeling replacement injected from var.environment via set_computed.
+        values = <<-YAML
+          replicaCount: 1
+
+          automountServiceAccountToken: false
+
+          serviceAccount:
+            create: true
+
+          podSecurityContext:
+            runAsGroup: 1001
+            runAsUser: 1001
+            runAsNonRoot: true
+            seccompProfile:
+              type: RuntimeDefault
+
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+            privileged: false
+            readOnlyRootFilesystem: true
+
+          serviceMonitor:
+            enabled: true
+            relabelings:
+              - action: replace
+                targetLabel: network
+                # replacement injected from var.environment via set_computed
+
+          config:
+            datasourceSecret:
+              name: postgres-exporter-config
+              key: DATA_SOURCE_NAME
+
+          prometheusRule:
+            enabled: false
+        YAML
       }
     }
   }

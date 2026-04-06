@@ -128,5 +128,14 @@ module "k8s_charts" {
       "settings.interruptionQueue" = one(module.eks[*].karpenter_queue_name) != null ? one(module.eks[*].karpenter_queue_name) : ""
       "settings.eksControlPlane"   = "true"
     }
+    k8s-monitoring = {
+      "cluster.name" = local.eks_cluster_name
+    }
+    prometheus-rds-exporter = {
+      "prometheus-rds-exporter-chart.serviceMonitor.relabelings[0].replacement" = var.environment
+    }
+    prometheus-postgres-exporter = {
+      "serviceMonitor.relabelings[0].replacement" = var.environment
+    }
   }
 }
