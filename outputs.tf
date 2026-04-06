@@ -99,3 +99,13 @@ output "s3_bucket_arns" {
   description = "Map of logical bucket key to bucket ARN."
   value       = module.s3.bucket_arns
 }
+
+output "s3_cloudfront_domain_names" {
+  description = "Map of logical bucket key to CloudFront distribution domain name."
+  value       = module.s3.cloudfront_domain_names
+}
+
+output "s3_cloudfront_distribution_ids" {
+  description = "Map of logical bucket key to CloudFront distribution ID."
+  value       = module.s3.cloudfront_distribution_ids
+}

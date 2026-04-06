@@ -144,6 +144,10 @@ s3 = {
         enabled = true
       }
 
+      cloudfront = {
+        enabled = true
+      }
+
       cors = {
         enabled         = true
         allowed_origins = ["*"]

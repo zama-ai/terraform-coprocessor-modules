@@ -52,6 +52,22 @@ variable "buckets" {
         expose_headers  = []
       })
 
+      # CloudFront distribution
+      cloudfront = optional(object({
+        enabled                   = optional(bool, false)
+        price_class               = optional(string, "PriceClass_All")
+        compress                  = optional(bool, true)
+        viewer_protocol_policy    = optional(string, "redirect-to-https")
+        allowed_methods           = optional(list(string), ["GET", "HEAD"])
+        cached_methods            = optional(list(string), ["GET", "HEAD"])
+        cache_policy_id           = optional(string, "658327ea-f89d-4fab-a63d-7e88639e58f6") # AWS managed CachingOptimized
+        geo_restriction_type      = optional(string, "none")
+        geo_restriction_locations = optional(list(string), [])
+        acm_certificate_arn       = optional(string, null)           # if set, used instead of default CloudFront certificate
+        ssl_support_method        = optional(string, "sni-only")     # only relevant when acm_certificate_arn is set
+        minimum_protocol_version  = optional(string, "TLSv1.2_2021") # only relevant when acm_certificate_arn is set
+      }), { enabled = false })
+
       # Bucket policies
       policy_statements = optional(list(object({
         sid        = string
