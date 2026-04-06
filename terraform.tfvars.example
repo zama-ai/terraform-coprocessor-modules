@@ -545,12 +545,6 @@ rds = {
   additional_allowed_cidr_blocks = ["10.1.0.0/16"]
 }
 
-
-# ==============================================================================
-#  S3
-#
-#  Default: { buckets = {} }
-# ==============================================================================
 # ==============================================================================
 #  k8s
 #
@@ -764,83 +758,149 @@ k8s_charts = {
   enabled = true
 
   # ── Applications ─────────────────────────────────────────────────────────────
-  # Map of Helm releases to deploy. The map key becomes the Helm release name.
+  # Map of applications to deploy. The map key becomes the Helm release name.
+  # Each entry can optionally include: namespace, service_account, irsa,
+  # helm_chart, and additional_manifests blocks.
   # Default: {}
   applications = {
+
+    # ── Example 1: simple chart, no service account or IRSA ──────────────────
     metrics-server = {
-      # Required. Helm chart repository URL.
-      repository = "https://kubernetes-sigs.github.io/metrics-server/"
+      # Required. Namespace the release is deployed into.
+      namespace = {
+        # Required. Kubernetes namespace name.
+        name = "kube-system"
 
-      # Required. Chart name within the repository.
-      chart = "metrics-server"
-
-      # Required. Chart version to pin.
-      version = "3.12.0"
-
-      # Kubernetes namespace to deploy into.
-      # Default: "default"
-      namespace = "kube-system"
-
-      # Create the namespace if it does not already exist.
-      # Default: true
-      create_namespace = false
-
-      # Raw YAML values string passed to the chart (equivalent to a values.yaml file).
-      # Default: ""
-      values = ""
-
-      # Individual key=value overrides merged on top of values.
-      # Default: {}
-      set = {
-        "replicas" = "2"
+        # false = namespace already exists; true = Terraform creates it.
+        # Default: false
+        create = false
       }
 
-      # Roll back the release automatically on failed install/upgrade.
-      # Default: true
-      atomic = true
+      # helm_chart is optional. Omit entirely if you only need a namespace or SA.
+      helm_chart = {
+        # Required.
+        repository = "https://kubernetes-sigs.github.io/metrics-server"
+        chart      = "metrics-server"
+        version    = "3.13.0"
 
-      # Wait for all resources to become ready before marking the release successful.
-      # Default: true
-      wait = true
+        # Raw YAML values (equivalent to a values.yaml file). Default: ""
+        values = ""
 
-      # Seconds to wait before considering the release failed.
-      # Default: 300
-      timeout = 300
+        # Individual key=value overrides merged on top of values. Default: {}
+        set = {
+          "replicas" = "2"
+        }
+
+        # false disables atomic rollback — useful for CRD-only charts.
+        # Default: true
+        atomic = true
+
+        # Default: true
+        wait = true
+
+        # Default: 300
+        timeout = 300
+      }
     }
 
+    # ── Example 2: chart with a service account (Helm-managed) ───────────────
     karpenter = {
-      repository       = "oci://public.ecr.aws/karpenter"
-      chart            = "karpenter"
-      version          = "1.3.3"
-      namespace        = "karpenter"
-      create_namespace = true
-      values           = <<-YAML
-        controller:
-          resources:
-            requests:
-              cpu: 250m
-              memory: 512Mi
-      YAML
-      set = {
-        "settings.clusterName"     = "acme-testnet"
-        "settings.interruptionQueue" = "acme-testnet-Karpenter"
+      namespace = {
+        name   = "karpenter"
+        create = true
       }
-      atomic  = true
-      wait    = true
-      timeout = 600
+
+      # service_account is optional.
+      # Default: null (no service account resource created)
+      service_account = {
+        # false = do not create via Terraform; let Helm or another tool manage it.
+        # Default: false
+        create = false
+
+        # Service account name. Default: null
+        name = "karpenter"
+
+        # Default: {}
+        labels = {}
+
+        # Default: {}
+        annotations = {}
+      }
+
+      helm_chart = {
+        repository = "oci://public.ecr.aws/karpenter"
+        chart      = "karpenter"
+        version    = "1.8.2"
+
+        # settings.clusterName, settings.interruptionQueue, and
+        # settings.eksControlPlane are injected automatically via set_computed
+        # at the root module level — no set block needed here.
+        values = <<-YAML
+          logLevel: info
+          replicas: 1
+        YAML
+
+        atomic  = true
+        wait    = true
+        timeout = 600
+      }
     }
 
-    external-secrets = {
-      repository       = "https://charts.external-secrets.io"
-      chart            = "external-secrets"
-      version          = "0.14.4"
-      namespace        = "external-secrets"
-      create_namespace = true
-      values           = ""
-      set              = {}
-      atomic           = true
-      wait             = true
-      timeout          = 300
+    # ── Example 3: chart with Terraform-managed service account + IRSA ────────
+    prometheus-rds-exporter = {
+      namespace = {
+        name   = "monitoring"
+        create = false
+      }
+
+      service_account = {
+        create = true
+        name   = "prometheus-rds-exporter"
+      }
+
+      # irsa provisions an IAM role annotated onto the service account.
+      # Default: { enabled = false }
+      irsa = {
+        # Default: false
+        enabled = true
+
+        # Override the computed role name "<app_key>-<partner_name>-<environment>".
+        # Default: null (uses computed name)
+        role_name = null
+
+        # IAM policy statements granted to this role.
+        # Default: []
+        policy_statements = [
+          {
+            # Default: ""
+            sid       = ""
+            effect    = "Allow"
+            actions   = ["rds:DescribeDBInstances"]
+            resources = ["arn:aws:rds:*:*:db:*"]
+          },
+        ]
+      }
+
+      helm_chart = {
+        repository = "oci://hub.zama.org/ghcr/zama-zws/helm-charts"
+        chart      = "prometheus-rds-exporter"
+        version    = "1.1.0"
+        values     = ""
+        atomic     = true
+        wait       = true
+        timeout    = 300
+      }
+    }
+
+    # ── Example 4: namespace + service account only, no Helm chart ───────────
+    # Useful for pre-creating a namespace or SA before an app is deployed.
+    my-namespace-only = {
+      namespace = {
+        name   = "my-app"
+        create = true
+      }
+
+      # helm_chart omitted entirely — only the namespace is created.
     }
   }
 }
@@ -878,6 +938,59 @@ s3 = {
         # true  = all four public access block flags set to false (bucket is publicly accessible)
         # false = bucket is fully private
         enabled = false
+      }
+
+      # CloudFront distribution in front of this bucket.
+      # Default: { enabled = false }
+      cloudfront = {
+        # Default: false
+        enabled = true
+
+        # Edge location coverage.
+        # "PriceClass_100" = EU + NA only (cheapest)
+        # "PriceClass_200" = above + Asia Pacific, Middle East, Africa
+        # "PriceClass_All" = all edge locations globally (best cache hit rate)
+        # Default: "PriceClass_All"
+        price_class = "PriceClass_All"
+
+        # Compress objects automatically (Gzip / Brotli). Default: true
+        compress = true
+
+        # "redirect-to-https" | "https-only" | "allow-all"
+        # Default: "redirect-to-https"
+        viewer_protocol_policy = "redirect-to-https"
+
+        # HTTP methods CloudFront accepts and forwards to the origin.
+        # Default: ["GET", "HEAD"]
+        allowed_methods = ["GET", "HEAD"]
+
+        # Methods whose responses CloudFront caches. Must be a subset of allowed_methods.
+        # Default: ["GET", "HEAD"]
+        cached_methods = ["GET", "HEAD"]
+
+        # AWS managed cache policy ID. Default is CachingOptimized — recommended for S3.
+        # Default: "658327ea-f89d-4fab-a63d-7e88639e58f6"
+        cache_policy_id = "658327ea-f89d-4fab-a63d-7e88639e58f6"
+
+        # "none" | "whitelist" | "blacklist". Default: "none"
+        geo_restriction_type = "none"
+
+        # ISO 3166-1 alpha-2 country codes. Only used when geo_restriction_type != "none".
+        # Default: []
+        geo_restriction_locations = []
+
+        # ACM certificate ARN for a custom domain. Must be in us-east-1.
+        # null = use the default *.cloudfront.net certificate.
+        # Default: null
+        acm_certificate_arn = null
+
+        # Only relevant when acm_certificate_arn is set.
+        # "sni-only" (recommended) | "vip". Default: "sni-only"
+        ssl_support_method = "sni-only"
+
+        # Only relevant when acm_certificate_arn is set.
+        # Default: "TLSv1.2_2021"
+        minimum_protocol_version = "TLSv1.2_2021"
       }
 
       # CORS configuration for browser-based access.
