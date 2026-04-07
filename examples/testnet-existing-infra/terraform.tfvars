@@ -66,73 +66,6 @@ rds = {
 }
 
 # =============================================================================
-#  k8s
-# =============================================================================
-k8s = {
-  enabled           = true
-  default_namespace = "coproc"
-
-  namespaces = {
-    coproc = {
-      labels = {
-        "app.kubernetes.io/name"       = "coprocessor"
-        "app.kubernetes.io/component"  = "storage"
-        "app.kubernetes.io/part-of"    = "zama-protocol"
-        "app.kubernetes.io/managed-by" = "terraform"
-      }
-      annotations = {
-        "terraform.io/module" = "coprocessor"
-      }
-    }
-  }
-
-  service_accounts = {
-    coprocessor = {
-      name      = "coprocessor"
-      namespace = "coproc"
-      s3_bucket_access = {
-        coprocessor = { actions = ["s3:*Object", "s3:ListBucket"] }
-      }
-    }
-  }
-
-  storage_classes = {
-    gp3 = {
-      provisioner         = "ebs.csi.aws.com"
-      reclaim_policy      = "Delete"
-      volume_binding_mode = "WaitForFirstConsumer"
-      parameters = {
-        type      = "gp3"
-        fsType    = "ext4"
-        encrypted = "true"
-      }
-      annotations = {
-        "storageclass.kubernetes.io/is-default-class" = "true"
-      }
-    }
-  }
-
-  external_name_services = {
-    coprocessor-database = {
-      # endpoint omitted — injected automatically from the rds submodule
-      namespace = "coproc"
-    }
-  }
-}
-
-# =============================================================================
-#  k8s Charts — not managed here
-#
-#  Partners using an existing cluster are expected to operate their own
-#  system-level Helm releases. This module does not deploy:
-#    - metrics-server  (assumed present in the existing cluster)
-#    - karpenter       (assumed present; IAM/SQS resources are partner-managed)
-#
-#  To adopt these releases into Terraform management, set k8s_charts.enabled = true
-#  and add the relevant application entries (see testnet-complete for reference).
-# =============================================================================
-
-# =============================================================================
 #  S3
 # =============================================================================
 s3 = {
@@ -175,3 +108,83 @@ s3 = {
     }
   }
 }
+
+
+# =============================================================================
+#  k8s
+# =============================================================================
+k8s = {
+  enabled           = true
+  default_namespace = "coproc"
+
+  namespaces = {
+    coproc = {
+      labels = {
+        "app.kubernetes.io/name"       = "coprocessor"
+        "app.kubernetes.io/component"  = "storage"
+        "app.kubernetes.io/part-of"    = "zama-protocol"
+        "app.kubernetes.io/managed-by" = "terraform"
+      }
+      annotations = {
+        "terraform.io/module" = "coprocessor"
+      }
+    }
+  }
+
+  service_accounts = {
+    coprocessor = {
+      name      = "coprocessor"
+      namespace = "coproc"
+      s3_bucket_access = {
+        coprocessor = { actions = ["s3:*Object", "s3:ListBucket"] }
+      }
+    }
+
+    db-admin = {
+      # Used by k8s Jobs/Pods that need superuser access to RDS:
+      # pg_restore, CREATE USER, schema migrations, etc.
+      name              = "db-admin"
+      namespace         = "coproc"
+      rds_secret_access = true
+    }
+  }
+
+  storage_classes = {
+    gp3 = {
+      provisioner         = "ebs.csi.aws.com"
+      reclaim_policy      = "Delete"
+      volume_binding_mode = "WaitForFirstConsumer"
+      parameters = {
+        type      = "gp3"
+        fsType    = "ext4"
+        encrypted = "true"
+      }
+      annotations = {
+        "storageclass.kubernetes.io/is-default-class" = "true"
+      }
+    }
+  }
+
+  external_name_services = {
+    coprocessor-database = {
+      # endpoint omitted — injected automatically from the rds submodule
+      namespace = "coproc"
+    }
+  }
+}
+
+# =============================================================================
+#  k8s Charts — not managed here
+#
+#  Partners using an existing cluster are expected to operate their own
+#  system-level Helm releases. This module does not deploy:
+#    - metrics-server              (assumed present in the existing cluster)
+#    - karpenter                   (assumed present; IAM/SQS resources are partner-managed)
+#    - prometheus-operator-crds    (must be applied before any chart that creates ServiceMonitors)
+#    - k8s-monitoring              (requires grafana-cloud-credentials secret in monitoring namespace)
+#    - prometheus-rds-exporter     (IRSA role created above via db-admin service account)
+#    - prometheus-postgres-exporter (requires postgres-exporter-config secret in monitoring namespace)
+#
+#  To adopt these releases into Terraform management, set k8s_charts.enabled = true
+#  and add the relevant application entries (see testnet-complete for reference).
+# =============================================================================
