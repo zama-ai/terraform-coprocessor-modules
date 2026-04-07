@@ -98,6 +98,19 @@ data "aws_iam_policy_document" "service_account" {
       resources = [bucket.value.arn, "${bucket.value.arn}/*"]
     }
   }
+
+  # Auto-generated Secrets Manager statement from rds_secret_access.
+  # Grants GetSecretValue + DescribeSecret on the RDS master user secret.
+  dynamic "statement" {
+    for_each = each.value.rds_secret_access && var.rds_master_secret_arn != null ? [1] : []
+
+    content {
+      sid       = "AllowRDSMasterSecretAccess"
+      effect    = "Allow"
+      actions   = ["secretsmanager:GetSecretValue", "secretsmanager:DescribeSecret"]
+      resources = [var.rds_master_secret_arn]
+    }
+  }
 }
 
 data "aws_iam_policy_document" "service_account_assume_role" {

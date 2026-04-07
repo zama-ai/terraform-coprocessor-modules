@@ -421,6 +421,8 @@ variable "k8s" {
       s3_bucket_access = optional(map(object({
         actions = list(string)
       })), {})
+
+      rds_secret_access = optional(bool, false)
       iam_policy_statements = optional(list(object({
         sid       = optional(string, "")
         effect    = string

@@ -96,6 +96,14 @@ k8s = {
         coprocessor = { actions = ["s3:*Object", "s3:ListBucket"] }
       }
     }
+
+    db-admin = {
+      # Used by k8s Jobs/Pods that need superuser access to RDS:
+      # pg_restore, CREATE USER, schema migrations, etc.
+      name              = "db-admin"
+      namespace         = "coproc"
+      rds_secret_access = true
+    }
   }
 
   storage_classes = {

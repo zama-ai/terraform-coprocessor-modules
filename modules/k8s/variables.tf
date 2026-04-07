@@ -22,6 +22,12 @@ variable "rds_endpoint" {
   default     = null
 }
 
+variable "rds_master_secret_arn" {
+  description = "ARN of the Secrets Manager secret containing the RDS master user password. Required when any service account sets rds_secret_access = true."
+  type        = string
+  default     = null
+}
+
 variable "s3_bucket_arns" {
   description = "Map of logical bucket key to ARN from the s3 module. Referenced by service_accounts[*].s3_bucket_access to generate S3 IAM statements automatically."
   type        = map(string)
@@ -70,6 +76,11 @@ variable "k8s" {
       s3_bucket_access = optional(map(object({
         actions = list(string)
       })), {})
+
+      # Grant secretsmanager:GetSecretValue + DescribeSecret on the RDS master secret.
+      # Requires var.rds_master_secret_arn to be set (threaded from the rds submodule).
+      # Default: false
+      rds_secret_access = optional(bool, false)
 
       # IAM policy statements for the IRSA role.
       iam_policy_statements = optional(list(object({
