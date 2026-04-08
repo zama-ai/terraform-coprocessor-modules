@@ -1,6 +1,9 @@
 output "helm_release_statuses" {
   description = "Map of application name to Helm release status."
-  value       = { for key, release in helm_release.this : key => release.status }
+  value = merge(
+    { for key, release in helm_release.crds : key => release.status },
+    { for key, release in helm_release.apps : key => release.status },
+  )
 }
 
 output "irsa_role_arns" {

@@ -131,6 +131,15 @@ module "k8s_charts" {
     }
     k8s-monitoring = {
       "cluster.name" = local.eks_cluster_name
+
+      # Injected into both destinations so every metric and log line carries
+      # consistent partner/network dimensions across all Grafana Cloud stacks.
+      # destinations[0] = grafana-cloud-metrics (prometheus)
+      # destinations[1] = grafana-cloud-logs    (loki)
+      "destinations[0].externalLabels.partner" = var.partner_name
+      "destinations[0].externalLabels.network" = var.environment
+      "destinations[1].externalLabels.partner" = var.partner_name
+      "destinations[1].externalLabels.network" = var.environment
     }
     prometheus-rds-exporter = {
       "prometheus-rds-exporter-chart.serviceMonitor.relabelings[0].replacement" = var.environment

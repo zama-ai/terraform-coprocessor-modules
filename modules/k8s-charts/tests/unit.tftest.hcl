@@ -28,8 +28,13 @@ run "empty_applications_creates_no_resources" {
   }
 
   assert {
-    condition     = length(helm_release.this) == 0
+    condition     = length(helm_release.apps) == 0
     error_message = "No helm releases must be created when applications is empty."
+  }
+
+  assert {
+    condition     = length(helm_release.crds) == 0
+    error_message = "No CRD releases must be created when applications is empty."
   }
 
   assert {
@@ -109,7 +114,7 @@ run "one_release_per_helm_app" {
   }
 
   assert {
-    condition     = length(helm_release.this) == 2
+    condition     = length(helm_release.apps) == 2
     error_message = "One helm release must be created per application with helm_chart set."
   }
 }
@@ -127,7 +132,7 @@ run "helm_release_name_matches_map_key" {
   }
 
   assert {
-    condition     = helm_release.this["metrics-server"].name == "metrics-server"
+    condition     = helm_release.apps["metrics-server"].name == "metrics-server"
     error_message = "Helm release name must match the map key."
   }
 }
@@ -145,7 +150,7 @@ run "helm_release_namespace_matches_namespace_name" {
   }
 
   assert {
-    condition     = helm_release.this["metrics-server"].namespace == "kube-system"
+    condition     = helm_release.apps["metrics-server"].namespace == "kube-system"
     error_message = "Helm release namespace must match namespace.name."
   }
 }
@@ -162,8 +167,49 @@ run "helm_release_skipped_when_helm_chart_null" {
   }
 
   assert {
-    condition     = length(helm_release.this) == 0
+    condition     = length(helm_release.apps) == 0
     error_message = "No helm release must be created when helm_chart is null."
+  }
+}
+
+# =============================================================================
+#  CRD chart ordering
+# =============================================================================
+
+run "crd_chart_lands_in_crds_resource_not_apps" {
+  command = plan
+
+  variables {
+    applications = {
+      prometheus-operator-crds = {
+        namespace  = { name = "monitoring" }
+        helm_chart = { repository = "https://prometheus-community.github.io/helm-charts", chart = "prometheus-operator-crds", version = "28.0.1", crd_chart = true, atomic = false }
+      }
+      prometheus-postgres-exporter = {
+        namespace  = { name = "monitoring" }
+        helm_chart = { repository = "https://prometheus-community.github.io/helm-charts", chart = "prometheus-postgres-exporter", version = "7.3.0" }
+      }
+    }
+  }
+
+  assert {
+    condition     = length(helm_release.crds) == 1
+    error_message = "CRD chart must land in helm_release.crds."
+  }
+
+  assert {
+    condition     = length(helm_release.apps) == 1
+    error_message = "Non-CRD chart must land in helm_release.apps."
+  }
+
+  assert {
+    condition     = contains(keys(helm_release.crds), "prometheus-operator-crds")
+    error_message = "prometheus-operator-crds must be in helm_release.crds."
+  }
+
+  assert {
+    condition     = contains(keys(helm_release.apps), "prometheus-postgres-exporter")
+    error_message = "prometheus-postgres-exporter must be in helm_release.apps."
   }
 }
 

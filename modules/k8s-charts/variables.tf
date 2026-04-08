@@ -70,6 +70,7 @@ variable "applications" {
     # Helm chart release.
     helm_chart = optional(object({
       enabled          = optional(bool, true)
+      crd_chart        = optional(bool, false) # When true, this release is deployed before all non-CRD releases.
       repository       = string
       chart            = string
       version          = string

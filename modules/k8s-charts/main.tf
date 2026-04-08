@@ -29,6 +29,17 @@ locals {
     if app.helm_chart != null && app.helm_chart.enabled
   }
 
+  # CRD-only releases are deployed first; all other releases depend on them.
+  crd_helm_apps = {
+    for key, app in local.helm_apps : key => app
+    if app.helm_chart.crd_chart
+  }
+
+  app_helm_apps = {
+    for key, app in local.helm_apps : key => app
+    if !app.helm_chart.crd_chart
+  }
+
   manifests_apps = {
     for key, app in var.applications : key => app
     if app.additional_manifests.enabled
@@ -138,10 +149,10 @@ resource "aws_iam_role_policy_attachment" "irsa" {
 }
 
 # ***************************************
-#  Helm Releases
+#  Helm Releases — CRDs first
 # ***************************************
-resource "helm_release" "this" {
-  for_each = local.helm_apps
+resource "helm_release" "crds" {
+  for_each = local.crd_helm_apps
 
   name             = each.key
   repository       = each.value.helm_chart.repository
@@ -164,6 +175,32 @@ resource "helm_release" "this" {
 }
 
 # ***************************************
+#  Helm Releases — Applications
+# ***************************************
+resource "helm_release" "apps" {
+  for_each = local.app_helm_apps
+
+  name             = each.key
+  repository       = each.value.helm_chart.repository
+  chart            = each.value.helm_chart.chart
+  version          = each.value.helm_chart.version
+  namespace        = each.value.namespace.name
+  create_namespace = each.value.helm_chart.create_namespace
+  atomic           = each.value.helm_chart.atomic
+  wait             = each.value.helm_chart.wait
+  timeout          = each.value.helm_chart.timeout
+
+  values = each.value.helm_chart.values != "" ? [each.value.helm_chart.values] : []
+
+  set = [for key, value in merge(
+    each.value.helm_chart.set,
+    lookup(var.set_computed, each.key, {}),
+  ) : { name = key, value = value }]
+
+  depends_on = [kubernetes_namespace.this, kubernetes_service_account.this, aws_iam_role_policy_attachment.irsa, helm_release.crds]
+}
+
+# ***************************************
 #  Additional Manifests
 #
 #  NOTE: manifests that reference custom CRDs require those CRDs to exist at plan
@@ -179,5 +216,5 @@ resource "kubernetes_manifest" "additional" {
   ]...)
 
   manifest   = each.value
-  depends_on = [helm_release.this]
+  depends_on = [helm_release.crds, helm_release.apps]
 }
