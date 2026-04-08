@@ -407,22 +407,28 @@ variable "k8s" {
   type = object({
     enabled = optional(bool, false)
 
+    # Namespaces
+    default_namespace = optional(string, "coprocessor")
     namespaces = optional(map(object({
       labels      = optional(map(string), {})
       annotations = optional(map(string), {})
     })), {})
 
-    default_namespace = optional(string, "coprocessor")
-
+    # Service accounts
     service_accounts = optional(map(object({
       name                   = string
       namespace              = optional(string, null)
-      iam_role_name_override = optional(string, null)
+      iam_role_name_override = optional(string, null) # overrides computed "<key>-<partner>-<env>" role name
+
+      # S3 access — map key must match a key in var.s3.buckets
       s3_bucket_access = optional(map(object({
         actions = list(string)
       })), {})
 
-      rds_secret_access = optional(bool, false)
+      # RDS access — grants GetSecretValue on the RDS master secret (Secrets Manager)
+      rds_master_secret_access = optional(bool, false)
+
+      # Custom IAM policy statements appended to the generated role
       iam_policy_statements = optional(list(object({
         sid       = optional(string, "")
         effect    = string
@@ -434,10 +440,13 @@ variable "k8s" {
           values   = list(string)
         })), [])
       })), [])
+
+      # Metadata
       labels      = optional(map(string), {})
       annotations = optional(map(string), {})
     })), {})
 
+    # Storage classes
     storage_classes = optional(map(object({
       provisioner            = string
       reclaim_policy         = optional(string, "Delete")
@@ -448,6 +457,8 @@ variable "k8s" {
       labels                 = optional(map(string), {})
     })), {})
 
+    # ExternalName services — map key becomes the Service name
+    # When endpoint is omitted the root module resolves it from the matching module output (see local.module_endpoints).
     external_name_services = optional(map(object({
       endpoint    = optional(string, null)
       namespace   = optional(string, null)
@@ -461,23 +472,30 @@ variable "k8s" {
 #  k8s Charts
 # ******************************************************
 variable "k8s_charts" {
-  description = "Kubernetes system-level applications to deploy (namespaces, service accounts, IRSA, Helm charts, additional manifests)."
+  description = "Kubernetes system-level applications to deploy via Helm."
   type = object({
     enabled = optional(bool, false)
+
+    # Map key is the logical application name and becomes the Helm release name.
     applications = optional(map(object({
+      # Namespace
       namespace = object({
         name   = string
-        create = optional(bool, false)
+        create = optional(bool, false) # set false when the namespace is managed elsewhere (e.g. by another chart)
       })
+
+      # Service account — when create = true and irsa.enabled = true, the IRSA role ARN is auto-annotated
       service_account = optional(object({
         create      = optional(bool, false)
         name        = optional(string, null)
         labels      = optional(map(string), {})
         annotations = optional(map(string), {})
       }), null)
+
+      # IRSA — creates an IAM role bound to the service account via OIDC
       irsa = optional(object({
         enabled   = optional(bool, false)
-        role_name = optional(string, null)
+        role_name = optional(string, null) # defaults to "<app_key>-<partner_name>-<environment>"
         policy_statements = optional(list(object({
           sid       = optional(string, "")
           effect    = string
@@ -485,18 +503,25 @@ variable "k8s_charts" {
           resources = list(string)
         })), [])
       }), { enabled = false })
+
+      # Helm chart
       helm_chart = optional(object({
         enabled          = optional(bool, true)
         repository       = string
         chart            = string
         version          = string
-        values           = optional(string, "")
-        set              = optional(map(string), {})
+        values           = optional(string, "")      # inline YAML values block
+        set              = optional(map(string), {}) # individual key=value overrides (merged on top of values)
+        crd_chart        = optional(bool, false)     # when true, deployed before all non-CRD releases
         create_namespace = optional(bool, false)
         atomic           = optional(bool, true)
         wait             = optional(bool, true)
         timeout          = optional(number, 300)
       }), null)
+
+      # Additional raw YAML manifests applied after the Helm chart.
+      # Map key is a logical name; value is a single Kubernetes resource in YAML.
+      # Use __region__ as a placeholder — substituted with the current AWS region at apply time.
       additional_manifests = optional(object({
         enabled   = optional(bool, false)
         manifests = optional(map(string), {})

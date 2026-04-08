@@ -55,6 +55,11 @@ eks = {
   karpenter = {
     enabled          = true
     rule_name_prefix = "coproc"
+
+    controller_nodegroup = {
+      enabled        = true
+      instance_types = ["t3.medium"]
+    }
   }
 }
 
@@ -144,9 +149,9 @@ k8s = {
     db-admin = {
       # Used by k8s Jobs/Pods that need superuser access to RDS:
       # pg_restore, CREATE USER, schema migrations, etc.
-      name              = "db-admin"
-      namespace         = "coproc"
-      rds_secret_access = true
+      name                     = "db-admin"
+      namespace                = "coproc"
+      rds_master_secret_access = true
     }
   }
 
@@ -181,6 +186,118 @@ k8s_charts = {
   enabled = true
 
   applications = {
+    # ==========================================================================
+    # NodePool / EC2NodeClass for Karpenter-provisioned nodes.
+    #
+    # Requires a two-phase apply on a net-new cluster:
+    #   1st apply — karpenter helm chart installs the NodePool/EC2NodeClass CRDs
+    #   2nd apply — these manifests are created against the now-known CRD schema
+    #
+    # __cluster_name__ and __node_role__ are injected by the root module.
+    # ==========================================================================
+    karpenter-nodepools = {
+      namespace = {
+        name   = "karpenter"
+        create = false # created by the karpenter helm release
+      }
+
+      additional_manifests = {
+        enabled = true
+        manifests = {
+          ec2nodeclass = <<-YAML
+            apiVersion: karpenter.k8s.aws/v1
+            kind: EC2NodeClass
+            metadata:
+              name: default
+            spec:
+              amiSelectorTerms:
+                - alias: al2023@latest
+              role: __node_role__
+              subnetSelectorTerms:
+                - tags:
+                    karpenter.sh/discovery: __cluster_name__
+              securityGroupSelectorTerms:
+                - tags:
+                    karpenter.sh/discovery: __cluster_name__
+              tags:
+                karpenter.sh/discovery: __cluster_name__
+          YAML
+
+          # Compute-intensive pool for coprocessor workers (tfhe, zkproof, sns).
+          # Tainted karpenter.sh/nodepool=coprocessor-pool:NoSchedule — worker pods must tolerate this.
+          nodepool-coprocessor = <<-YAML
+            apiVersion: karpenter.sh/v1
+            kind: NodePool
+            metadata:
+              name: coprocessor-pool
+            spec:
+              template:
+                spec:
+                  nodeClassRef:
+                    group: karpenter.k8s.aws
+                    kind: EC2NodeClass
+                    name: default
+                  taints:
+                    - key: karpenter.sh/nodepool
+                      value: coprocessor-pool
+                      effect: NoSchedule
+                  requirements:
+                    - key: karpenter.sh/capacity-type
+                      operator: In
+                      values: ["on-demand"]
+                    - key: kubernetes.io/arch
+                      operator: In
+                      values: ["amd64"]
+                    - key: node.kubernetes.io/instance-type
+                      operator: In
+                      values: ["c5.xlarge", "c5.2xlarge", "c5a.xlarge", "c5a.2xlarge"]
+              limits:
+                cpu: "100"
+                memory: 400Gi
+              disruption:
+                consolidationPolicy: WhenEmpty
+                consolidateAfter: 30s
+          YAML
+
+          # General-purpose pool for coprocessor services (db-migration, listeners, tx-sender).
+          # Tainted karpenter.sh/nodepool=zws-pool:NoSchedule — service pods must tolerate this.
+          nodepool-services = <<-YAML
+            apiVersion: karpenter.sh/v1
+            kind: NodePool
+            metadata:
+              name: zws-pool
+            spec:
+              template:
+                spec:
+                  nodeClassRef:
+                    group: karpenter.k8s.aws
+                    kind: EC2NodeClass
+                    name: default
+                  taints:
+                    - key: karpenter.sh/nodepool
+                      value: zws-pool
+                      effect: NoSchedule
+                  requirements:
+                    - key: karpenter.sh/capacity-type
+                      operator: In
+                      values: ["on-demand"]
+                    - key: kubernetes.io/arch
+                      operator: In
+                      values: ["amd64"]
+                    - key: node.kubernetes.io/instance-type
+                      operator: In
+                      values: ["t3.large", "t3.xlarge", "m5.large", "m5.xlarge"]
+              limits:
+                cpu: "50"
+                memory: 200Gi
+              disruption:
+                consolidationPolicy: WhenEmptyOrUnderutilized
+                consolidateAfter: 1m
+          YAML
+        }
+      }
+    }
+
     prometheus-operator-crds = {
       # Cluster-scoped CRDs required by coprocessor app ServiceMonitors and the exporters.
       # Must be applied before any chart that creates ServiceMonitor resources.
@@ -428,11 +545,11 @@ k8s_charts = {
             replicaCount: 1
             resources:
               requests:
-                cpu: 1000m
-                memory: 1000Mi
+                cpu: 100m
+                memory: 128Mi
               limits:
-                cpu: 1000m
-                memory: 1000Mi
+                cpu: 500m
+                memory: 256Mi
             serviceAccount:
               create: false
               name: prometheus-rds-exporter

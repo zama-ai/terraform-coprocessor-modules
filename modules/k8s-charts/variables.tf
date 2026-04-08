@@ -20,6 +20,15 @@ variable "set_computed" {
   default     = {}
 }
 
+variable "manifests_vars" {
+  description = "Computed values injected into additional_manifests YAML by the root module. Supported placeholders: __region__ (always substituted), __cluster_name__, __node_role__."
+  type = object({
+    cluster_name = optional(string, "")
+    node_role    = optional(string, "")
+  })
+  default = {}
+}
+
 variable "applications" {
   description = <<-EOT
     Map of system-level applications to deploy. The map key is the logical application name

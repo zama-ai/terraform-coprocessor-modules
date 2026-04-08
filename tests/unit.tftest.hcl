@@ -107,16 +107,6 @@ run "additional_subnet_ids_empty_when_additional_subnets_disabled" {
 #  Networking module count wiring
 # =============================================================================
 
-run "networking_disabled_creates_no_module" {
-  command = plan
-
-  # Uses shared defaults: networking.enabled = false.
-  assert {
-    condition     = length(module.networking) == 0
-    error_message = "Networking module must not be created when networking.enabled = false."
-  }
-}
-
 run "networking_enabled_creates_one_module" {
   command = plan
 

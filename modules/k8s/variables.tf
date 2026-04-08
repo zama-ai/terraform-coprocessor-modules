@@ -16,14 +16,8 @@ variable "oidc_provider_arn" {
   type        = string
 }
 
-variable "rds_endpoint" {
-  description = "RDS instance hostname. Used as the external_name for any ExternalName service whose endpoint is null."
-  type        = string
-  default     = null
-}
-
 variable "rds_master_secret_arn" {
-  description = "ARN of the Secrets Manager secret containing the RDS master user password. Required when any service account sets rds_secret_access = true."
+  description = "ARN of the Secrets Manager secret containing the RDS master user password. Required when any service account sets rds_master_secret_access = true."
   type        = string
   default     = null
 }
@@ -45,44 +39,30 @@ variable "k8s" {
   type = object({
     enabled = optional(bool, false)
 
-    # Map of namespaces to create. The map key is the namespace name.
+    # Namespaces
     namespaces = optional(map(object({
       labels      = optional(map(string), {})
       annotations = optional(map(string), {})
     })), {})
 
-    # Fallback namespace for service accounts and ExternalName services that do not
-    # specify their own namespace. Does not need to be a key in namespaces (it may
-    # reference a pre-existing namespace).
+    # Fallback namespace for service accounts and ExternalName services that omit their own.
     default_namespace = optional(string, "coprocessor")
 
-    # Map of service accounts to create.
-    # The map key is a short logical name (e.g. "sns-worker", "coprocessor").
-    # Service accounts with iam_policy_statements get a dedicated IRSA role; those
-    # without are created as plain service accounts with no role annotation.
+    # Service accounts — every entry creates an IRSA role + policy regardless of which access fields are set.
     service_accounts = optional(map(object({
-      # Kubernetes service account name
-      name = string
+      name                   = string
+      namespace              = optional(string, null) # defaults to k8s.default_namespace
+      iam_role_name_override = optional(string, null) # overrides computed "<key>-<partner_name>-<environment>"
 
-      # Namespace override; defaults to k8s.default_namespace when null
-      namespace = optional(string, null)
-
-      # IAM role name override; defaults to "<key>-<partner_name>-<environment>"
-      iam_role_name_override = optional(string, null)
-
-      # Map of logical bucket key → S3 actions to grant on that bucket.
-      # ARNs are resolved from var.s3_bucket_arns — no need to hardcode them in tfvars.
-      # Default actions: ["s3:*Object", "s3:ListBucket"]. Override per bucket as needed.
+      # S3 access — map key must match a key in var.s3.buckets
       s3_bucket_access = optional(map(object({
         actions = list(string)
       })), {})
 
-      # Grant secretsmanager:GetSecretValue + DescribeSecret on the RDS master secret.
-      # Requires var.rds_master_secret_arn to be set (threaded from the rds submodule).
-      # Default: false
-      rds_secret_access = optional(bool, false)
+      # RDS access — grants GetSecretValue + DescribeSecret on the RDS master secret
+      rds_master_secret_access = optional(bool, false)
 
-      # IAM policy statements for the IRSA role.
+      # Custom IAM policy statements appended to the generated role
       iam_policy_statements = optional(list(object({
         sid       = optional(string, "")
         effect    = string
@@ -95,11 +75,12 @@ variable "k8s" {
         })), [])
       })), [])
 
+      # Metadata
       labels      = optional(map(string), {})
       annotations = optional(map(string), {})
     })), {})
 
-    # Map of StorageClass resources. The map key is the storage class name.
+    # Storage classes
     storage_classes = optional(map(object({
       provisioner            = string
       reclaim_policy         = optional(string, "Delete")
@@ -110,12 +91,10 @@ variable "k8s" {
       labels                 = optional(map(string), {})
     })), {})
 
-    # Map of ExternalName services — one per external dependency (RDS, ElastiCache, etc.).
-    # The map key becomes the Kubernetes service name (e.g. "coprocessor-db", "coprocessor-redis").
-    # The endpoint port is stripped automatically; the app connects on its own configured port.
-    # endpoint may be null to fall back to var.rds_endpoint (injected from the rds submodule).
+    # ExternalName services — map key becomes the Service name
+    # Endpoints resolved by the root module; port is stripped automatically.
     external_name_services = optional(map(object({
-      endpoint    = optional(string, null) # host:port or bare hostname; null = use var.rds_endpoint
+      endpoint    = optional(string, null) # host:port or bare hostname
       namespace   = optional(string, null) # defaults to k8s.default_namespace
       annotations = optional(map(string), {})
     })), {})

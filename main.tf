@@ -12,6 +12,20 @@ locals {
 
   # Additional subnets have no existing_vpc equivalent — only available when networking module ran and additional subnets were enabled
   additional_subnet_ids = var.networking.enabled && var.networking.additional_subnets.enabled ? module.networking[0].additional_subnet_ids : []
+
+  # ExternalName service endpoints — explicit tfvars value takes precedence, otherwise resolved from module outputs
+  module_endpoints = {
+    coprocessor-database = module.rds.db_instance_address
+  }
+
+  k8s_config = merge(var.k8s, {
+    external_name_services = {
+      for key, svc in var.k8s.external_name_services :
+      key => merge(svc, {
+        endpoint = svc.endpoint != null ? svc.endpoint : lookup(local.module_endpoints, key, null)
+      })
+    }
+  })
 }
 
 # ******************************************************
@@ -96,11 +110,10 @@ module "k8s" {
     : ""
   )
 
-  rds_endpoint          = module.rds.db_instance_address
   rds_master_secret_arn = module.rds.rds_master_secret_arn
   s3_bucket_arns        = module.s3.bucket_arns
 
-  k8s = var.k8s
+  k8s = local.k8s_config
 }
 
 # ******************************************************
@@ -123,6 +136,11 @@ module "k8s_charts" {
 
   applications = var.k8s_charts.applications
 
+  manifests_vars = {
+    cluster_name = local.eks_cluster_name
+    node_role    = "${local.eks_cluster_name}-Karpenter"
+  }
+
   set_computed = {
     karpenter = {
       "settings.clusterName"       = local.eks_cluster_name
@@ -131,9 +149,6 @@ module "k8s_charts" {
     }
     k8s-monitoring = {
       "cluster.name" = local.eks_cluster_name
-
-      # Injected into both destinations so every metric and log line carries
-      # consistent partner/network dimensions across all Grafana Cloud stacks.
       # destinations[0] = grafana-cloud-metrics (prometheus)
       # destinations[1] = grafana-cloud-logs    (loki)
       "destinations[0].externalLabels.partner" = var.partner_name

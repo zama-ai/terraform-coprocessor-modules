@@ -172,6 +172,29 @@ run "helm_release_skipped_when_helm_chart_null" {
   }
 }
 
+run "helm_release_skipped_when_helm_chart_disabled" {
+  command = plan
+
+  variables {
+    applications = {
+      metrics-server = {
+        namespace  = { name = "kube-system" }
+        helm_chart = { repository = "https://kubernetes-sigs.github.io/metrics-server", chart = "metrics-server", version = "3.13.0", enabled = false }
+      }
+    }
+  }
+
+  assert {
+    condition     = length(helm_release.apps) == 0
+    error_message = "No helm release must be created when helm_chart.enabled = false."
+  }
+
+  assert {
+    condition     = length(helm_release.crds) == 0
+    error_message = "No CRD release must be created when helm_chart.enabled = false."
+  }
+}
+
 # =============================================================================
 #  CRD chart ordering
 # =============================================================================

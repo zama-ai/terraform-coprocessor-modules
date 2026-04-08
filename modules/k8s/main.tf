@@ -8,7 +8,6 @@ locals {
   # e.g., "arn:aws:iam::123456789012:oidc-provider/oidc.eks.us-east-1.amazonaws.com/id/EXAMPLE"
   #     → "oidc.eks.us-east-1.amazonaws.com/id/EXAMPLE"
   oidc_provider_id = replace(var.oidc_provider_arn, "/^.*oidc-provider\\//", "")
-
 }
 
 # ***************************************
@@ -53,7 +52,7 @@ resource "kubernetes_namespace" "this" {
 }
 
 # ***************************************
-#  IAM: per-service-account policy + IRSA role
+#  IAM: role and policy(s) for Kubernetes Service Accounts
 # ***************************************
 data "aws_iam_policy_document" "service_account" {
   for_each = var.k8s.enabled ? var.k8s.service_accounts : {}
@@ -99,10 +98,10 @@ data "aws_iam_policy_document" "service_account" {
     }
   }
 
-  # Auto-generated Secrets Manager statement from rds_secret_access.
+  # Auto-generated Secrets Manager statement from rds_master_secret_access.
   # Grants GetSecretValue + DescribeSecret on the RDS master user secret.
   dynamic "statement" {
-    for_each = each.value.rds_secret_access && var.rds_master_secret_arn != null ? [1] : []
+    for_each = each.value.rds_master_secret_access && var.rds_master_secret_arn != null ? [1] : []
 
     content {
       sid       = "AllowRDSMasterSecretAccess"
@@ -201,7 +200,7 @@ resource "kubernetes_service" "external_name" {
 
   spec {
     type          = "ExternalName"
-    external_name = split(":", coalesce(each.value.endpoint, var.rds_endpoint))[0]
+    external_name = split(":", each.value.endpoint)[0]
   }
 
   depends_on = [kubernetes_namespace.this]

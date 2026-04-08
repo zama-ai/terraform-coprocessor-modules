@@ -143,9 +143,9 @@ k8s = {
     db-admin = {
       # Used by k8s Jobs/Pods that need superuser access to RDS:
       # pg_restore, CREATE USER, schema migrations, etc.
-      name              = "db-admin"
-      namespace         = "coproc"
-      rds_secret_access = true
+      name                     = "db-admin"
+      namespace                = "coproc"
+      rds_master_secret_access = true
     }
   }
 
@@ -178,12 +178,13 @@ k8s = {
 #
 #  Partners using an existing cluster are expected to operate their own
 #  system-level Helm releases. This module does not deploy:
-#    - metrics-server              (assumed present in the existing cluster)
-#    - karpenter                   (assumed present; IAM/SQS resources are partner-managed)
-#    - prometheus-operator-crds    (must be applied before any chart that creates ServiceMonitors)
-#    - k8s-monitoring              (requires grafana-cloud-credentials secret in monitoring namespace)
-#    - prometheus-rds-exporter     (IRSA role created above via db-admin service account)
-#    - prometheus-postgres-exporter (requires postgres-exporter-config secret in monitoring namespace)
+#    - metrics-server                  (assumed present in the existing cluster)
+#    - karpenter                       (assumed present; IAM/SQS resources are partner-managed)
+#    - karpenter NodePool/EC2NodeClass (assumed present; see testnet-complete for reference)
+#    - prometheus-operator-crds        (must be applied before any chart that creates ServiceMonitors)
+#    - k8s-monitoring                  (requires grafana-cloud-credentials secret in monitoring namespace)
+#    - prometheus-rds-exporter         (IRSA role created above via db-admin service account)
+#    - prometheus-postgres-exporter    (requires postgres-exporter-config secret in monitoring namespace)
 #
 #  To adopt these releases into Terraform management, set k8s_charts.enabled = true
 #  and add the relevant application entries (see testnet-complete for reference).

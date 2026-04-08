@@ -202,16 +202,20 @@ resource "helm_release" "apps" {
 
 # ***************************************
 #  Additional Manifests
-#
-#  NOTE: manifests that reference custom CRDs require those CRDs to exist at plan
-#  time. On a net-new cluster, apply twice: first to install the Helm chart (and
-#  its CRDs), then to create these manifest resources.
 # ***************************************
 resource "kubernetes_manifest" "additional" {
   for_each = merge([
     for app_key, app in local.manifests_apps : {
       for name, yaml in app.additional_manifests.manifests :
-      "${app_key}/${name}" => yamldecode(replace(yaml, "__region__", data.aws_region.current.id))
+      "${app_key}/${name}" => yamldecode(
+        replace(
+          replace(
+            replace(yaml, "__region__", data.aws_region.current.id),
+            "__cluster_name__", var.manifests_vars.cluster_name
+          ),
+          "__node_role__", var.manifests_vars.node_role
+        )
+      )
     }
   ]...)
 
