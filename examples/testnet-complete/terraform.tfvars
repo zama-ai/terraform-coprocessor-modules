@@ -68,6 +68,50 @@ rds = {
 }
 
 # =============================================================================
+#  S3
+# =============================================================================
+s3 = {
+  buckets = {
+    coprocessor = {
+      purpose = "coprocessor-storage"
+
+      public_access = {
+        enabled = true
+      }
+
+      cloudfront = {
+        enabled = true
+      }
+
+      cors = {
+        enabled         = true
+        allowed_origins = ["*"]
+        allowed_methods = ["GET", "HEAD"]
+        allowed_headers = ["Authorization"]
+        expose_headers  = ["Access-Control-Allow-Origin"]
+      }
+
+      policy_statements = [
+        {
+          sid        = "PublicRead"
+          effect     = "Allow"
+          principals = { "*" = ["*"] }
+          actions    = ["s3:GetObject"]
+          resources  = ["objects"]
+        },
+        {
+          sid        = "ZamaList"
+          effect     = "Allow"
+          principals = { "*" = ["*"] }
+          actions    = ["s3:ListBucket"]
+          resources  = ["bucket"]
+        }
+      ]
+    }
+  }
+}
+
+# =============================================================================
 #  k8s
 # =============================================================================
 k8s = {
@@ -150,6 +194,7 @@ k8s_charts = {
         repository = "https://prometheus-community.github.io/helm-charts"
         chart      = "prometheus-operator-crds"
         version    = "28.0.1"
+        crd_chart  = true  # Deployed before all other helm releases; ServiceMonitor charts depend on these CRDs
         atomic     = false # CRDs are cluster-scoped; atomic rollback is not dangerous here
       }
     }
@@ -238,13 +283,21 @@ k8s_charts = {
         chart      = "k8s-monitoring"
         version    = "3.8.1"
 
-        # Credentials must be created manually before first deploy:
+        # All Grafana Cloud credentials and URLs must be created manually before first deploy:
         # kubectl create secret generic grafana-cloud-credentials -n monitoring \
-        #   --from-literal=prometheus-username=<id> --from-literal=prometheus-password=<token> \
-        #   --from-literal=loki-username=<id>       --from-literal=loki-password=<token>
+        #   --from-literal=prometheus-username=<id>    --from-literal=prometheus-password=<token> \
+        #   --from-literal=prometheus-url=<remote_write_url> \
+        #   --from-literal=loki-username=<id>          --from-literal=loki-password=<token> \
+        #   --from-literal=loki-url=<loki_push_url>
         values = <<-YAML
           global:
             scrapeInterval: 5m  # CHANGE ME: increase to 10m to further reduce ingestion costs
+
+          alloy-metrics:
+            enabled: true
+
+          alloy-logs:
+            enabled: true
 
           clusterMetrics:
             enabled: true
@@ -267,9 +320,15 @@ k8s_charts = {
               - gw-blockchain
               - eth-blockchain
 
+          # destinations[0].externalLabels.partner and .network are injected
+          # automatically from var.partner_name and var.environment by the root module.
           destinations:
             - name: grafana-cloud-metrics
               type: prometheus
+              urlFrom:
+                secretKeyRef:
+                  name: grafana-cloud-credentials
+                  key: prometheus-url
               auth:
                 type: basic
                 usernameKey: prometheus-username
@@ -281,6 +340,10 @@ k8s_charts = {
 
             - name: grafana-cloud-logs
               type: loki
+              urlFrom:
+                secretKeyRef:
+                  name: grafana-cloud-credentials
+                  key: loki-url
               tenantIdKey: loki-username
               auth:
                 type: basic
@@ -291,13 +354,6 @@ k8s_charts = {
                 name: grafana-cloud-credentials
                 namespace: monitoring
         YAML
-
-        set = {
-          # CHANGE ME: your Grafana Cloud Prometheus remote_write URL
-          "destinations[0].url" = "https://prometheus-prod-xx-yyyy.grafana.net/api/prom/push"
-          # CHANGE ME: your Grafana Cloud Loki push URL
-          "destinations[1].url" = "https://logs-prod-xx-yyyy.grafana.net/loki/api/v1/push"
-        }
       }
     }
 
@@ -361,7 +417,7 @@ k8s_charts = {
       helm_chart = {
         repository = "oci://hub.zama.org/ghcr/zama-zws/helm-charts"
         chart      = "prometheus-rds-exporter"
-        version    = "1.1.0"
+        version    = "1.0.1"
 
         values = <<-YAML
           irsa:
@@ -456,50 +512,6 @@ k8s_charts = {
             enabled: false
         YAML
       }
-    }
-  }
-}
-
-# =============================================================================
-#  S3
-# =============================================================================
-s3 = {
-  buckets = {
-    coprocessor = {
-      purpose = "coprocessor-storage"
-
-      public_access = {
-        enabled = true
-      }
-
-      cloudfront = {
-        enabled = true
-      }
-
-      cors = {
-        enabled         = true
-        allowed_origins = ["*"]
-        allowed_methods = ["GET", "HEAD"]
-        allowed_headers = ["Authorization"]
-        expose_headers  = ["Access-Control-Allow-Origin"]
-      }
-
-      policy_statements = [
-        {
-          sid        = "PublicRead"
-          effect     = "Allow"
-          principals = { "*" = ["*"] }
-          actions    = ["s3:GetObject"]
-          resources  = ["objects"]
-        },
-        {
-          sid        = "ZamaList"
-          effect     = "Allow"
-          principals = { "*" = ["*"] }
-          actions    = ["s3:ListBucket"]
-          resources  = ["bucket"]
-        }
-      ]
     }
   }
 }
