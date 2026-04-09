@@ -58,7 +58,7 @@ eks = {
 
     controller_nodegroup = {
       enabled        = true
-      instance_types = ["t3.medium"]
+      instance_types = ["t3.small"]
     }
   }
 }
@@ -125,6 +125,17 @@ k8s = {
 
   namespaces = {
     coproc = {
+      labels = {
+        "app.kubernetes.io/name"       = "coprocessor"
+        "app.kubernetes.io/component"  = "storage"
+        "app.kubernetes.io/part-of"    = "zama-protocol"
+        "app.kubernetes.io/managed-by" = "terraform"
+      }
+      annotations = {
+        "terraform.io/module" = "coprocessor"
+      }
+    }
+    monitoring = {
       labels = {
         "app.kubernetes.io/name"       = "coprocessor"
         "app.kubernetes.io/component"  = "storage"
@@ -392,7 +403,7 @@ k8s_charts = {
     k8s-monitoring = {
       namespace = {
         name   = "monitoring"
-        create = true
+        create = false
       }
 
       helm_chart = {
@@ -442,10 +453,7 @@ k8s_charts = {
           destinations:
             - name: grafana-cloud-metrics
               type: prometheus
-              urlFrom:
-                secretKeyRef:
-                  name: grafana-cloud-credentials
-                  key: prometheus-url
+              url: # CHANGE ME
               auth:
                 type: basic
                 usernameKey: prometheus-username
@@ -457,10 +465,7 @@ k8s_charts = {
 
             - name: grafana-cloud-logs
               type: loki
-              urlFrom:
-                secretKeyRef:
-                  name: grafana-cloud-credentials
-                  key: loki-url
+              url: # CHANGE ME
               tenantIdKey: loki-username
               auth:
                 type: basic
