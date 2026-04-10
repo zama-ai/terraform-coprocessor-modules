@@ -8,7 +8,7 @@ This repo provides a Terraform Module for deploying the base layer infrastructur
 
 Infrastructure deployed by the [`examples/testnet-complete`](./examples/testnet-complete) example.
 
-![Coprocessor Infrastructure](diagrams/images/coprocessor.drawio.png)
+![Coprocessor Infrastructure - terraform-corprocessor-mdoules v0.2.0](diagrams/images/copro-arch-v0.2.0.drawio.png)
 
 ---
 
