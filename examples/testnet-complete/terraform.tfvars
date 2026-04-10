@@ -118,9 +118,9 @@ s3 = {
 }
 
 # =============================================================================
-#  k8s
+#  k8s Coprocessor Dependencies
 # =============================================================================
-k8s = {
+k8s_coprocessor_deps = {
   enabled           = true
   default_namespace = "coproc"
 
@@ -175,9 +175,9 @@ k8s = {
 }
 
 # =============================================================================
-#  k8s Charts
+#  k8s System Charts
 # =============================================================================
-k8s_charts = {
+k8s_system_charts = {
   enabled = true
 
   applications = {
@@ -400,7 +400,13 @@ k8s_charts = {
         #   --from-literal=prometheus-username=<id>    --from-literal=prometheus-password=<token> \
         #   --from-literal=prometheus-url=<remote_write_url> \
         #   --from-literal=loki-username=<id>          --from-literal=loki-password=<token> \
-        #   --from-literal=loki-url=<loki_push_url>
+        #   --from-literal=loki-url=<loki_push_url> \
+        #   --from-literal=otlp-username=<id>          --from-literal=otlp-password=<token> \
+        #   --from-literal=otlp-url=<tempo_push_url>
+        #
+        # Coprocessor pods must also set OTEL_EXPORTER_OTLP_ENDPOINT pointing at the
+        # alloy-receiver ClusterIP service, e.g.:
+        #   OTEL_EXPORTER_OTLP_ENDPOINT=http://k8s-monitoring-alloy-receiver.monitoring.svc.cluster.local:4317
         values = <<-YAML
           global:
             scrapeInterval: 5m  # CHANGE ME: increase to 10m to further reduce ingestion costs
@@ -410,6 +416,40 @@ k8s_charts = {
 
           alloy-logs:
             enabled: true
+
+          alloy-receiver:
+            enabled: true
+            alloy:
+              extraConfig: |
+                // Drop spans with no identifiable service — avoids polluting Tempo with noise.
+                otelcol.processor.filter "drop_unknown_service_spans" {
+                  error_mode = "ignore"
+                  traces {
+                    span = [
+                      "resource.attributes[\"service.name\"] == \"unknown_service\"",
+                    ]
+                  }
+                  output {
+                    traces = [otelcol.processor.filter.drop_compute_worker_non_errors.input]
+                  }
+                }
+
+                // tfhe-worker, sns-executor, and zkproof-worker emit a span per compute
+                // operation and produce very high trace volume. Only forward error spans
+                // to Tempo to keep ingestion costs bounded.
+                otelcol.processor.filter "drop_compute_worker_non_errors" {
+                  error_mode = "ignore"
+                  traces {
+                    span = [
+                      "resource.attributes[\"service.name\"] == \"tfhe-worker\" and status.code != STATUS_CODE_ERROR",
+                      "resource.attributes[\"service.name\"] == \"sns-executor\" and status.code != STATUS_CODE_ERROR",
+                      "resource.attributes[\"service.name\"] == \"zkproof-worker\" and status.code != STATUS_CODE_ERROR",
+                    ]
+                  }
+                  output {
+                    traces = [otelcol.exporter.otlphttp.grafana_cloud_traces.input]
+                  }
+                }
 
           clusterMetrics:
             enabled: true
@@ -432,12 +472,27 @@ k8s_charts = {
               - gw-blockchain
               - eth-blockchain
 
-          # destinations[0].externalLabels.partner and .network are injected
-          # automatically from var.partner_name and var.environment by the root module.
+          traces:
+            enabled: true
+
+          receivers:
+            otlp:
+              enabled: true
+              grpc:
+                enabled: true
+                port: 4317
+              http:
+                enabled: false
+
+          # __partner__ and __network__ are substituted automatically by the module
+          # from var.partner_name and var.environment at apply time.
           destinations:
             - name: grafana-cloud-metrics
               type: prometheus
               url: # CHANGE ME
+              externalLabels:
+                partner: __partner__
+                network: __network__
               auth:
                 type: basic
                 usernameKey: prometheus-username
@@ -451,10 +506,28 @@ k8s_charts = {
               type: loki
               url: # CHANGE ME
               tenantIdKey: loki-username
+              externalLabels:
+                partner: __partner__
+                network: __network__
               auth:
                 type: basic
                 usernameKey: loki-username
                 passwordKey: loki-password
+              secret:
+                create: false
+                name: grafana-cloud-credentials
+                namespace: monitoring
+
+            - name: grafana-cloud-traces
+              type: otlp
+              url: # CHANGE ME - Grafana Cloud Tempo endpoint (e.g. https://tempo-prod-XX.grafana.net/tempo)
+              externalLabels:
+                partner: __partner__
+                network: __network__
+              auth:
+                type: basic
+                usernameKey: otlp-username
+                passwordKey: otlp-password
               secret:
                 create: false
                 name: grafana-cloud-credentials

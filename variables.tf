@@ -400,9 +400,9 @@ variable "s3" {
 }
 
 # ******************************************************
-#  k8s
+#  k8s Coprocessor Dependencies
 # ******************************************************
-variable "k8s" {
+variable "k8s_coprocessor_deps" {
   description = "Kubernetes coprocessor resource configuration (namespaces, service accounts, storage classes, ExternalName services)."
   type = object({
     enabled = optional(bool, false)
@@ -469,9 +469,9 @@ variable "k8s" {
 }
 
 # ******************************************************
-#  k8s Charts
+#  k8s System Charts
 # ******************************************************
-variable "k8s_charts" {
+variable "k8s_system_charts" {
   description = "Kubernetes system-level applications to deploy via Helm."
   type = object({
     enabled = optional(bool, false)

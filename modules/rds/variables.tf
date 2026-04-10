@@ -60,7 +60,7 @@ variable "rds" {
 
     # Maintenance & backups
     maintenance_window      = optional(string, "Mon:00:00-Mon:03:00")
-    backup_retention_period = optional(number, 7)
+    backup_retention_period = optional(number, 30)
     deletion_protection     = optional(bool, true)
 
     # Monitoring
@@ -79,5 +79,5 @@ variable "rds" {
     additional_allowed_cidr_blocks = optional(list(string), [])
   })
 
-  default = { db_name = "", enabled = false }
+  default = { enabled = false }
 }

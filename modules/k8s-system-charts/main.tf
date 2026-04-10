@@ -29,6 +29,20 @@ locals {
     if app.helm_chart != null && app.helm_chart.enabled
   }
 
+  # Substitute standard placeholders in helm values so that computed or
+  # partner-specific values can be embedded directly in the tfvars YAML block
+  # without requiring root-level set_computed overrides.
+  #
+  # Supported placeholders:
+  #   __partner__ → var.partner_name
+  #   __network__ → var.environment
+  resolved_helm_values = {
+    for key, app in local.helm_apps : key => replace(
+      replace(app.helm_chart.values, "__partner__", var.partner_name),
+      "__network__", var.environment
+    )
+  }
+
   # CRD-only releases are deployed first; all other releases depend on them.
   crd_helm_apps = {
     for key, app in local.helm_apps : key => app
@@ -164,7 +178,7 @@ resource "helm_release" "crds" {
   wait             = each.value.helm_chart.wait
   timeout          = each.value.helm_chart.timeout
 
-  values = each.value.helm_chart.values != "" ? [each.value.helm_chart.values] : []
+  values = local.resolved_helm_values[each.key] != "" ? [local.resolved_helm_values[each.key]] : []
 
   set = [for key, value in merge(
     each.value.helm_chart.set,
@@ -190,7 +204,7 @@ resource "helm_release" "apps" {
   wait             = each.value.helm_chart.wait
   timeout          = each.value.helm_chart.timeout
 
-  values = each.value.helm_chart.values != "" ? [each.value.helm_chart.values] : []
+  values = local.resolved_helm_values[each.key] != "" ? [local.resolved_helm_values[each.key]] : []
 
   set = [for key, value in merge(
     each.value.helm_chart.set,

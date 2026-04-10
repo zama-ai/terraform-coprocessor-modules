@@ -18,9 +18,9 @@ locals {
     coprocessor-database = module.rds.db_instance_address
   }
 
-  k8s_config = merge(var.k8s, {
+  k8s_config = merge(var.k8s_coprocessor_deps, {
     external_name_services = {
-      for key, svc in var.k8s.external_name_services :
+      for key, svc in var.k8s_coprocessor_deps.external_name_services :
       key => merge(svc, {
         endpoint = svc.endpoint != null ? svc.endpoint : lookup(local.module_endpoints, key, null)
       })
@@ -94,10 +94,10 @@ module "s3" {
 }
 
 # ******************************************************
-#  k8s
+#  k8s Coprocessor Dependencies
 # ******************************************************
-module "k8s" {
-  source = "./modules/k8s"
+module "k8s_coprocessor_deps" {
+  source = "./modules/k8s-coprocessor-deps"
 
   partner_name = var.partner_name
   environment  = var.environment
@@ -117,11 +117,11 @@ module "k8s" {
 }
 
 # ******************************************************
-#  k8s Charts
+#  k8s System Charts
 # ******************************************************
-module "k8s_charts" {
-  count  = var.k8s_charts.enabled ? 1 : 0
-  source = "./modules/k8s-charts"
+module "k8s_system_charts" {
+  count  = var.k8s_system_charts.enabled ? 1 : 0
+  source = "./modules/k8s-system-charts"
 
   partner_name = var.partner_name
   environment  = var.environment
@@ -134,7 +134,7 @@ module "k8s_charts" {
     : ""
   )
 
-  applications = var.k8s_charts.applications
+  applications = var.k8s_system_charts.applications
 
   manifests_vars = {
     cluster_name = local.eks_cluster_name
@@ -149,12 +149,6 @@ module "k8s_charts" {
     }
     k8s-monitoring = {
       "cluster.name" = local.eks_cluster_name
-      # destinations[0] = grafana-cloud-metrics (prometheus)
-      # destinations[1] = grafana-cloud-logs    (loki)
-      "destinations[0].externalLabels.partner" = var.partner_name
-      "destinations[0].externalLabels.network" = var.environment
-      "destinations[1].externalLabels.partner" = var.partner_name
-      "destinations[1].externalLabels.network" = var.environment
     }
     prometheus-rds-exporter = {
       "prometheus-rds-exporter-chart.serviceMonitor.relabelings[0].replacement" = var.environment

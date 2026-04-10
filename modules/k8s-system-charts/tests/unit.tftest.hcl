@@ -1,5 +1,5 @@
 mock_provider "helm" {}
-
+mock_provider "kubernetes" {}
 
 mock_provider "aws" {
   mock_data "aws_iam_policy_document" {
@@ -389,5 +389,234 @@ run "irsa_role_name_override_is_respected" {
   assert {
     condition     = aws_iam_role.irsa["external-secrets"].name == "my-custom-eso-role"
     error_message = "irsa.role_name override must replace the computed role name."
+  }
+}
+
+# =============================================================================
+#  set_computed merging
+# =============================================================================
+
+run "set_computed_values_are_merged_into_helm_release" {
+  command = plan
+
+  variables {
+    applications = {
+      karpenter = {
+        namespace  = { name = "karpenter", create = true }
+        helm_chart = { repository = "oci://public.ecr.aws/karpenter", chart = "karpenter", version = "1.8.2", set = { "replicas" = "1" } }
+      }
+    }
+    set_computed = {
+      karpenter = {
+        "settings.clusterName"       = "acme-testnet"
+        "settings.interruptionQueue" = "acme-testnet-karpenter"
+      }
+    }
+  }
+
+  assert {
+    condition = contains(
+      [for s in helm_release.apps["karpenter"].set : s.name],
+      "settings.clusterName"
+    )
+    error_message = "set_computed keys must be present in the helm release set block."
+  }
+
+  assert {
+    condition = contains(
+      [for s in helm_release.apps["karpenter"].set : s.name],
+      "replicas"
+    )
+    error_message = "helm_chart.set keys must be preserved when set_computed is merged."
+  }
+}
+
+# =============================================================================
+#  additional_manifests
+# =============================================================================
+
+run "additional_manifests_disabled_creates_no_manifest_resources" {
+  command = plan
+
+  variables {
+    applications = {
+      karpenter-nodepools = {
+        namespace = { name = "karpenter" }
+        additional_manifests = {
+          enabled = false
+          manifests = {
+            nodepool = <<-YAML
+              apiVersion: karpenter.sh/v1
+              kind: NodePool
+              metadata:
+                name: default
+              spec:
+                template:
+                  spec:
+                    nodeClassRef:
+                      group: karpenter.k8s.aws
+                      kind: EC2NodeClass
+                      name: default
+                    requirements: []
+                limits:
+                  cpu: "10"
+                disruption:
+                  consolidationPolicy: WhenEmpty
+                  consolidateAfter: 30s
+            YAML
+          }
+        }
+      }
+    }
+  }
+
+  assert {
+    condition     = length(kubernetes_manifest.additional) == 0
+    error_message = "No manifests must be created when additional_manifests.enabled = false."
+  }
+}
+
+run "additional_manifests_enabled_creates_manifest_resources" {
+  command = plan
+
+  variables {
+    manifests_vars = {
+      cluster_name = "acme-testnet"
+      node_role    = "acme-testnet-Karpenter"
+    }
+    applications = {
+      karpenter-nodepools = {
+        namespace = { name = "karpenter" }
+        additional_manifests = {
+          enabled = true
+          manifests = {
+            nodepool = <<-YAML
+              apiVersion: karpenter.sh/v1
+              kind: NodePool
+              metadata:
+                name: default
+              spec:
+                template:
+                  spec:
+                    nodeClassRef:
+                      group: karpenter.k8s.aws
+                      kind: EC2NodeClass
+                      name: default
+                    requirements: []
+                limits:
+                  cpu: "10"
+                disruption:
+                  consolidationPolicy: WhenEmpty
+                  consolidateAfter: 30s
+            YAML
+          }
+        }
+      }
+    }
+  }
+
+  assert {
+    condition     = length(kubernetes_manifest.additional) == 1
+    error_message = "One manifest resource must be created per entry when additional_manifests.enabled = true."
+  }
+
+  assert {
+    condition     = contains(keys(kubernetes_manifest.additional), "karpenter-nodepools/nodepool")
+    error_message = "Manifest key must be '<app_key>/<manifest_key>'."
+  }
+}
+
+run "manifests_vars_placeholders_are_substituted" {
+  command = plan
+
+  variables {
+    manifests_vars = {
+      cluster_name = "acme-testnet"
+      node_role    = "acme-testnet-Karpenter"
+    }
+    applications = {
+      karpenter-nodepools = {
+        namespace = { name = "karpenter" }
+        additional_manifests = {
+          enabled = true
+          manifests = {
+            ec2nodeclass = <<-YAML
+              apiVersion: karpenter.k8s.aws/v1
+              kind: EC2NodeClass
+              metadata:
+                name: default
+              spec:
+                amiSelectorTerms:
+                  - alias: al2023@latest
+                role: __node_role__
+                subnetSelectorTerms:
+                  - tags:
+                      karpenter.sh/discovery: __cluster_name__
+                securityGroupSelectorTerms:
+                  - tags:
+                      karpenter.sh/discovery: __cluster_name__
+            YAML
+          }
+        }
+      }
+    }
+  }
+
+  assert {
+    condition     = kubernetes_manifest.additional["karpenter-nodepools/ec2nodeclass"].manifest.spec.role == "acme-testnet-Karpenter"
+    error_message = "__node_role__ placeholder must be substituted with manifests_vars.node_role."
+  }
+
+  assert {
+    condition     = kubernetes_manifest.additional["karpenter-nodepools/ec2nodeclass"].manifest.spec.subnetSelectorTerms[0].tags["karpenter.sh/discovery"] == "acme-testnet"
+    error_message = "__cluster_name__ placeholder must be substituted with manifests_vars.cluster_name."
+  }
+}
+
+# =============================================================================
+#  Helm values placeholder substitution
+# =============================================================================
+
+run "helm_values_partner_and_network_placeholders_are_substituted" {
+  command = plan
+
+  variables {
+    applications = {
+      k8s-monitoring = {
+        namespace = { name = "monitoring" }
+        helm_chart = {
+          repository = "https://grafana.github.io/helm-charts"
+          chart      = "k8s-monitoring"
+          version    = "3.8.1"
+          values     = <<-YAML
+            destinations:
+              - name: grafana-cloud-metrics
+                externalLabels:
+                  partner: __partner__
+                  network: __network__
+          YAML
+        }
+      }
+    }
+  }
+
+  assert {
+    condition     = strcontains(helm_release.apps["k8s-monitoring"].values[0], "partner: acme")
+    error_message = "__partner__ placeholder must be substituted with var.partner_name in helm values."
+  }
+
+  assert {
+    condition     = strcontains(helm_release.apps["k8s-monitoring"].values[0], "network: testnet")
+    error_message = "__network__ placeholder must be substituted with var.environment in helm values."
+  }
+
+  assert {
+    condition     = !strcontains(helm_release.apps["k8s-monitoring"].values[0], "__partner__")
+    error_message = "__partner__ placeholder must not remain in the rendered helm values."
+  }
+
+  assert {
+    condition     = !strcontains(helm_release.apps["k8s-monitoring"].values[0], "__network__")
+    error_message = "__network__ placeholder must not remain in the rendered helm values."
   }
 }
