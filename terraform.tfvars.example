@@ -500,8 +500,8 @@ rds = {
   maintenance_window = "Mon:00:00-Mon:03:00"
 
   # Days to retain automated backups. 0 disables backups.
-  # Default: 7
-  backup_retention_period = 7
+  # Default: 30
+  backup_retention_period = 30
 
   # Prevent accidental deletion via Terraform destroy.
   # Default: true
@@ -546,14 +546,14 @@ rds = {
 }
 
 # ==============================================================================
-#  k8s
+#  k8s Coprocessor Dependencies
 #
 #  Kubernetes-native resources: namespaces, service accounts (with IRSA),
 #  storage classes, and ExternalName services.
 #
 #  Default: { enabled = false }
 # ==============================================================================
-k8s = {
+k8s_coprocessor_deps = {
   # Default: false
   enabled = true
 
@@ -567,7 +567,7 @@ k8s = {
   # Map of Kubernetes namespaces to create. The map key is the namespace name.
   # Default: {}
   namespaces = {
-    coprocessor = {
+    coproc = {
       # Default: {}
       labels = {
         "app.kubernetes.io/managed-by" = "terraform"
@@ -579,91 +579,61 @@ k8s = {
       }
     }
 
-    coprocessor-jobs = {
-      labels      = {}
-      annotations = {}
-    }
+    coproc-admin   = {}
+    gw-blockchain  = {}
+    eth-blockchain = {}
   }
 
   # ── Service Accounts ─────────────────────────────────────────────────────────
   # Map of Kubernetes service accounts. The map key is a short logical name used
   # in Terraform resource addressing and output maps.
-  # Service accounts with iam_policy_statements get a dedicated IRSA role;
-  # those without are created as plain service accounts with no role annotation.
   # Default: {}
   service_accounts = {
     coprocessor = {
       # Required. Kubernetes service account name.
       name = "coprocessor"
 
-      # Namespace override. Defaults to k8s.default_namespace when null.
+      # Namespace override. Defaults to k8s_coprocessor_deps.default_namespace when null.
       # Default: null
-      namespace = "coprocessor"
+      namespace = "coproc"
 
       # Override the computed IAM role name "<key>-<partner_name>-<environment>".
       # Default: null (uses computed name)
       iam_role_name_override = null
 
-      # IAM policy statements granted to this service account via IRSA.
-      # An empty list creates a plain service account with no IAM role.
-      # Default: []
-      iam_policy_statements = [
-        {
-          # Default: ""
-          sid    = "AllowSQSAccess"
-          # Default: "Allow"
-          effect = "Allow"
-          actions = [
-            "sqs:SendMessage",
-            "sqs:ReceiveMessage",
-            "sqs:DeleteMessage",
-            "sqs:GetQueueAttributes",
-          ]
-          resources = ["arn:aws:sqs:eu-west-1:123456789012:coprocessor-queue"]
+      # Grant s3:* access to specific S3 buckets (keys must match s3.buckets keys).
+      # Generates GetObject/PutObject/DeleteObject/ListBucket statements automatically.
+      # Default: {}
+      s3_bucket_access = {
+        coprocessor = { actions = ["s3:*Object", "s3:ListBucket"] }
+      }
 
-          # Optional IAM condition blocks.
-          # Default: []
-          conditions = [
-            {
-              test     = "StringEquals"
-              variable = "aws:SourceVpc"
-              values   = ["vpc-0123456789abcdef0"]
-            }
-          ]
-        },
-        {
-          sid       = "AllowSecretsRead"
-          effect    = "Allow"
-          actions   = ["secretsmanager:GetSecretValue"]
-          resources = ["arn:aws:secretsmanager:eu-west-1:123456789012:secret:coprocessor/*"]
-          conditions = []
-        },
-      ]
+      # Grant GetSecretValue + DescribeSecret on the RDS master Secrets Manager secret.
+      # Default: false
+      rds_master_secret_access = false
+
+      # Arbitrary additional IAM policy statements appended to the generated role.
+      # Default: []
+      iam_policy_statements = []
 
       # Default: {}
-      labels = {
-        "app.kubernetes.io/component" = "coprocessor"
-      }
+      labels = {}
 
       # Default: {}
       annotations = {}
     }
 
-    sns-worker = {
-      name      = "sns-worker"
-      namespace = null  # falls back to default_namespace
-      iam_role_name_override = null
-      iam_policy_statements = [
-        {
-          sid       = "AllowSNSPublish"
-          effect    = "Allow"
-          actions   = ["sns:Publish"]
-          resources = ["arn:aws:sns:eu-west-1:123456789012:coprocessor-topic"]
-          conditions = []
-        },
-      ]
-      labels      = {}
-      annotations = {}
+    db-admin = {
+      # Used by k8s Jobs/Pods that need superuser access to RDS:
+      # pg_restore, CREATE USER, schema migrations, etc.
+      name                     = "db-admin"
+      namespace                = "coproc-admin"
+      iam_role_name_override   = null
+      s3_bucket_access         = {}
+      rds_master_secret_access = true
+      iam_policy_statements    = []
+      labels                   = {}
+      annotations              = {}
     }
   }
 
@@ -691,6 +661,7 @@ k8s = {
       # Default: {}
       parameters = {
         type      = "gp3"
+        fsType    = "ext4"
         encrypted = "true"
       }
 
@@ -702,42 +673,27 @@ k8s = {
       # Default: {}
       labels = {}
     }
-
-    gp3-retain = {
-      provisioner            = "ebs.csi.aws.com"
-      reclaim_policy         = "Retain"
-      volume_binding_mode    = "WaitForFirstConsumer"
-      allow_volume_expansion = true
-      parameters             = { type = "gp3", encrypted = "true" }
-      annotations            = {}
-      labels                 = {}
-    }
   }
 
   # ── ExternalName Services ─────────────────────────────────────────────────────
   # Map of Kubernetes ExternalName services that proxy to external dependencies
-  # (e.g. RDS, ElastiCache). The map key becomes the Kubernetes service name.
+  # (e.g. RDS). The map key becomes the Kubernetes service name.
   # The port is stripped from the endpoint automatically; the app connects on
   # its own configured port.
+  # When endpoint is omitted, the root module injects the RDS hostname automatically.
   # Default: {}
   external_name_services = {
-    coprocessor-db = {
-      # Required. host:port or bare hostname of the external endpoint.
-      endpoint = "acme-testnet-coprocessor.cxyz.eu-west-1.rds.amazonaws.com:5432"
-
-      # Namespace override. Defaults to k8s.default_namespace when null.
+    coprocessor-database = {
+      # Omit endpoint to have the root module inject the RDS hostname automatically.
+      # Or provide an explicit host:port / bare hostname.
       # Default: null
-      namespace = null
+      endpoint = null
+
+      # Namespace override. Defaults to k8s_coprocessor_deps.default_namespace when null.
+      # Default: null
+      namespace = "coproc"
 
       # Default: {}
-      annotations = {
-        "description" = "RDS PostgreSQL instance"
-      }
-    }
-
-    coprocessor-redis = {
-      endpoint    = "acme-testnet.abc123.0001.euw1.cache.amazonaws.com:6379"
-      namespace   = null
       annotations = {}
     }
   }
@@ -745,15 +701,23 @@ k8s = {
 
 
 # ==============================================================================
-#  k8s Charts
+#  k8s System Charts
 #
 #  System-level Helm chart deployments (e.g. metrics-server, karpenter,
 #  external-secrets). Requires eks.enabled = true or a valid kubernetes_provider
 #  configuration.
 #
+#  Helm values support the following placeholder substitutions applied automatically
+#  by the module at apply time:
+#    __partner__ → var.partner_name
+#    __network__ → var.environment
+#    __region__  → current AWS region (in additional_manifests only)
+#    __cluster_name__ → EKS cluster name (in additional_manifests only)
+#    __node_role__    → Karpenter node IAM role name (in additional_manifests only)
+#
 #  Default: { enabled = false }
 # ==============================================================================
-k8s_charts = {
+k8s_system_charts = {
   # Default: false
   enabled = true
 
@@ -833,8 +797,8 @@ k8s_charts = {
         version    = "1.8.2"
 
         # settings.clusterName, settings.interruptionQueue, and
-        # settings.eksControlPlane are injected automatically via set_computed
-        # at the root module level — no set block needed here.
+        # settings.eksControlPlane are injected automatically by the root module
+        # via set_computed — no set block needed here.
         values = <<-YAML
           logLevel: info
           replicas: 1
