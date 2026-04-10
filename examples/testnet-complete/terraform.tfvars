@@ -53,8 +53,9 @@ eks = {
   }
 
   karpenter = {
-    enabled          = true
-    rule_name_prefix = "coproc"
+    enabled                         = true
+    rule_name_prefix                = "coproc"
+    create_spot_service_linked_role = false
 
     controller_nodegroup = {
       enabled        = true
@@ -124,28 +125,11 @@ k8s = {
   default_namespace = "coproc"
 
   namespaces = {
-    coproc = {
-      labels = {
-        "app.kubernetes.io/name"       = "coprocessor"
-        "app.kubernetes.io/component"  = "storage"
-        "app.kubernetes.io/part-of"    = "zama-protocol"
-        "app.kubernetes.io/managed-by" = "terraform"
-      }
-      annotations = {
-        "terraform.io/module" = "coprocessor"
-      }
-    }
-    monitoring = {
-      labels = {
-        "app.kubernetes.io/name"       = "coprocessor"
-        "app.kubernetes.io/component"  = "storage"
-        "app.kubernetes.io/part-of"    = "zama-protocol"
-        "app.kubernetes.io/managed-by" = "terraform"
-      }
-      annotations = {
-        "terraform.io/module" = "coprocessor"
-      }
-    }
+    coproc         = {}
+    coproc-admin   = {}
+    monitoring     = {}
+    gw-blockchain  = {}
+    eth-blockchain = {}
   }
 
   service_accounts = {
@@ -161,7 +145,7 @@ k8s = {
       # Used by k8s Jobs/Pods that need superuser access to RDS:
       # pg_restore, CREATE USER, schema migrations, etc.
       name                     = "db-admin"
-      namespace                = "coproc"
+      namespace                = "coproc-admin"
       rds_master_secret_access = true
     }
   }
@@ -213,7 +197,7 @@ k8s_charts = {
       }
 
       additional_manifests = {
-        enabled = true
+        enabled = false
         manifests = {
           ec2nodeclass = <<-YAML
             apiVersion: karpenter.k8s.aws/v1
@@ -585,9 +569,6 @@ k8s_charts = {
         name   = "monitoring"
         create = false # created by k8s-monitoring
       }
-
-      # kubectl create secret generic postgres-exporter-config -n monitoring \
-      #   --from-literal=DATA_SOURCE_NAME="postgresql://coproc:<password>@coprocessor-database.coproc.svc.cluster.local:5432/coprocessor?sslmode=require"
 
       helm_chart = {
         repository = "https://prometheus-community.github.io/helm-charts"

@@ -118,17 +118,10 @@ k8s = {
   default_namespace = "coproc"
 
   namespaces = {
-    coproc = {
-      labels = {
-        "app.kubernetes.io/name"       = "coprocessor"
-        "app.kubernetes.io/component"  = "storage"
-        "app.kubernetes.io/part-of"    = "zama-protocol"
-        "app.kubernetes.io/managed-by" = "terraform"
-      }
-      annotations = {
-        "terraform.io/module" = "coprocessor"
-      }
-    }
+    coproc         = {}
+    coproc-admin   = {}
+    gw-blockchain  = {}
+    eth-blockchain = {}
   }
 
   service_accounts = {
@@ -144,7 +137,7 @@ k8s = {
       # Used by k8s Jobs/Pods that need superuser access to RDS:
       # pg_restore, CREATE USER, schema migrations, etc.
       name                     = "db-admin"
-      namespace                = "coproc"
+      namespace                = "coproc-admin"
       rds_master_secret_access = true
     }
   }
