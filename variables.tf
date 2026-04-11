@@ -289,7 +289,7 @@ variable "rds" {
 
     # Maintenance & backups
     maintenance_window      = optional(string, "Mon:00:00-Mon:03:00")
-    backup_retention_period = optional(number, 7)
+    backup_retention_period = optional(number, 30)
     deletion_protection     = optional(bool, true)
 
     # Monitoring

@@ -856,7 +856,123 @@ k8s_system_charts = {
       }
     }
 
-    # ── Example 4: namespace + service account only, no Helm chart ───────────
+    # ── Example 4: chart with inline YAML values using __partner__/__network__ ──
+    # __partner__ and __network__ are substituted automatically by the module
+    # from var.partner_name and var.environment at apply time.
+    k8s-monitoring = {
+      namespace = {
+        name   = "monitoring"
+        create = true
+      }
+
+      helm_chart = {
+        repository = "https://grafana.github.io/helm-charts"
+        chart      = "k8s-monitoring"
+        version    = "3.8.1"
+
+        # Prerequisites — create this secret before applying:
+        # kubectl create secret generic grafana-cloud-credentials -n monitoring \
+        #   --from-literal=prometheus-username=<id>  --from-literal=prometheus-password=<token> \
+        #   --from-literal=prometheus-url=<url> \
+        #   --from-literal=loki-username=<id>        --from-literal=loki-password=<token> \
+        #   --from-literal=loki-url=<url> \
+        #   --from-literal=otlp-username=<id>        --from-literal=otlp-password=<token> \
+        #   --from-literal=otlp-url=<url>
+        #
+        # Coprocessor pods must set:
+        #   OTEL_EXPORTER_OTLP_ENDPOINT=http://k8s-monitoring-alloy-receiver.monitoring.svc.cluster.local:4317
+        values = <<-YAML
+          alloy-metrics:
+            enabled: true
+
+          alloy-logs:
+            enabled: true
+
+          clusterMetrics:
+            enabled: true
+
+          prometheusOperatorObjects:
+            enabled: true
+            serviceMonitors:
+              enabled: true
+              namespaces:
+                - monitoring
+                - coproc
+                - gw-blockchain
+                - eth-blockchain
+                - kube-system
+
+          podLogs:
+            enabled: true
+            namespaces:
+              - coproc
+              - gw-blockchain
+              - eth-blockchain
+
+          traces:
+            enabled: true
+
+          receivers:
+            otlp:
+              enabled: true
+              grpc:
+                enabled: true
+                port: 4317
+              http:
+                enabled: false
+
+          destinations:
+            - name: grafana-cloud-metrics
+              type: prometheus
+              url: # CHANGE ME
+              externalLabels:
+                partner: __partner__
+                network: __network__
+              auth:
+                type: basic
+                usernameKey: prometheus-username
+                passwordKey: prometheus-password
+              secret:
+                create: false
+                name: grafana-cloud-credentials
+                namespace: monitoring
+
+            - name: grafana-cloud-logs
+              type: loki
+              url: # CHANGE ME
+              tenantIdKey: loki-username
+              externalLabels:
+                partner: __partner__
+                network: __network__
+              auth:
+                type: basic
+                usernameKey: loki-username
+                passwordKey: loki-password
+              secret:
+                create: false
+                name: grafana-cloud-credentials
+                namespace: monitoring
+
+            - name: grafana-cloud-traces
+              type: otlp
+              url: # CHANGE ME - e.g. https://otlp-gateway-prod-us-east-0.grafana.net/otlp
+              protocol: http  # Grafana Cloud OTLP gateway requires http, not grpc (default)
+              externalLabels:
+                partner: __partner__
+                network: __network__
+              auth:
+                type: basic
+                usernameKey: otlp-username
+                passwordKey: otlp-password
+              secret:
+                create: false
+                name: grafana-cloud-credentials
+                namespace: monitoring
+        YAML
+      }
+    }
+
+    # ── Example 5: namespace + service account only, no Helm chart ───────────
     # Useful for pre-creating a namespace or SA before an app is deployed.
     my-namespace-only = {
       namespace = {

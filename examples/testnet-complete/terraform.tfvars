@@ -53,9 +53,8 @@ eks = {
   }
 
   karpenter = {
-    enabled                         = true
-    rule_name_prefix                = "coproc"
-    create_spot_service_linked_role = false
+    enabled          = true
+    rule_name_prefix = "coproc"
 
     controller_nodegroup = {
       enabled        = true
@@ -178,18 +177,9 @@ k8s_coprocessor_deps = {
 #  k8s System Charts
 # =============================================================================
 k8s_system_charts = {
-  enabled = true
+  enabled = false
 
   applications = {
-    # ==========================================================================
-    # NodePool / EC2NodeClass for Karpenter-provisioned nodes.
-    #
-    # Requires a two-phase apply on a net-new cluster:
-    #   1st apply — karpenter helm chart installs the NodePool/EC2NodeClass CRDs
-    #   2nd apply — these manifests are created against the now-known CRD schema
-    #
-    # __cluster_name__ and __node_role__ are injected by the root module.
-    # ==========================================================================
     karpenter-nodepools = {
       namespace = {
         name   = "karpenter"
@@ -296,7 +286,6 @@ k8s_system_charts = {
     prometheus-operator-crds = {
       # Cluster-scoped CRDs required by coprocessor app ServiceMonitors and the exporters.
       # Must be applied before any chart that creates ServiceMonitor resources.
-      # NOTE: on a net-new cluster, apply this first or accept a two-phase apply.
       namespace = {
         name   = "monitoring"
         create = false # created by k8s-monitoring
@@ -346,7 +335,6 @@ k8s_system_charts = {
           replicas: 1
           dnsPolicy: Default
 
-          # Pin the controller pod to the dedicated karpenter controller node group.
           nodeSelector:
             karpenter.sh/controller: "true"
           tolerations:
@@ -395,61 +383,15 @@ k8s_system_charts = {
         chart      = "k8s-monitoring"
         version    = "3.8.1"
 
-        # All Grafana Cloud credentials and URLs must be created manually before first deploy:
-        # kubectl create secret generic grafana-cloud-credentials -n monitoring \
-        #   --from-literal=prometheus-username=<id>    --from-literal=prometheus-password=<token> \
-        #   --from-literal=prometheus-url=<remote_write_url> \
-        #   --from-literal=loki-username=<id>          --from-literal=loki-password=<token> \
-        #   --from-literal=loki-url=<loki_push_url> \
-        #   --from-literal=otlp-username=<id>          --from-literal=otlp-password=<token> \
-        #   --from-literal=otlp-url=<tempo_push_url>
-        #
-        # Coprocessor pods must also set OTEL_EXPORTER_OTLP_ENDPOINT pointing at the
-        # alloy-receiver ClusterIP service, e.g.:
-        #   OTEL_EXPORTER_OTLP_ENDPOINT=http://k8s-monitoring-alloy-receiver.monitoring.svc.cluster.local:4317
         values = <<-YAML
           global:
-            scrapeInterval: 5m  # CHANGE ME: increase to 10m to further reduce ingestion costs
+            scrapeInterval: 10m
 
           alloy-metrics:
             enabled: true
 
           alloy-logs:
             enabled: true
-
-          alloy-receiver:
-            enabled: true
-            alloy:
-              extraConfig: |
-                // Drop spans with no identifiable service — avoids polluting Tempo with noise.
-                otelcol.processor.filter "drop_unknown_service_spans" {
-                  error_mode = "ignore"
-                  traces {
-                    span = [
-                      "resource.attributes[\"service.name\"] == \"unknown_service\"",
-                    ]
-                  }
-                  output {
-                    traces = [otelcol.processor.filter.drop_compute_worker_non_errors.input]
-                  }
-                }
-
-                // tfhe-worker, sns-executor, and zkproof-worker emit a span per compute
-                // operation and produce very high trace volume. Only forward error spans
-                // to Tempo to keep ingestion costs bounded.
-                otelcol.processor.filter "drop_compute_worker_non_errors" {
-                  error_mode = "ignore"
-                  traces {
-                    span = [
-                      "resource.attributes[\"service.name\"] == \"tfhe-worker\" and status.code != STATUS_CODE_ERROR",
-                      "resource.attributes[\"service.name\"] == \"sns-executor\" and status.code != STATUS_CODE_ERROR",
-                      "resource.attributes[\"service.name\"] == \"zkproof-worker\" and status.code != STATUS_CODE_ERROR",
-                    ]
-                  }
-                  output {
-                    traces = [otelcol.exporter.otlphttp.grafana_cloud_traces.input]
-                  }
-                }
 
           clusterMetrics:
             enabled: true
@@ -520,7 +462,8 @@ k8s_system_charts = {
 
             - name: grafana-cloud-traces
               type: otlp
-              url: # CHANGE ME - Grafana Cloud Tempo endpoint (e.g. https://tempo-prod-XX.grafana.net/tempo)
+              url: # CHANGE ME
+              protocol: http  # Grafana Cloud OTLP gateway requires http, not grpc (default)
               externalLabels:
                 partner: __partner__
                 network: __network__

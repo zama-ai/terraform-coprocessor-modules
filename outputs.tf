@@ -87,6 +87,11 @@ output "rds_db_instance_port" {
   value       = module.rds.db_instance_port
 }
 
+output "rds_master_secret_arn" {
+  description = "ARN of the Secrets Manager secret containing the RDS master user password. Null when manage_master_user_password = false or rds.enabled = false."
+  value       = module.rds.rds_master_secret_arn
+}
+
 # ******************************************************
 #  S3
 # ******************************************************

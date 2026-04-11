@@ -57,6 +57,11 @@ output "rds_db_instance_identifier" {
   value       = module.coprocessor.rds_db_instance_identifier
 }
 
+output "rds_master_secret_arn" {
+  description = "ARN of the Secrets Manager secret containing the RDS master user password."
+  value       = module.coprocessor.rds_master_secret_arn
+}
+
 # ******************************************************
 #  S3
 # ******************************************************
