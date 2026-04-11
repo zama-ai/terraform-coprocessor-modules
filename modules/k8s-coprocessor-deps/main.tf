@@ -8,13 +8,65 @@ locals {
   # e.g., "arn:aws:iam::123456789012:oidc-provider/oidc.eks.us-east-1.amazonaws.com/id/EXAMPLE"
   #     → "oidc.eks.us-east-1.amazonaws.com/id/EXAMPLE"
   oidc_provider_id = replace(var.oidc_provider_arn, "/^.*oidc-provider\\//", "")
+
+  # ── Built-in service accounts ──────────────────────────────────────────────
+  builtin_coprocessor_sa = {
+    name      = "coprocessor"
+    namespace = local.namespace
+    s3_bucket_access = {
+      (var.k8s.service_accounts.coprocessor.s3_bucket_key) = { actions = ["s3:*Object", "s3:ListBucket"] }
+    }
+    rds_master_secret_access = false
+    iam_role_name_override   = null
+    iam_policy_statements    = []
+    labels                   = {}
+    annotations              = {}
+  }
+
+  builtin_db_admin_sa = {
+    name                     = "db-admin"
+    namespace                = "coproc-admin"
+    s3_bucket_access         = {}
+    rds_master_secret_access = true
+    iam_role_name_override   = null
+    iam_policy_statements    = []
+    labels                   = {}
+    annotations              = {}
+  }
+
+  # ── Built-in storage classes ───────────────────────────────────────────────
+  builtin_gp3 = {
+    provisioner            = "ebs.csi.aws.com"
+    reclaim_policy         = "Delete"
+    volume_binding_mode    = "WaitForFirstConsumer"
+    allow_volume_expansion = true
+    parameters = {
+      type      = "gp3"
+      fsType    = "ext4"
+      encrypted = "true"
+    }
+    annotations = { "storageclass.kubernetes.io/is-default-class" = "true" }
+    labels      = {}
+  }
+
+  # ── Merged maps — extra entries with the same key override the built-in ────
+  service_accounts = merge(
+    var.k8s.service_accounts.coprocessor.enabled ? { coprocessor = local.builtin_coprocessor_sa } : {},
+    var.k8s.service_accounts.db_admin.enabled ? { db-admin = local.builtin_db_admin_sa } : {},
+    var.k8s.service_accounts.extra,
+  )
+
+  storage_classes = merge(
+    var.k8s.storage_classes.gp3.enabled ? { gp3 = local.builtin_gp3 } : {},
+    var.k8s.storage_classes.extra,
+  )
 }
 
 # ***************************************
 #  Storage Classes
 # ***************************************
 resource "kubernetes_storage_class_v1" "this" {
-  for_each = var.k8s.enabled ? var.k8s.storage_classes : {}
+  for_each = var.k8s.enabled ? local.storage_classes : {}
 
   metadata {
     name        = each.key
@@ -33,7 +85,7 @@ resource "kubernetes_storage_class_v1" "this" {
 #  Kubernetes Namespaces
 # ***************************************
 resource "kubernetes_namespace" "this" {
-  for_each = var.k8s.enabled ? var.k8s.namespaces : {}
+  for_each = var.k8s.enabled ? { for key, config in var.k8s.namespaces : key => config if config.enabled } : {}
 
   metadata {
     name = each.key
@@ -55,7 +107,7 @@ resource "kubernetes_namespace" "this" {
 #  IAM: role and policy(s) for Kubernetes Service Accounts
 # ***************************************
 data "aws_iam_policy_document" "service_account" {
-  for_each = var.k8s.enabled ? var.k8s.service_accounts : {}
+  for_each = var.k8s.enabled ? local.service_accounts : {}
 
   dynamic "statement" {
     for_each = each.value.iam_policy_statements
@@ -113,7 +165,7 @@ data "aws_iam_policy_document" "service_account" {
 }
 
 data "aws_iam_policy_document" "service_account_assume_role" {
-  for_each = var.k8s.enabled ? var.k8s.service_accounts : {}
+  for_each = var.k8s.enabled ? local.service_accounts : {}
 
   statement {
     effect  = "Allow"
@@ -139,21 +191,21 @@ data "aws_iam_policy_document" "service_account_assume_role" {
 }
 
 resource "aws_iam_policy" "service_account" {
-  for_each = var.k8s.enabled ? var.k8s.service_accounts : {}
+  for_each = var.k8s.enabled ? local.service_accounts : {}
 
   name   = coalesce(each.value.iam_role_name_override, "${each.key}-${var.partner_name}-${var.environment}")
   policy = data.aws_iam_policy_document.service_account[each.key].json
 }
 
 resource "aws_iam_role" "service_account" {
-  for_each = var.k8s.enabled ? var.k8s.service_accounts : {}
+  for_each = var.k8s.enabled ? local.service_accounts : {}
 
   name               = coalesce(each.value.iam_role_name_override, "${each.key}-${var.partner_name}-${var.environment}")
   assume_role_policy = data.aws_iam_policy_document.service_account_assume_role[each.key].json
 }
 
 resource "aws_iam_role_policy_attachment" "service_account" {
-  for_each = var.k8s.enabled ? var.k8s.service_accounts : {}
+  for_each = var.k8s.enabled ? local.service_accounts : {}
 
   role       = aws_iam_role.service_account[each.key].name
   policy_arn = aws_iam_policy.service_account[each.key].arn
@@ -163,7 +215,7 @@ resource "aws_iam_role_policy_attachment" "service_account" {
 #  Kubernetes Service Accounts
 # ***************************************
 resource "kubernetes_service_account" "this" {
-  for_each = var.k8s.enabled ? var.k8s.service_accounts : {}
+  for_each = var.k8s.enabled ? local.service_accounts : {}
 
   metadata {
     name      = each.value.name
@@ -190,7 +242,7 @@ resource "kubernetes_service_account" "this" {
 #  ExternalName Services (RDS, ElastiCache, etc.)
 # ***************************************
 resource "kubernetes_service" "external_name" {
-  for_each = var.k8s.enabled ? var.k8s.external_name_services : {}
+  for_each = var.k8s.enabled ? { for key, config in var.k8s.external_name_services : key => config if config.enabled } : {}
 
   metadata {
     name        = each.key

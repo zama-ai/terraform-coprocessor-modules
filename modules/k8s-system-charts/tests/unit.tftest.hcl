@@ -10,10 +10,18 @@ mock_provider "aws" {
 }
 
 # Shared defaults across all runs.
+# Disable the four built-ins that default to enabled so that existing tests
+# using `extra` can make precise count assertions without interference.
 variables {
   partner_name      = "acme"
   environment       = "testnet"
   oidc_provider_arn = "arn:aws:iam::123456789012:oidc-provider/oidc.eks.eu-west-1.amazonaws.com/id/EXAMPLE1234567890"
+  defaults = {
+    karpenter_nodepools      = { enabled = false }
+    prometheus_operator_crds = { enabled = false }
+    metrics_server           = { enabled = false }
+    karpenter                = { enabled = false }
+  }
 }
 
 # =============================================================================
@@ -24,7 +32,7 @@ run "empty_applications_creates_no_resources" {
   command = plan
 
   variables {
-    applications = {}
+    extra = {}
   }
 
   assert {
@@ -56,7 +64,7 @@ run "namespace_create_true_creates_resource" {
   command = plan
 
   variables {
-    applications = {
+    extra = {
       karpenter = {
         namespace  = { name = "karpenter", create = true }
         helm_chart = { repository = "oci://public.ecr.aws/karpenter", chart = "karpenter", version = "1.8.2" }
@@ -79,7 +87,7 @@ run "namespace_create_false_skips_resource" {
   command = plan
 
   variables {
-    applications = {
+    extra = {
       metrics-server = {
         namespace  = { name = "kube-system", create = false }
         helm_chart = { repository = "https://kubernetes-sigs.github.io/metrics-server", chart = "metrics-server", version = "3.13.0" }
@@ -101,7 +109,7 @@ run "one_release_per_helm_app" {
   command = plan
 
   variables {
-    applications = {
+    extra = {
       metrics-server = {
         namespace  = { name = "kube-system" }
         helm_chart = { repository = "https://kubernetes-sigs.github.io/metrics-server", chart = "metrics-server", version = "3.13.0" }
@@ -123,7 +131,7 @@ run "helm_release_name_matches_map_key" {
   command = plan
 
   variables {
-    applications = {
+    extra = {
       metrics-server = {
         namespace  = { name = "kube-system" }
         helm_chart = { repository = "https://kubernetes-sigs.github.io/metrics-server", chart = "metrics-server", version = "3.13.0" }
@@ -141,7 +149,7 @@ run "helm_release_namespace_matches_namespace_name" {
   command = plan
 
   variables {
-    applications = {
+    extra = {
       metrics-server = {
         namespace  = { name = "kube-system" }
         helm_chart = { repository = "https://kubernetes-sigs.github.io/metrics-server", chart = "metrics-server", version = "3.13.0" }
@@ -159,7 +167,7 @@ run "helm_release_skipped_when_helm_chart_null" {
   command = plan
 
   variables {
-    applications = {
+    extra = {
       no-helm-app = {
         namespace = { name = "default" }
       }
@@ -176,7 +184,7 @@ run "helm_release_skipped_when_helm_chart_disabled" {
   command = plan
 
   variables {
-    applications = {
+    extra = {
       metrics-server = {
         namespace  = { name = "kube-system" }
         helm_chart = { repository = "https://kubernetes-sigs.github.io/metrics-server", chart = "metrics-server", version = "3.13.0", enabled = false }
@@ -203,7 +211,7 @@ run "crd_chart_lands_in_crds_resource_not_apps" {
   command = plan
 
   variables {
-    applications = {
+    extra = {
       prometheus-operator-crds = {
         namespace  = { name = "monitoring" }
         helm_chart = { repository = "https://prometheus-community.github.io/helm-charts", chart = "prometheus-operator-crds", version = "28.0.1", crd_chart = true, atomic = false }
@@ -244,7 +252,7 @@ run "service_account_create_true_creates_resource" {
   command = plan
 
   variables {
-    applications = {
+    extra = {
       external-secrets = {
         namespace = { name = "external-secrets", create = true }
         service_account = {
@@ -271,7 +279,7 @@ run "service_account_create_false_skips_resource" {
   command = plan
 
   variables {
-    applications = {
+    extra = {
       karpenter = {
         namespace = { name = "karpenter", create = true }
         service_account = {
@@ -297,7 +305,7 @@ run "irsa_disabled_creates_no_iam_resources" {
   command = plan
 
   variables {
-    applications = {
+    extra = {
       metrics-server = {
         namespace  = { name = "kube-system" }
         irsa       = { enabled = false }
@@ -316,7 +324,7 @@ run "irsa_enabled_creates_role_policy_and_attachment" {
   command = plan
 
   variables {
-    applications = {
+    extra = {
       external-secrets = {
         namespace = { name = "external-secrets", create = true }
         service_account = {
@@ -363,7 +371,7 @@ run "irsa_role_name_override_is_respected" {
   command = plan
 
   variables {
-    applications = {
+    extra = {
       external-secrets = {
         namespace = { name = "external-secrets" }
         service_account = {
@@ -400,7 +408,7 @@ run "set_computed_values_are_merged_into_helm_release" {
   command = plan
 
   variables {
-    applications = {
+    extra = {
       karpenter = {
         namespace  = { name = "karpenter", create = true }
         helm_chart = { repository = "oci://public.ecr.aws/karpenter", chart = "karpenter", version = "1.8.2", set = { "replicas" = "1" } }
@@ -439,7 +447,7 @@ run "additional_manifests_disabled_creates_no_manifest_resources" {
   command = plan
 
   variables {
-    applications = {
+    extra = {
       karpenter-nodepools = {
         namespace = { name = "karpenter" }
         additional_manifests = {
@@ -484,7 +492,7 @@ run "additional_manifests_enabled_creates_manifest_resources" {
       cluster_name = "acme-testnet"
       node_role    = "acme-testnet-Karpenter"
     }
-    applications = {
+    extra = {
       karpenter-nodepools = {
         namespace = { name = "karpenter" }
         additional_manifests = {
@@ -534,7 +542,7 @@ run "manifests_vars_placeholders_are_substituted" {
       cluster_name = "acme-testnet"
       node_role    = "acme-testnet-Karpenter"
     }
-    applications = {
+    extra = {
       karpenter-nodepools = {
         namespace = { name = "karpenter" }
         additional_manifests = {
@@ -581,7 +589,7 @@ run "helm_values_partner_and_network_placeholders_are_substituted" {
   command = plan
 
   variables {
-    applications = {
+    extra = {
       k8s-monitoring = {
         namespace = { name = "monitoring" }
         helm_chart = {
@@ -618,5 +626,293 @@ run "helm_values_partner_and_network_placeholders_are_substituted" {
   assert {
     condition     = !strcontains(helm_release.apps["k8s-monitoring"].values[0], "__network__")
     error_message = "__network__ placeholder must not remain in the rendered helm values."
+  }
+}
+
+# =============================================================================
+#  Built-in defaults — k8s_monitoring URL injection
+# =============================================================================
+
+run "defaults_k8s_monitoring_urls_injected_into_destinations" {
+  command = plan
+
+  variables {
+    defaults = {
+      karpenter_nodepools      = { enabled = false }
+      prometheus_operator_crds = { enabled = false }
+      metrics_server           = { enabled = false }
+      karpenter                = { enabled = false }
+      k8s_monitoring = {
+        enabled        = true
+        prometheus_url = "https://prometheus.example.com/push"
+        loki_url       = "https://loki.example.com/push"
+        otlp_url       = "https://otlp.example.com/push"
+      }
+    }
+  }
+
+  assert {
+    condition     = strcontains(helm_release.apps["k8s-monitoring"].values[0], "https://prometheus.example.com/push")
+    error_message = "prometheus_url must be injected into the destinations values."
+  }
+
+  assert {
+    condition     = strcontains(helm_release.apps["k8s-monitoring"].values[0], "https://loki.example.com/push")
+    error_message = "loki_url must be injected into the destinations values."
+  }
+
+  assert {
+    condition     = strcontains(helm_release.apps["k8s-monitoring"].values[0], "https://otlp.example.com/push")
+    error_message = "otlp_url must be injected into the destinations values."
+  }
+
+  assert {
+    condition     = strcontains(helm_release.apps["k8s-monitoring"].values[0], "partner: acme")
+    error_message = "__partner__ placeholder in baked-in destinations must still be substituted."
+  }
+
+  assert {
+    condition     = strcontains(helm_release.apps["k8s-monitoring"].values[0], "scrapeInterval")
+    error_message = "Baked-in k8s_monitoring base values must still be present."
+  }
+}
+
+# =============================================================================
+#  Built-in defaults
+# =============================================================================
+
+run "defaults_all_disabled_creates_no_resources" {
+  command = plan
+
+  variables {
+    defaults = {
+      karpenter_nodepools          = { enabled = false }
+      prometheus_operator_crds     = { enabled = false }
+      metrics_server               = { enabled = false }
+      karpenter                    = { enabled = false }
+      k8s_monitoring               = { enabled = false }
+      prometheus_rds_exporter      = { enabled = false }
+      prometheus_postgres_exporter = { enabled = false }
+    }
+  }
+
+  assert {
+    condition     = length(helm_release.apps) == 0
+    error_message = "No helm releases must be created when all defaults are disabled."
+  }
+
+  assert {
+    condition     = length(helm_release.crds) == 0
+    error_message = "No CRD releases must be created when all defaults are disabled."
+  }
+
+  assert {
+    condition     = length(kubernetes_manifest.additional) == 0
+    error_message = "No manifests must be created when all defaults are disabled."
+  }
+
+  assert {
+    condition     = length(aws_iam_role.irsa) == 0
+    error_message = "No IRSA roles must be created when all defaults are disabled."
+  }
+}
+
+run "defaults_karpenter_enabled_creates_helm_release" {
+  command = plan
+
+  variables {
+    defaults = {
+      karpenter_nodepools      = { enabled = false }
+      prometheus_operator_crds = { enabled = false }
+      metrics_server           = { enabled = false }
+      karpenter                = { enabled = true }
+    }
+  }
+
+  assert {
+    condition     = contains(keys(helm_release.apps), "karpenter")
+    error_message = "Built-in karpenter must create a helm_release.apps entry."
+  }
+
+  assert {
+    condition     = helm_release.apps["karpenter"].chart == "karpenter"
+    error_message = "Built-in karpenter chart name must be 'karpenter'."
+  }
+
+  assert {
+    condition     = helm_release.apps["karpenter"].repository == "oci://public.ecr.aws/karpenter"
+    error_message = "Built-in karpenter must use the public ECR repository."
+  }
+}
+
+run "defaults_karpenter_version_override_is_respected" {
+  command = plan
+
+  variables {
+    defaults = {
+      karpenter_nodepools      = { enabled = false }
+      prometheus_operator_crds = { enabled = false }
+      metrics_server           = { enabled = false }
+      karpenter                = { enabled = true, version = "1.9.0" }
+    }
+  }
+
+  assert {
+    condition     = helm_release.apps["karpenter"].version == "1.9.0"
+    error_message = "defaults.karpenter.version override must be respected."
+  }
+}
+
+run "defaults_karpenter_user_values_appended_to_base" {
+  command = plan
+
+  variables {
+    defaults = {
+      karpenter_nodepools      = { enabled = false }
+      prometheus_operator_crds = { enabled = false }
+      metrics_server           = { enabled = false }
+      karpenter                = { enabled = true, values = "replicas: 2\n" }
+    }
+  }
+
+  assert {
+    condition     = strcontains(helm_release.apps["karpenter"].values[0], "replicas: 2")
+    error_message = "User-supplied karpenter values must be present in the rendered values."
+  }
+
+  assert {
+    condition     = strcontains(helm_release.apps["karpenter"].values[0], "logLevel: info")
+    error_message = "Baked-in karpenter base values must still be present when user values are appended."
+  }
+}
+
+run "defaults_prometheus_operator_crds_enabled_creates_crd_release" {
+  command = plan
+
+  variables {
+    defaults = {
+      karpenter_nodepools      = { enabled = false }
+      prometheus_operator_crds = { enabled = true }
+      metrics_server           = { enabled = false }
+      karpenter                = { enabled = false }
+    }
+  }
+
+  assert {
+    condition     = contains(keys(helm_release.crds), "prometheus-operator-crds")
+    error_message = "Built-in prometheus-operator-crds must land in helm_release.crds."
+  }
+
+  assert {
+    condition     = length(helm_release.apps) == 0
+    error_message = "prometheus-operator-crds must not appear in helm_release.apps."
+  }
+}
+
+run "defaults_metrics_server_enabled_creates_helm_release" {
+  command = plan
+
+  variables {
+    defaults = {
+      karpenter_nodepools      = { enabled = false }
+      prometheus_operator_crds = { enabled = false }
+      metrics_server           = { enabled = true }
+      karpenter                = { enabled = false }
+    }
+  }
+
+  assert {
+    condition     = contains(keys(helm_release.apps), "metrics-server")
+    error_message = "Built-in metrics-server must create a helm_release.apps entry."
+  }
+}
+
+run "defaults_karpenter_nodepools_enabled_creates_three_manifests" {
+  command = plan
+
+  variables {
+    manifests_vars = {
+      cluster_name = "acme-testnet"
+      node_role    = "acme-testnet-Karpenter"
+    }
+    defaults = {
+      karpenter_nodepools      = { enabled = true }
+      prometheus_operator_crds = { enabled = false }
+      metrics_server           = { enabled = false }
+      karpenter                = { enabled = false }
+    }
+  }
+
+  assert {
+    condition     = length(kubernetes_manifest.additional) == 3
+    error_message = "Built-in karpenter-nodepools must create 3 manifests (ec2nodeclass + 2 nodepools)."
+  }
+
+  assert {
+    condition     = contains(keys(kubernetes_manifest.additional), "karpenter-nodepools/ec2nodeclass")
+    error_message = "Built-in karpenter-nodepools must include the ec2nodeclass manifest."
+  }
+
+  assert {
+    condition     = contains(keys(kubernetes_manifest.additional), "karpenter-nodepools/nodepool-coprocessor")
+    error_message = "Built-in karpenter-nodepools must include the nodepool-coprocessor manifest."
+  }
+
+  assert {
+    condition     = contains(keys(kubernetes_manifest.additional), "karpenter-nodepools/nodepool-services")
+    error_message = "Built-in karpenter-nodepools must include the nodepool-services manifest."
+  }
+}
+
+run "defaults_prometheus_rds_exporter_enabled_creates_irsa" {
+  command = plan
+
+  variables {
+    defaults = {
+      karpenter_nodepools      = { enabled = false }
+      prometheus_operator_crds = { enabled = false }
+      metrics_server           = { enabled = false }
+      karpenter                = { enabled = false }
+      prometheus_rds_exporter  = { enabled = true }
+    }
+  }
+
+  assert {
+    condition     = contains(keys(aws_iam_role.irsa), "prometheus-rds-exporter")
+    error_message = "Built-in prometheus-rds-exporter must create an IRSA role."
+  }
+
+  assert {
+    condition     = contains(keys(helm_release.apps), "prometheus-rds-exporter")
+    error_message = "Built-in prometheus-rds-exporter must create a helm release."
+  }
+}
+
+run "extra_overrides_builtin_with_same_key" {
+  command = plan
+
+  variables {
+    defaults = {
+      karpenter_nodepools      = { enabled = false }
+      prometheus_operator_crds = { enabled = false }
+      metrics_server           = { enabled = true }
+      karpenter                = { enabled = false }
+    }
+    extra = {
+      metrics-server = {
+        namespace  = { name = "kube-system" }
+        helm_chart = { repository = "https://kubernetes-sigs.github.io/metrics-server", chart = "metrics-server", version = "9.9.9" }
+      }
+    }
+  }
+
+  assert {
+    condition     = helm_release.apps["metrics-server"].version == "9.9.9"
+    error_message = "extra entry must override the built-in when keys match."
+  }
+
+  assert {
+    condition     = length(helm_release.apps) == 1
+    error_message = "extra override must not create a duplicate release alongside the built-in."
   }
 }

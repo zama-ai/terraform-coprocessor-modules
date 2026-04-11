@@ -137,26 +137,33 @@ run "one_set_of_iam_resources_per_service_account" {
     k8s = {
       enabled = true
       service_accounts = {
-        sns-worker = {
-          name = "sns-worker"
-          iam_policy_statements = [
-            {
-              effect    = "Allow"
-              actions   = ["sns:Publish"]
-              resources = ["arn:aws:sns:eu-west-1:123456789012:my-topic"]
-            }
-          ]
+        coprocessor = { enabled = false }
+        db_admin    = { enabled = false }
+        extra = {
+          sns-worker = {
+            name = "sns-worker"
+            iam_policy_statements = [
+              {
+                effect    = "Allow"
+                actions   = ["sns:Publish"]
+                resources = ["arn:aws:sns:eu-west-1:123456789012:my-topic"]
+              }
+            ]
+          }
+          coprocessor = {
+            name = "coprocessor"
+            iam_policy_statements = [
+              {
+                effect    = "Allow"
+                actions   = ["s3:GetObject"]
+                resources = ["arn:aws:s3:::my-bucket/*"]
+              }
+            ]
+          }
         }
-        coprocessor = {
-          name = "coprocessor"
-          iam_policy_statements = [
-            {
-              effect    = "Allow"
-              actions   = ["s3:GetObject"]
-              resources = ["arn:aws:s3:::my-bucket/*"]
-            }
-          ]
-        }
+      }
+      storage_classes = {
+        gp3 = { enabled = false }
       }
     }
   }
@@ -189,15 +196,17 @@ run "iam_role_name_defaults_to_key_partner_env" {
     k8s = {
       enabled = true
       service_accounts = {
-        sns-worker = {
-          name = "sns-worker"
-          iam_policy_statements = [
-            {
-              effect    = "Allow"
-              actions   = ["sns:Publish"]
-              resources = ["arn:aws:sns:eu-west-1:123456789012:my-topic"]
-            }
-          ]
+        extra = {
+          sns-worker = {
+            name = "sns-worker"
+            iam_policy_statements = [
+              {
+                effect    = "Allow"
+                actions   = ["sns:Publish"]
+                resources = ["arn:aws:sns:eu-west-1:123456789012:my-topic"]
+              }
+            ]
+          }
         }
       }
     }
@@ -221,16 +230,18 @@ run "iam_role_name_override_is_respected" {
     k8s = {
       enabled = true
       service_accounts = {
-        sns-worker = {
-          name                   = "sns-worker"
-          iam_role_name_override = "my-custom-role-name"
-          iam_policy_statements = [
-            {
-              effect    = "Allow"
-              actions   = ["sns:Publish"]
-              resources = ["arn:aws:sns:eu-west-1:123456789012:my-topic"]
-            }
-          ]
+        extra = {
+          sns-worker = {
+            name                   = "sns-worker"
+            iam_role_name_override = "my-custom-role-name"
+            iam_policy_statements = [
+              {
+                effect    = "Allow"
+                actions   = ["sns:Publish"]
+                resources = ["arn:aws:sns:eu-west-1:123456789012:my-topic"]
+              }
+            ]
+          }
         }
       }
     }
@@ -254,15 +265,17 @@ run "sa_without_namespace_uses_default_namespace" {
       enabled           = true
       default_namespace = "coprocessor"
       service_accounts = {
-        sns-worker = {
-          name = "sns-worker"
-          iam_policy_statements = [
-            {
-              effect    = "Allow"
-              actions   = ["sns:Publish"]
-              resources = ["arn:aws:sns:eu-west-1:123456789012:my-topic"]
-            }
-          ]
+        extra = {
+          sns-worker = {
+            name = "sns-worker"
+            iam_policy_statements = [
+              {
+                effect    = "Allow"
+                actions   = ["sns:Publish"]
+                resources = ["arn:aws:sns:eu-west-1:123456789012:my-topic"]
+              }
+            ]
+          }
         }
       }
     }
@@ -282,16 +295,18 @@ run "sa_with_namespace_override_uses_its_own_namespace" {
       enabled           = true
       default_namespace = "coprocessor"
       service_accounts = {
-        sns-worker = {
-          name      = "sns-worker"
-          namespace = "coprocessor-workers"
-          iam_policy_statements = [
-            {
-              effect    = "Allow"
-              actions   = ["sns:Publish"]
-              resources = ["arn:aws:sns:eu-west-1:123456789012:my-topic"]
-            }
-          ]
+        extra = {
+          sns-worker = {
+            name      = "sns-worker"
+            namespace = "coprocessor-workers"
+            iam_policy_statements = [
+              {
+                effect    = "Allow"
+                actions   = ["sns:Publish"]
+                resources = ["arn:aws:sns:eu-west-1:123456789012:my-topic"]
+              }
+            ]
+          }
         }
       }
     }
@@ -396,15 +411,17 @@ run "one_storage_class_per_map_entry" {
     k8s = {
       enabled = true
       storage_classes = {
-        gp3  = { provisioner = "ebs.csi.aws.com" }
-        gp3i = { provisioner = "ebs.csi.aws.com", parameters = { type = "gp3", iops = "16000" } }
+        extra = {
+          gp3  = { provisioner = "ebs.csi.aws.com" }
+          gp3i = { provisioner = "ebs.csi.aws.com", parameters = { type = "gp3", iops = "16000" } }
+        }
       }
     }
   }
 
   assert {
     condition     = length(kubernetes_storage_class_v1.this) == 2
-    error_message = "One storage class must be created per storage_classes map entry."
+    error_message = "One storage class must be created per storage_classes.extra map entry."
   }
 }
 
@@ -415,7 +432,10 @@ run "storage_class_name_matches_map_key" {
     k8s = {
       enabled = true
       storage_classes = {
-        gp3 = { provisioner = "ebs.csi.aws.com" }
+        gp3 = { enabled = false }
+        extra = {
+          gp3 = { provisioner = "ebs.csi.aws.com" }
+        }
       }
     }
   }
@@ -433,9 +453,12 @@ run "storage_class_provisioner_and_parameters_are_set" {
     k8s = {
       enabled = true
       storage_classes = {
-        gp3 = {
-          provisioner = "ebs.csi.aws.com"
-          parameters  = { type = "gp3", encrypted = "true", fsType = "ext4" }
+        gp3 = { enabled = false }
+        extra = {
+          gp3 = {
+            provisioner = "ebs.csi.aws.com"
+            parameters  = { type = "gp3", encrypted = "true", fsType = "ext4" }
+          }
         }
       }
     }
@@ -459,9 +482,12 @@ run "storage_class_default_annotation_is_applied" {
     k8s = {
       enabled = true
       storage_classes = {
-        gp3 = {
-          provisioner = "ebs.csi.aws.com"
-          annotations = { "storageclass.kubernetes.io/is-default-class" = "true" }
+        gp3 = { enabled = false }
+        extra = {
+          gp3 = {
+            provisioner = "ebs.csi.aws.com"
+            annotations = { "storageclass.kubernetes.io/is-default-class" = "true" }
+          }
         }
       }
     }
@@ -470,5 +496,209 @@ run "storage_class_default_annotation_is_applied" {
   assert {
     condition     = kubernetes_storage_class_v1.this["gp3"].metadata[0].annotations["storageclass.kubernetes.io/is-default-class"] == "true"
     error_message = "Storage class default annotation must be applied."
+  }
+}
+
+# =============================================================================
+#  Built-in defaults
+# =============================================================================
+
+run "defaults_all_disabled_creates_no_builtin_resources" {
+  command = plan
+
+  variables {
+    k8s = {
+      enabled = true
+      service_accounts = {
+        coprocessor = { enabled = false }
+        db_admin    = { enabled = false }
+      }
+      storage_classes = {
+        gp3 = { enabled = false }
+      }
+    }
+  }
+
+  assert {
+    condition     = length(kubernetes_service_account.this) == 0
+    error_message = "No service accounts must be created when all defaults are disabled."
+  }
+
+  assert {
+    condition     = length(kubernetes_storage_class_v1.this) == 0
+    error_message = "No storage classes must be created when all defaults are disabled."
+  }
+}
+
+run "defaults_coprocessor_sa_is_created" {
+  command = plan
+
+  variables {
+    s3_bucket_arns = { coprocessor = "arn:aws:s3:::acme-testnet-coprocessor" }
+    k8s = {
+      enabled = true
+      service_accounts = {
+        coprocessor = { enabled = true }
+        db_admin    = { enabled = false }
+      }
+      storage_classes = {
+        gp3 = { enabled = false }
+      }
+      namespaces = { coproc = {} }
+    }
+  }
+
+  assert {
+    condition     = contains(keys(kubernetes_service_account.this), "coprocessor")
+    error_message = "Built-in coprocessor service account must be created."
+  }
+
+  assert {
+    condition     = kubernetes_service_account.this["coprocessor"].metadata[0].name == "coprocessor"
+    error_message = "Built-in coprocessor service account name must be 'coprocessor'."
+  }
+
+  assert {
+    condition     = kubernetes_service_account.this["coprocessor"].metadata[0].namespace == "coproc"
+    error_message = "Built-in coprocessor service account must use default_namespace."
+  }
+
+  assert {
+    condition     = contains(keys(aws_iam_role.service_account), "coprocessor")
+    error_message = "Built-in coprocessor must create an IRSA role."
+  }
+}
+
+run "defaults_db_admin_sa_is_created" {
+  command = plan
+
+  variables {
+    rds_master_secret_arn = "arn:aws:secretsmanager:eu-west-1:123456789012:secret:rds!db-test"
+    k8s = {
+      enabled = true
+      service_accounts = {
+        coprocessor = { enabled = false }
+        db_admin    = { enabled = true }
+      }
+      storage_classes = {
+        gp3 = { enabled = false }
+      }
+      namespaces = { coproc-admin = {} }
+    }
+  }
+
+  assert {
+    condition     = contains(keys(kubernetes_service_account.this), "db-admin")
+    error_message = "Built-in db-admin service account must be created."
+  }
+
+  assert {
+    condition     = kubernetes_service_account.this["db-admin"].metadata[0].namespace == "coproc-admin"
+    error_message = "Built-in db-admin service account must use the coproc-admin namespace."
+  }
+
+  assert {
+    condition     = contains(keys(aws_iam_role.service_account), "db-admin")
+    error_message = "Built-in db-admin must create an IRSA role."
+  }
+}
+
+run "defaults_gp3_storage_class_is_created" {
+  command = plan
+
+  variables {
+    k8s = {
+      enabled = true
+      service_accounts = {
+        coprocessor = { enabled = false }
+        db_admin    = { enabled = false }
+      }
+      storage_classes = {
+        gp3 = { enabled = true }
+      }
+    }
+  }
+
+  assert {
+    condition     = contains(keys(kubernetes_storage_class_v1.this), "gp3")
+    error_message = "Built-in gp3 storage class must be created."
+  }
+
+  assert {
+    condition     = kubernetes_storage_class_v1.this["gp3"].storage_provisioner == "ebs.csi.aws.com"
+    error_message = "Built-in gp3 storage class must use the EBS CSI provisioner."
+  }
+
+  assert {
+    condition     = kubernetes_storage_class_v1.this["gp3"].parameters["encrypted"] == "true"
+    error_message = "Built-in gp3 storage class must have encrypted = true."
+  }
+
+  assert {
+    condition     = kubernetes_storage_class_v1.this["gp3"].metadata[0].annotations["storageclass.kubernetes.io/is-default-class"] == "true"
+    error_message = "Built-in gp3 storage class must be marked as the cluster default."
+  }
+}
+
+run "defaults_coprocessor_s3_bucket_key_override_is_respected" {
+  command = plan
+
+  variables {
+    s3_bucket_arns = { my-custom-bucket = "arn:aws:s3:::acme-testnet-custom" }
+    k8s = {
+      enabled = true
+      service_accounts = {
+        coprocessor = { enabled = true, s3_bucket_key = "my-custom-bucket" }
+        db_admin    = { enabled = false }
+      }
+      storage_classes = {
+        gp3 = { enabled = false }
+      }
+      namespaces = { coproc = {} }
+    }
+  }
+
+  assert {
+    condition     = contains(keys(kubernetes_service_account.this), "coprocessor")
+    error_message = "Coprocessor service account must still be created with a custom s3_bucket_key."
+  }
+}
+
+run "extra_service_account_overrides_builtin_with_same_key" {
+  command = plan
+
+  variables {
+    k8s = {
+      enabled = true
+      service_accounts = {
+        coprocessor = { enabled = true }
+        db_admin    = { enabled = false }
+        extra = {
+          coprocessor = {
+            name = "coprocessor"
+            iam_policy_statements = [
+              {
+                effect    = "Allow"
+                actions   = ["s3:GetObject"]
+                resources = ["arn:aws:s3:::override-bucket/*"]
+              }
+            ]
+          }
+        }
+      }
+      storage_classes = {
+        gp3 = { enabled = false }
+      }
+    }
+  }
+
+  assert {
+    condition     = length(kubernetes_service_account.this) == 1
+    error_message = "Extra entry must override the built-in — no duplicate service account."
+  }
+
+  assert {
+    condition     = contains(keys(kubernetes_service_account.this), "coprocessor")
+    error_message = "The coprocessor service account must still exist after the override."
   }
 }

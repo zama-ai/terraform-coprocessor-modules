@@ -134,7 +134,8 @@ module "k8s_system_charts" {
     : ""
   )
 
-  applications = var.k8s_system_charts.applications
+  defaults = var.k8s_system_charts.defaults
+  extra    = var.k8s_system_charts.extra
 
   manifests_vars = {
     cluster_name = local.eks_cluster_name

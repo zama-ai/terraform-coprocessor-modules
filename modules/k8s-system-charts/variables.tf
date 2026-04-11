@@ -29,10 +29,65 @@ variable "manifests_vars" {
   default = {}
 }
 
-variable "applications" {
+variable "defaults" {
   description = <<-EOT
-    Map of system-level applications to deploy. The map key is the logical application name
-    and becomes the Helm release name.
+    Toggle built-in applications on/off with optional version/values overrides.
+    All built-ins default to disabled except karpenter_nodepools, prometheus_operator_crds,
+    metrics_server, and karpenter which default to enabled.
+
+    Built-in applications:
+      - karpenter_nodepools:          EC2NodeClass + NodePool manifests (no Helm chart)
+      - prometheus_operator_crds:     Cluster-scoped Prometheus CRDs (must precede ServiceMonitor charts)
+      - metrics_server:               Kubernetes Metrics Server
+      - karpenter:                    Karpenter controller
+      - k8s_monitoring:               Grafana k8s-monitoring (requires values with destination URLs)
+      - prometheus_rds_exporter:      Prometheus RDS exporter (IRSA + Helm chart)
+      - prometheus_postgres_exporter: Prometheus Postgres exporter
+  EOT
+  type = object({
+    karpenter_nodepools = optional(object({
+      enabled = optional(bool, true)
+    }), {})
+    prometheus_operator_crds = optional(object({
+      enabled = optional(bool, true)
+      version = optional(string, "28.0.1")
+    }), {})
+    metrics_server = optional(object({
+      enabled = optional(bool, true)
+      version = optional(string, "3.13.0")
+    }), {})
+    karpenter = optional(object({
+      enabled = optional(bool, true)
+      version = optional(string, "1.8.2")
+      # Appended on top of baked-in defaults — use to override specific fields.
+      values = optional(string, "")
+    }), {})
+    k8s_monitoring = optional(object({
+      enabled        = optional(bool, false)
+      version        = optional(string, "3.8.1")
+      prometheus_url = optional(string, "")
+      loki_url       = optional(string, "")
+      otlp_url       = optional(string, "")
+      # Appended after baked-in base + destinations — use for arbitrary additional overrides.
+      values = optional(string, "")
+    }), {})
+    prometheus_rds_exporter = optional(object({
+      enabled = optional(bool, false)
+      version = optional(string, "1.0.1")
+    }), {})
+    prometheus_postgres_exporter = optional(object({
+      enabled = optional(bool, false)
+      version = optional(string, "7.3.0")
+    }), {})
+  })
+  default = {}
+}
+
+variable "extra" {
+  description = <<-EOT
+    Additional custom applications to deploy alongside the built-ins.
+    The map key is the logical application name and becomes the Helm release name.
+    An entry here with the same key as a built-in overrides the built-in entirely.
 
     Each application may have any combination of:
       - namespace: the Kubernetes namespace the application lives in (required)
@@ -47,27 +102,20 @@ variable "applications" {
       1st apply — installs the Helm chart (CRDs land)
       2nd apply — creates CRD-dependent manifests
   EOT
-
   type = map(object({
-    # Kubernetes namespace the application lives in. Required.
     namespace = object({
       name   = string
       create = optional(bool, false)
     })
-
-    # Kubernetes service account. When create = true and irsa.enabled = true,
-    # the IRSA role ARN is automatically injected as an annotation.
     service_account = optional(object({
       create      = optional(bool, false)
       name        = optional(string, null)
       labels      = optional(map(string), {})
       annotations = optional(map(string), {})
     }), null)
-
-    # IAM role for service account (IRSA). Requires oidc_provider_arn to be set.
     irsa = optional(object({
       enabled   = optional(bool, false)
-      role_name = optional(string, null) # defaults to "<app_key>-<partner_name>-<environment>"
+      role_name = optional(string, null)
       policy_statements = optional(list(object({
         sid       = optional(string, "")
         effect    = string
@@ -75,31 +123,23 @@ variable "applications" {
         resources = list(string)
       })), [])
     }), { enabled = false })
-
-    # Helm chart release.
     helm_chart = optional(object({
       enabled          = optional(bool, true)
-      crd_chart        = optional(bool, false) # When true, this release is deployed before all non-CRD releases.
+      crd_chart        = optional(bool, false)
       repository       = string
       chart            = string
       version          = string
-      values           = optional(string, "")      # inline YAML values
-      set              = optional(map(string), {}) # individual key=value overrides
+      values           = optional(string, "")
+      set              = optional(map(string), {})
       create_namespace = optional(bool, false)
       atomic           = optional(bool, true)
       wait             = optional(bool, true)
       timeout          = optional(number, 300)
     }), null)
-
-    # Raw YAML manifests applied after the Helm chart.
-    # Map key is a logical name; value is raw YAML content (single Kubernetes resource per entry).
-    # Use the placeholder __region__ anywhere a region string is needed — it is substituted
-    # with the current AWS provider region at apply time.
     additional_manifests = optional(object({
       enabled   = optional(bool, false)
       manifests = optional(map(string), {})
     }), { enabled = false })
   }))
-
   default = {}
 }

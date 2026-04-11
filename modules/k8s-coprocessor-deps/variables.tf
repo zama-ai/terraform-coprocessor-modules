@@ -39,61 +39,81 @@ variable "k8s" {
   type = object({
     enabled = optional(bool, false)
 
+    # Fallback namespace for service accounts and ExternalName services that omit their own.
+    default_namespace = optional(string, "coproc")
+
     # Namespaces
     namespaces = optional(map(object({
+      enabled     = optional(bool, true)
       labels      = optional(map(string), {})
       annotations = optional(map(string), {})
     })), {})
 
-    # Fallback namespace for service accounts and ExternalName services that omit their own.
-    default_namespace = optional(string, "coprocessor")
+    # Service accounts — built-in toggles + custom extras.
+    service_accounts = optional(object({
+      # coprocessor: IRSA role with S3 access (s3:*Object + s3:ListBucket).
+      coprocessor = optional(object({
+        enabled = optional(bool, true)
+        # Key in var.s3_bucket_arns to grant access to.
+        s3_bucket_key = optional(string, "coprocessor")
+      }), {})
 
-    # Service accounts — every entry creates an IRSA role + policy regardless of which access fields are set.
-    service_accounts = optional(map(object({
-      name                   = string
-      namespace              = optional(string, null) # defaults to k8s.default_namespace
-      iam_role_name_override = optional(string, null) # overrides computed "<key>-<partner_name>-<environment>"
+      # db_admin: IRSA role with RDS master secret (GetSecretValue + DescribeSecret).
+      db_admin = optional(object({
+        enabled = optional(bool, true)
+      }), {})
 
-      # S3 access — map key must match a key in var.s3.buckets
-      s3_bucket_access = optional(map(object({
-        actions = list(string)
-      })), {})
-
-      # RDS access — grants GetSecretValue + DescribeSecret on the RDS master secret
-      rds_master_secret_access = optional(bool, false)
-
-      # Custom IAM policy statements appended to the generated role
-      iam_policy_statements = optional(list(object({
-        sid       = optional(string, "")
-        effect    = string
-        actions   = list(string)
-        resources = list(string)
-        conditions = optional(list(object({
-          test     = string
-          variable = string
-          values   = list(string)
+      # Custom service accounts beyond the built-ins.
+      # An entry with the same key as a built-in overrides it entirely.
+      # Every entry creates an IRSA role + policy.
+      extra = optional(map(object({
+        name                   = string
+        namespace              = optional(string, null) # defaults to k8s.default_namespace
+        iam_role_name_override = optional(string, null) # overrides computed "<key>-<partner_name>-<environment>"
+        s3_bucket_access = optional(map(object({
+          actions = list(string)
+        })), {})
+        rds_master_secret_access = optional(bool, false)
+        iam_policy_statements = optional(list(object({
+          sid       = optional(string, "")
+          effect    = string
+          actions   = list(string)
+          resources = list(string)
+          conditions = optional(list(object({
+            test     = string
+            variable = string
+            values   = list(string)
+          })), [])
         })), [])
-      })), [])
+        labels      = optional(map(string), {})
+        annotations = optional(map(string), {})
+      })), {})
+    }), {})
 
-      # Metadata
-      labels      = optional(map(string), {})
-      annotations = optional(map(string), {})
-    })), {})
+    # Storage classes — built-in toggles + custom extras.
+    storage_classes = optional(object({
+      # gp3: encrypted EBS gp3, WaitForFirstConsumer, set as cluster default.
+      gp3 = optional(object({
+        enabled = optional(bool, true)
+      }), {})
 
-    # Storage classes
-    storage_classes = optional(map(object({
-      provisioner            = string
-      reclaim_policy         = optional(string, "Delete")
-      volume_binding_mode    = optional(string, "WaitForFirstConsumer")
-      allow_volume_expansion = optional(bool, true)
-      parameters             = optional(map(string), {})
-      annotations            = optional(map(string), {})
-      labels                 = optional(map(string), {})
-    })), {})
+      # Custom storage classes beyond the built-ins.
+      # An entry with the same key as a built-in overrides it entirely.
+      extra = optional(map(object({
+        provisioner            = string
+        reclaim_policy         = optional(string, "Delete")
+        volume_binding_mode    = optional(string, "WaitForFirstConsumer")
+        allow_volume_expansion = optional(bool, true)
+        parameters             = optional(map(string), {})
+        annotations            = optional(map(string), {})
+        labels                 = optional(map(string), {})
+      })), {})
+    }), {})
 
-    # ExternalName services — map key becomes the Service name
+    # ExternalName services — map key becomes the Service name.
     # Endpoints resolved by the root module; port is stripped automatically.
     external_name_services = optional(map(object({
+      enabled     = optional(bool, true)
       endpoint    = optional(string, null) # host:port or bare hostname
       namespace   = optional(string, null) # defaults to k8s.default_namespace
       annotations = optional(map(string), {})

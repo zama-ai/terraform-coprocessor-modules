@@ -229,10 +229,10 @@ run "eks_disabled_without_kubernetes_credentials_plans_without_error" {
 run "k8s_charts_disabled_creates_no_module" {
   command = plan
 
-  # k8s_charts.enabled defaults to false — no helm releases created.
+  # k8s_system_charts.enabled defaults to false — no helm releases created.
   assert {
-    condition     = length(module.k8s_charts) == 0
-    error_message = "k8s_charts module must not be created when k8s_charts.enabled = false."
+    condition     = length(module.k8s_system_charts) == 0
+    error_message = "k8s_system_charts module must not be created when k8s_system_charts.enabled = false."
   }
 }
 
@@ -240,9 +240,15 @@ run "k8s_charts_enabled_creates_one_module" {
   command = plan
 
   variables {
-    k8s_charts = {
+    k8s_system_charts = {
       enabled = true
-      applications = {
+      defaults = {
+        karpenter_nodepools      = { enabled = false }
+        prometheus_operator_crds = { enabled = false }
+        metrics_server           = { enabled = false }
+        karpenter                = { enabled = false }
+      }
+      extra = {
         metrics-server = {
           namespace  = { name = "kube-system" }
           helm_chart = { repository = "https://kubernetes-sigs.github.io/metrics-server/", chart = "metrics-server", version = "3.12.0" }
@@ -252,8 +258,8 @@ run "k8s_charts_enabled_creates_one_module" {
   }
 
   assert {
-    condition     = length(module.k8s_charts) == 1
-    error_message = "k8s_charts module must be created when k8s_charts.enabled = true."
+    condition     = length(module.k8s_system_charts) == 1
+    error_message = "k8s_system_charts module must be created when k8s_system_charts.enabled = true."
   }
 }
 
@@ -265,7 +271,7 @@ run "k8s_enabled_plans_without_error" {
   command = plan
 
   variables {
-    k8s = {
+    k8s_coprocessor_deps = {
       enabled           = true
       default_namespace = "coprocessor"
       namespaces = {
@@ -275,8 +281,8 @@ run "k8s_enabled_plans_without_error" {
   }
 
   assert {
-    condition     = module.k8s.namespace == "coprocessor"
-    error_message = "k8s.namespace must match default_namespace when k8s.enabled = true."
+    condition     = module.k8s_coprocessor_deps.namespace == "coprocessor"
+    error_message = "k8s_coprocessor_deps.namespace must match default_namespace when enabled = true."
   }
 }
 
@@ -298,7 +304,7 @@ run "byoc_oidc_provider_arn_plans_without_error" {
       cluster_name           = "byoc-cluster"
       oidc_provider_arn      = "arn:aws:iam::123456789012:oidc-provider/oidc.eks.eu-west-1.amazonaws.com/id/EXAMPLED539D4633E53DE1B716D3041E"
     }
-    k8s = {
+    k8s_coprocessor_deps = {
       enabled           = true
       default_namespace = "coprocessor"
     }
@@ -310,7 +316,7 @@ run "byoc_oidc_provider_arn_plans_without_error" {
   }
 
   assert {
-    condition     = module.k8s.namespace == "coprocessor"
-    error_message = "k8s module must plan successfully with a BYOC OIDC provider ARN."
+    condition     = module.k8s_coprocessor_deps.namespace == "coprocessor"
+    error_message = "k8s_coprocessor_deps must plan successfully with a BYOC OIDC provider ARN."
   }
 }

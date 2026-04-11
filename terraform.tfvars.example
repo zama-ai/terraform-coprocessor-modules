@@ -560,14 +560,17 @@ k8s_coprocessor_deps = {
   # Fallback namespace for service accounts and ExternalName services that do
   # not specify their own namespace. Does not need to be a key in namespaces
   # (may reference a pre-existing namespace).
-  # Default: "coprocessor"
-  default_namespace = "coprocessor"
+  # Default: "coproc"
+  default_namespace = "coproc"
 
   # ── Namespaces ───────────────────────────────────────────────────────────────
   # Map of Kubernetes namespaces to create. The map key is the namespace name.
   # Default: {}
   namespaces = {
     coproc = {
+      # Default: true
+      enabled = true
+
       # Default: {}
       labels = {
         "app.kubernetes.io/managed-by" = "terraform"
@@ -579,99 +582,101 @@ k8s_coprocessor_deps = {
       }
     }
 
-    coproc-admin   = {}
-    gw-blockchain  = {}
-    eth-blockchain = {}
+    coproc-admin   = { enabled = true }
+    gw-blockchain  = { enabled = true }
+    eth-blockchain = { enabled = true }
   }
 
   # ── Service Accounts ─────────────────────────────────────────────────────────
-  # Map of Kubernetes service accounts. The map key is a short logical name used
-  # in Terraform resource addressing and output maps.
-  # Default: {}
   service_accounts = {
-    coprocessor = {
-      # Required. Kubernetes service account name.
-      name = "coprocessor"
+    # Toggle built-in service accounts on/off.
+    # coprocessor: IRSA role with S3 access (s3:*Object + s3:ListBucket).
+    # db_admin: IRSA role with RDS master secret (GetSecretValue + DescribeSecret).
+    coprocessor = { enabled = true }
+    db_admin    = { enabled = true }
 
-      # Namespace override. Defaults to k8s_coprocessor_deps.default_namespace when null.
-      # Default: null
-      namespace = "coproc"
+    # Additional service accounts beyond the built-ins. An entry with the same
+    # key as a built-in overrides it entirely.
+    # Default: {}
+    extra = {
+      sns-worker = {
+        # Required. Kubernetes service account name.
+        name = "sns-worker"
 
-      # Override the computed IAM role name "<key>-<partner_name>-<environment>".
-      # Default: null (uses computed name)
-      iam_role_name_override = null
+        # Namespace override. Defaults to k8s_coprocessor_deps.default_namespace when null.
+        # Default: null
+        namespace = null
 
-      # Grant s3:* access to specific S3 buckets (keys must match s3.buckets keys).
-      # Generates GetObject/PutObject/DeleteObject/ListBucket statements automatically.
-      # Default: {}
-      s3_bucket_access = {
-        coprocessor = { actions = ["s3:*Object", "s3:ListBucket"] }
+        # Override the computed IAM role name "<key>-<partner_name>-<environment>".
+        # Default: null (uses computed name)
+        iam_role_name_override = null
+
+        # Grant access to specific S3 buckets (keys must match s3.buckets keys).
+        # Default: {}
+        s3_bucket_access = {}
+
+        # Grant GetSecretValue + DescribeSecret on the RDS master Secrets Manager secret.
+        # Default: false
+        rds_master_secret_access = false
+
+        # Arbitrary additional IAM policy statements appended to the generated role.
+        # Default: []
+        iam_policy_statements = [
+          {
+            effect    = "Allow"
+            actions   = ["sns:Publish"]
+            resources = ["arn:aws:sns:eu-west-1:123456789012:my-topic"]
+          }
+        ]
+
+        # Default: {}
+        labels = {}
+
+        # Default: {}
+        annotations = {}
       }
-
-      # Grant GetSecretValue + DescribeSecret on the RDS master Secrets Manager secret.
-      # Default: false
-      rds_master_secret_access = false
-
-      # Arbitrary additional IAM policy statements appended to the generated role.
-      # Default: []
-      iam_policy_statements = []
-
-      # Default: {}
-      labels = {}
-
-      # Default: {}
-      annotations = {}
-    }
-
-    db-admin = {
-      # Used by k8s Jobs/Pods that need superuser access to RDS:
-      # pg_restore, CREATE USER, schema migrations, etc.
-      name                     = "db-admin"
-      namespace                = "coproc-admin"
-      iam_role_name_override   = null
-      s3_bucket_access         = {}
-      rds_master_secret_access = true
-      iam_policy_statements    = []
-      labels                   = {}
-      annotations              = {}
     }
   }
 
   # ── Storage Classes ──────────────────────────────────────────────────────────
-  # Map of Kubernetes StorageClass resources. The map key becomes the storage
-  # class name.
-  # Default: {}
   storage_classes = {
-    gp3 = {
-      # Required. CSI driver name.
-      provisioner = "ebs.csi.aws.com"
+    # Toggle built-in storage classes on/off.
+    # gp3: encrypted EBS gp3, WaitForFirstConsumer, set as cluster default.
+    gp3 = { enabled = true }
 
-      # "Retain" | "Delete"
-      # Default: "Delete"
-      reclaim_policy = "Delete"
+    # Additional storage classes beyond the built-ins. An entry with the same
+    # key as a built-in overrides it entirely.
+    # Default: {}
+    extra = {
+      gp3-retain = {
+        # Required. CSI driver name.
+        provisioner = "ebs.csi.aws.com"
 
-      # "WaitForFirstConsumer" | "Immediate"
-      # Default: "WaitForFirstConsumer"
-      volume_binding_mode = "WaitForFirstConsumer"
+        # "Retain" | "Delete"
+        # Default: "Delete"
+        reclaim_policy = "Retain"
 
-      # Default: true
-      allow_volume_expansion = true
+        # "WaitForFirstConsumer" | "Immediate"
+        # Default: "WaitForFirstConsumer"
+        volume_binding_mode = "WaitForFirstConsumer"
 
-      # Driver-specific parameters passed verbatim to the StorageClass.
-      # Default: {}
-      parameters = {
-        type      = "gp3"
-        fsType    = "ext4"
-        encrypted = "true"
+        # Default: true
+        allow_volume_expansion = true
+
+        # Driver-specific parameters passed verbatim to the StorageClass.
+        # Default: {}
+        parameters = {
+          type      = "gp3"
+          fsType    = "ext4"
+          encrypted = "true"
+        }
+
+        # Default: {}
+        annotations = {}
+
+        # Default: {}
+        labels = {}
       }
-
-      # Default: {}
-      annotations = {
-        "storageclass.kubernetes.io/is-default-class" = "true"
-      }
-
-      # Default: {}
-      labels = {}
     }
   }
 
@@ -684,6 +689,9 @@ k8s_coprocessor_deps = {
   # Default: {}
   external_name_services = {
     coprocessor-database = {
+      # Default: true
+      enabled = true
+
       # Omit endpoint to have the root module inject the RDS hostname automatically.
       # Or provide an explicit host:port / bare hostname.
       # Default: null

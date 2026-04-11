@@ -407,59 +407,76 @@ variable "k8s_coprocessor_deps" {
   type = object({
     enabled = optional(bool, false)
 
+    default_namespace = optional(string, "coproc")
+
     # Namespaces
-    default_namespace = optional(string, "coprocessor")
     namespaces = optional(map(object({
+      enabled     = optional(bool, true)
       labels      = optional(map(string), {})
       annotations = optional(map(string), {})
     })), {})
 
-    # Service accounts
-    service_accounts = optional(map(object({
-      name                   = string
-      namespace              = optional(string, null)
-      iam_role_name_override = optional(string, null) # overrides computed "<key>-<partner>-<env>" role name
+    # Service accounts — built-in toggles + custom extras.
+    service_accounts = optional(object({
+      # coprocessor: IRSA role with S3 access (s3:*Object + s3:ListBucket).
+      coprocessor = optional(object({
+        enabled       = optional(bool, true)
+        s3_bucket_key = optional(string, "coprocessor")
+      }), {})
 
-      # S3 access — map key must match a key in var.s3.buckets
-      s3_bucket_access = optional(map(object({
-        actions = list(string)
-      })), {})
+      # db_admin: IRSA role with RDS master secret (GetSecretValue + DescribeSecret).
+      db_admin = optional(object({
+        enabled = optional(bool, true)
+      }), {})
 
-      # RDS access — grants GetSecretValue on the RDS master secret (Secrets Manager)
-      rds_master_secret_access = optional(bool, false)
-
-      # Custom IAM policy statements appended to the generated role
-      iam_policy_statements = optional(list(object({
-        sid       = optional(string, "")
-        effect    = string
-        actions   = list(string)
-        resources = list(string)
-        conditions = optional(list(object({
-          test     = string
-          variable = string
-          values   = list(string)
+      # Additional service accounts. An entry with the same key as a built-in overrides it.
+      extra = optional(map(object({
+        name                   = string
+        namespace              = optional(string, null)
+        iam_role_name_override = optional(string, null)
+        s3_bucket_access = optional(map(object({
+          actions = list(string)
+        })), {})
+        rds_master_secret_access = optional(bool, false)
+        iam_policy_statements = optional(list(object({
+          sid       = optional(string, "")
+          effect    = string
+          actions   = list(string)
+          resources = list(string)
+          conditions = optional(list(object({
+            test     = string
+            variable = string
+            values   = list(string)
+          })), [])
         })), [])
-      })), [])
+        labels      = optional(map(string), {})
+        annotations = optional(map(string), {})
+      })), {})
+    }), {})
 
-      # Metadata
-      labels      = optional(map(string), {})
-      annotations = optional(map(string), {})
-    })), {})
+    # Storage classes — built-in toggles + custom extras.
+    storage_classes = optional(object({
+      # gp3: encrypted EBS gp3, WaitForFirstConsumer, set as cluster default.
+      gp3 = optional(object({
+        enabled = optional(bool, true)
+      }), {})
 
-    # Storage classes
-    storage_classes = optional(map(object({
-      provisioner            = string
-      reclaim_policy         = optional(string, "Delete")
-      volume_binding_mode    = optional(string, "WaitForFirstConsumer")
-      allow_volume_expansion = optional(bool, true)
-      parameters             = optional(map(string), {})
-      annotations            = optional(map(string), {})
-      labels                 = optional(map(string), {})
-    })), {})
+      # Additional storage classes. An entry with the same key as a built-in overrides it.
+      extra = optional(map(object({
+        provisioner            = string
+        reclaim_policy         = optional(string, "Delete")
+        volume_binding_mode    = optional(string, "WaitForFirstConsumer")
+        allow_volume_expansion = optional(bool, true)
+        parameters             = optional(map(string), {})
+        annotations            = optional(map(string), {})
+        labels                 = optional(map(string), {})
+      })), {})
+    }), {})
 
-    # ExternalName services — map key becomes the Service name
+    # ExternalName services — map key becomes the Service name.
     # When endpoint is omitted the root module resolves it from the matching module output (see local.module_endpoints).
     external_name_services = optional(map(object({
+      enabled     = optional(bool, true)
       endpoint    = optional(string, null)
       namespace   = optional(string, null)
       annotations = optional(map(string), {})
@@ -476,26 +493,57 @@ variable "k8s_system_charts" {
   type = object({
     enabled = optional(bool, false)
 
-    # Map key is the logical application name and becomes the Helm release name.
-    applications = optional(map(object({
-      # Namespace
+    # Toggle built-in applications on/off. See modules/k8s-system-charts for full docs.
+    defaults = optional(object({
+      karpenter_nodepools = optional(object({
+        enabled = optional(bool, true)
+      }), {})
+      prometheus_operator_crds = optional(object({
+        enabled = optional(bool, true)
+        version = optional(string, "28.0.1")
+      }), {})
+      metrics_server = optional(object({
+        enabled = optional(bool, true)
+        version = optional(string, "3.13.0")
+      }), {})
+      karpenter = optional(object({
+        enabled = optional(bool, true)
+        version = optional(string, "1.8.2")
+        values  = optional(string, "")
+      }), {})
+      k8s_monitoring = optional(object({
+        enabled        = optional(bool, false)
+        version        = optional(string, "3.8.1")
+        prometheus_url = optional(string, "")
+        loki_url       = optional(string, "")
+        otlp_url       = optional(string, "")
+        values         = optional(string, "")
+      }), {})
+      prometheus_rds_exporter = optional(object({
+        enabled = optional(bool, false)
+        version = optional(string, "1.0.1")
+      }), {})
+      prometheus_postgres_exporter = optional(object({
+        enabled = optional(bool, false)
+        version = optional(string, "7.3.0")
+      }), {})
+    }), {})
+
+    # Additional custom applications. An entry with the same key as a built-in overrides it.
+    extra = optional(map(object({
       namespace = object({
         name   = string
-        create = optional(bool, false) # set false when the namespace is managed elsewhere (e.g. by another chart)
+        create = optional(bool, false)
       })
-
-      # Service account — when create = true and irsa.enabled = true, the IRSA role ARN is auto-annotated
       service_account = optional(object({
         create      = optional(bool, false)
         name        = optional(string, null)
         labels      = optional(map(string), {})
         annotations = optional(map(string), {})
       }), null)
-
-      # IRSA — creates an IAM role bound to the service account via OIDC
       irsa = optional(object({
         enabled   = optional(bool, false)
-        role_name = optional(string, null) # defaults to "<app_key>-<partner_name>-<environment>"
+        role_name = optional(string, null)
         policy_statements = optional(list(object({
           sid       = optional(string, "")
           effect    = string
@@ -503,25 +551,19 @@ variable "k8s_system_charts" {
           resources = list(string)
         })), [])
       }), { enabled = false })
-
-      # Helm chart
       helm_chart = optional(object({
         enabled          = optional(bool, true)
         repository       = string
         chart            = string
         version          = string
-        values           = optional(string, "")      # inline YAML values block
-        set              = optional(map(string), {}) # individual key=value overrides (merged on top of values)
-        crd_chart        = optional(bool, false)     # when true, deployed before all non-CRD releases
+        values           = optional(string, "")
+        set              = optional(map(string), {})
+        crd_chart        = optional(bool, false)
         create_namespace = optional(bool, false)
         atomic           = optional(bool, true)
         wait             = optional(bool, true)
         timeout          = optional(number, 300)
       }), null)
-
-      # Additional raw YAML manifests applied after the Helm chart.
-      # Map key is a logical name; value is a single Kubernetes resource in YAML.
-      # Use __region__ as a placeholder — substituted with the current AWS region at apply time.
       additional_manifests = optional(object({
         enabled   = optional(bool, false)
         manifests = optional(map(string), {})
