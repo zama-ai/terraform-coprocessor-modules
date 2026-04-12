@@ -37,11 +37,6 @@ kubernetes_provider = {
   host                   = "https://XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX.gr7.eu-west-1.eks.amazonaws.com"
   cluster_ca_certificate = "LS0tLS1CRUdJTi..."  # base64-encoded CA cert
   cluster_name           = "my-existing-cluster"
-
-  # OIDC provider ARN for IRSA. Only needed when eks.enabled = false and k8s
-  # service accounts with iam_policy_statements are used.
-  # Default: null (resolved automatically from the EKS module when eks.enabled = true)
-  oidc_provider_arn = "arn:aws:iam::123456789012:oidc-provider/oidc.eks.eu-west-1.amazonaws.com/id/EXAMPLED539D4633E53DE1B716D3041E"
 }
 
 
@@ -239,12 +234,13 @@ eks = {
     }
 
     # IAM policies attached to every node group's IAM role.
-    # Default: the four policies shown below.
+    # Default: the five policies shown below.
     default_iam_policies = {
       AmazonEBSCSIDriverPolicy           = "arn:aws:iam::aws:policy/service-role/AmazonEBSCSIDriverPolicy"
       AmazonEC2ContainerRegistryReadOnly = "arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly"
       AmazonEKSWorkerNodePolicy          = "arn:aws:iam::aws:policy/AmazonEKSWorkerNodePolicy"
       AmazonEKS_CNI_Policy               = "arn:aws:iam::aws:policy/AmazonEKS_CNI_Policy"
+      AmazonSSMManagedInstanceCore       = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
     }
 
     # Map of node groups. Key becomes the node group name and the EC2 Name tag.
@@ -319,9 +315,7 @@ eks = {
         # Additional IAM policies attached only to this node group's role.
         # Merged with default_iam_policies.
         # Default: {}
-        iam_role_additional_policies = {
-          AmazonSSMManagedInstanceCore = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
-        }
+        iam_role_additional_policies = {}
 
         # IMDSv2 configuration. hop_limit = 1 prevents non-hostNetwork pods from
         # reaching instance metadata (recommended). Raise to 2 only if pods need IMDS.
@@ -441,15 +435,15 @@ rds = {
 
   # ── Instance ────────────────────────────────────────────────────────────────
 
-  # Default: "db.t4g.medium"
+  # Default: "db.m5.4xlarge"
   instance_class = "db.m5.4xlarge"
 
   # Initial allocated storage in GiB.
-  # Default: 20
+  # Default: 400
   allocated_storage = 400
 
   # Maximum storage for autoscaling. Set equal to allocated_storage to disable.
-  # Default: 100
+  # Default: 1000
   max_allocated_storage = 1000
 
   # Deploy a standby replica in a second AZ for automatic failover.
@@ -500,8 +494,8 @@ rds = {
   maintenance_window = "Mon:00:00-Mon:03:00"
 
   # Days to retain automated backups. 0 disables backups.
-  # Default: 30
-  backup_retention_period = 30
+  # Default: 7
+  backup_retention_period = 7
 
   # Prevent accidental deletion via Terraform destroy.
   # Default: true
@@ -545,6 +539,144 @@ rds = {
   additional_allowed_cidr_blocks = ["10.1.0.0/16"]
 }
 
+
+# ==============================================================================
+#  S3
+#
+#  Default: { buckets = {} }
+# ==============================================================================
+s3 = {
+  # Map of buckets to create. The map key is a short logical name used in
+  # Terraform resource addressing and output maps.
+  buckets = {
+    coprocessor = {
+      # Required. Human-readable description used for tagging.
+      purpose = "coprocessor-storage"
+
+      # Override the computed bucket name "<partner>-<env>-<key>-<random_suffix>".
+      # Use when importing a pre-existing bucket.
+      # Default: null (uses computed name)
+      name_override = null
+
+      # Allow Terraform destroy to delete the bucket even if it contains objects.
+      # Default: false
+      force_destroy = false
+
+      # Enable S3 object versioning.
+      # Default: true
+      versioning = true
+
+      # Public access configuration.
+      # Default: { enabled = false }
+      public_access = {
+        # true  = all four public access block flags set to false (bucket is publicly accessible)
+        # false = bucket is fully private
+        enabled = false
+      }
+
+      # CloudFront distribution in front of this bucket.
+      # Default: { enabled = false }
+      cloudfront = {
+        # Default: false
+        enabled = true
+
+        # Edge location coverage.
+        # "PriceClass_100" = EU + NA only (cheapest)
+        # "PriceClass_200" = above + Asia Pacific, Middle East, Africa
+        # "PriceClass_All" = all edge locations globally (best cache hit rate)
+        # Default: "PriceClass_All"
+        price_class = "PriceClass_All"
+
+        # Compress objects automatically (Gzip / Brotli). Default: true
+        compress = true
+
+        # "redirect-to-https" | "https-only" | "allow-all"
+        # Default: "redirect-to-https"
+        viewer_protocol_policy = "redirect-to-https"
+
+        # HTTP methods CloudFront accepts and forwards to the origin.
+        # Default: ["GET", "HEAD"]
+        allowed_methods = ["GET", "HEAD"]
+
+        # Methods whose responses CloudFront caches. Must be a subset of allowed_methods.
+        # Default: ["GET", "HEAD"]
+        cached_methods = ["GET", "HEAD"]
+
+        # AWS managed cache policy ID. Default is CachingOptimized — recommended for S3.
+        # Default: "658327ea-f89d-4fab-a63d-7e88639e58f6"
+        cache_policy_id = "658327ea-f89d-4fab-a63d-7e88639e58f6"
+
+        # "none" | "whitelist" | "blacklist". Default: "none"
+        geo_restriction_type = "none"
+
+        # ISO 3166-1 alpha-2 country codes. Only used when geo_restriction_type != "none".
+        # Default: []
+        geo_restriction_locations = []
+
+        # Custom hostnames (CNAMEs) for this distribution.
+        # Requires acm_certificate_arn to be set. ACM cert must be in us-east-1.
+        # Default: []
+        aliases = ["assets.example.com"]
+
+        # ACM certificate ARN for a custom domain. Must be in us-east-1.
+        # null = use the default *.cloudfront.net certificate.
+        # Default: null
+        acm_certificate_arn = "arn:aws:acm:us-east-1:123456789012:certificate/abc-12345"
+
+        # Only relevant when acm_certificate_arn is set.
+        # "sni-only" (recommended) | "vip". Default: "sni-only"
+        ssl_support_method = "sni-only"
+
+        # Only relevant when acm_certificate_arn is set.
+        # Default: "TLSv1.2_2021"
+        minimum_protocol_version = "TLSv1.2_2021"
+      }
+
+      # CORS configuration for browser-based access.
+      # Default: { enabled = false, all lists empty }
+      cors = {
+        enabled         = false
+        allowed_origins = ["https://example.com"]
+        allowed_methods = ["GET", "HEAD"]
+        allowed_headers = ["Authorization"]
+        expose_headers  = ["Access-Control-Allow-Origin"]
+      }
+
+      # IAM bucket policy statements.
+      # resources aliases: "bucket" → bucket ARN, "objects" → bucket ARN + "/*"
+      # Default: []
+      policy_statements = [
+        {
+          sid        = "PublicRead"
+          effect     = "Allow"
+          principals = { "*" = ["*"] }  # wildcard principal
+          actions    = ["s3:GetObject"]
+          resources  = ["objects"]
+
+          # Optional conditions on the policy statement.
+          # Default: []
+          conditions = [
+            {
+              test     = "StringEquals"
+              variable = "aws:SourceVpc"
+              values   = ["vpc-0123456789abcdef0"]
+            }
+          ]
+        },
+        {
+          sid        = "AccountAccess"
+          effect     = "Allow"
+          principals = { AWS = ["arn:aws:iam::123456789012:root"] }  # typed principal
+          actions    = ["s3:*"]
+          resources  = ["bucket", "objects"]
+          conditions = []
+        },
+      ]
+    }
+  }
+}
+
+
 # ==============================================================================
 #  k8s Coprocessor Dependencies
 #
@@ -583,6 +715,7 @@ k8s_coprocessor_deps = {
     }
 
     coproc-admin   = { enabled = true }
+    monitoring     = { enabled = true }
     gw-blockchain  = { enabled = true }
     eth-blockchain = { enabled = true }
   }
@@ -590,8 +723,8 @@ k8s_coprocessor_deps = {
   # ── Service Accounts ─────────────────────────────────────────────────────────
   service_accounts = {
     # Toggle built-in service accounts on/off.
-    # coprocessor: IRSA role with S3 access (s3:*Object + s3:ListBucket).
-    # db_admin: IRSA role with RDS master secret (GetSecretValue + DescribeSecret).
+    # coprocessor: IRSA role with S3 access (GetObject, PutObject, DeleteObject, ListBucket).
+    # db_admin:    IRSA role with RDS master secret (GetSecretValue + DescribeSecret).
     coprocessor = { enabled = true }
     db_admin    = { enabled = true }
 
@@ -711,15 +844,14 @@ k8s_coprocessor_deps = {
 # ==============================================================================
 #  k8s System Charts
 #
-#  System-level Helm chart deployments (e.g. metrics-server, karpenter,
-#  external-secrets). Requires eks.enabled = true or a valid kubernetes_provider
-#  configuration.
+#  System-level Helm chart deployments. Requires eks.enabled = true or a valid
+#  kubernetes_provider configuration.
 #
 #  Helm values support the following placeholder substitutions applied automatically
 #  by the module at apply time:
-#    __partner__ → var.partner_name
-#    __network__ → var.environment
-#    __region__  → current AWS region (in additional_manifests only)
+#    __partner__      → var.partner_name
+#    __network__      → var.environment
+#    __region__       → current AWS region (in additional_manifests only)
 #    __cluster_name__ → EKS cluster name (in additional_manifests only)
 #    __node_role__    → Karpenter node IAM role name (in additional_manifests only)
 #
@@ -729,31 +861,98 @@ k8s_system_charts = {
   # Default: false
   enabled = true
 
-  # ── Applications ─────────────────────────────────────────────────────────────
-  # Map of applications to deploy. The map key becomes the Helm release name.
-  # Each entry can optionally include: namespace, service_account, irsa,
-  # helm_chart, and additional_manifests blocks.
+  # ── Built-in applications ─────────────────────────────────────────────────
+  # Toggle and configure the bundled chart deployments.
+  # All built-ins are enabled by default except k8s_monitoring, prometheus_rds_exporter,
+  # and prometheus_postgres_exporter which require explicit opt-in.
+  defaults = {
+    # Karpenter EC2NodeClass + NodePool manifests.
+    # Default: { enabled = true }
+    karpenter_nodepools = { enabled = true }
+
+    # Prometheus Operator CRD chart (deployed before other monitoring charts).
+    # Default: { enabled = true, version = "28.0.1" }
+    prometheus_operator_crds = {
+      enabled = true
+      version = "28.0.1"
+    }
+
+    # Kubernetes Metrics Server.
+    # Default: { enabled = true, version = "3.13.0" }
+    metrics_server = {
+      enabled = true
+      version = "3.13.0"
+    }
+
+    # Karpenter controller Helm chart.
+    # settings.clusterName, settings.interruptionQueue, and settings.eksControlPlane
+    # are injected automatically — no set block needed.
+    # Default: { enabled = true, version = "1.8.2", values = "" }
+    karpenter = {
+      enabled = true
+      version = "1.8.2"
+      values  = ""  # optional extra Helm values merged on top of built-in defaults
+    }
+
+    # Grafana k8s-monitoring (Alloy-based metrics, logs, and traces pipeline).
+    # Prerequisites — create this secret before applying:
+    #   kubectl create secret generic grafana-cloud-credentials -n monitoring \
+    #     --from-literal=prometheus-username=<id>  --from-literal=prometheus-password=<token> \
+    #     --from-literal=loki-username=<id>        --from-literal=loki-password=<token> \
+    #     --from-literal=otlp-username=<id>        --from-literal=otlp-password=<token>
+    #
+    # Coprocessor pods must set:
+    #   OTEL_EXPORTER_OTLP_ENDPOINT=http://k8s-monitoring-alloy-receiver.monitoring.svc.cluster.local:4317
+    #
+    # Default: { enabled = false, version = "3.8.1", all urls = "" }
+    k8s_monitoring = {
+      enabled        = true
+      version        = "3.8.1"
+      prometheus_url = ""  # CHANGE ME — e.g. https://prometheus-prod-01-eu-west-0.grafana.net/api/prom/push
+      loki_url       = ""  # CHANGE ME — e.g. https://logs-prod-eu-west-0.grafana.net/loki/api/v1/push
+      otlp_url       = ""  # CHANGE ME — e.g. https://otlp-gateway-prod-eu-west-0.grafana.net/otlp
+      values         = ""  # optional extra Helm values merged on top of built-in defaults
+    }
+
+    # Prometheus RDS exporter.
+    # Default: { enabled = false, version = "1.0.1" }
+    prometheus_rds_exporter = {
+      enabled = false
+      version = "1.0.1"
+    }
+
+    # Prometheus Postgres exporter.
+    # Default: { enabled = false, version = "7.3.0" }
+    prometheus_postgres_exporter = {
+      enabled = false
+      version = "7.3.0"
+    }
+  }
+
+  # ── Custom applications ───────────────────────────────────────────────────
+  # Additional Helm releases beyond the built-ins. An entry with the same key
+  # as a built-in overrides it entirely.
   # Default: {}
-  applications = {
+  extra = {
 
     # ── Example 1: simple chart, no service account or IRSA ──────────────────
-    metrics-server = {
+    my-app = {
       # Required. Namespace the release is deployed into.
       namespace = {
         # Required. Kubernetes namespace name.
-        name = "kube-system"
+        name = "my-app"
 
         # false = namespace already exists; true = Terraform creates it.
         # Default: false
-        create = false
+        create = true
       }
 
       # helm_chart is optional. Omit entirely if you only need a namespace or SA.
       helm_chart = {
         # Required.
-        repository = "https://kubernetes-sigs.github.io/metrics-server"
-        chart      = "metrics-server"
-        version    = "3.13.0"
+        repository = "https://charts.example.com"
+        chart      = "my-app"
+        version    = "1.0.0"
 
         # Raw YAML values (equivalent to a values.yaml file). Default: ""
         values = ""
@@ -775,11 +974,11 @@ k8s_system_charts = {
       }
     }
 
-    # ── Example 2: chart with a service account (Helm-managed) ───────────────
-    karpenter = {
+    # ── Example 2: chart with Terraform-managed service account + IRSA ────────
+    prometheus-rds-exporter = {
       namespace = {
-        name   = "karpenter"
-        create = true
+        name   = "monitoring"
+        create = false
       }
 
       # service_account is optional.
@@ -787,47 +986,16 @@ k8s_system_charts = {
       service_account = {
         # false = do not create via Terraform; let Helm or another tool manage it.
         # Default: false
-        create = false
+        create = true
 
         # Service account name. Default: null
-        name = "karpenter"
+        name = "prometheus-rds-exporter"
 
         # Default: {}
         labels = {}
 
         # Default: {}
         annotations = {}
-      }
-
-      helm_chart = {
-        repository = "oci://public.ecr.aws/karpenter"
-        chart      = "karpenter"
-        version    = "1.8.2"
-
-        # settings.clusterName, settings.interruptionQueue, and
-        # settings.eksControlPlane are injected automatically by the root module
-        # via set_computed — no set block needed here.
-        values = <<-YAML
-          logLevel: info
-          replicas: 1
-        YAML
-
-        atomic  = true
-        wait    = true
-        timeout = 600
-      }
-    }
-
-    # ── Example 3: chart with Terraform-managed service account + IRSA ────────
-    prometheus-rds-exporter = {
-      namespace = {
-        name   = "monitoring"
-        create = false
-      }
-
-      service_account = {
-        create = true
-        name   = "prometheus-rds-exporter"
       }
 
       # irsa provisions an IAM role annotated onto the service account.
@@ -844,7 +1012,6 @@ k8s_system_charts = {
         # Default: []
         policy_statements = [
           {
-            # Default: ""
             sid       = ""
             effect    = "Allow"
             actions   = ["rds:DescribeDBInstances"]
@@ -864,263 +1031,15 @@ k8s_system_charts = {
       }
     }
 
-    # ── Example 4: chart with inline YAML values using __partner__/__network__ ──
-    # __partner__ and __network__ are substituted automatically by the module
-    # from var.partner_name and var.environment at apply time.
-    k8s-monitoring = {
-      namespace = {
-        name   = "monitoring"
-        create = true
-      }
-
-      helm_chart = {
-        repository = "https://grafana.github.io/helm-charts"
-        chart      = "k8s-monitoring"
-        version    = "3.8.1"
-
-        # Prerequisites — create this secret before applying:
-        # kubectl create secret generic grafana-cloud-credentials -n monitoring \
-        #   --from-literal=prometheus-username=<id>  --from-literal=prometheus-password=<token> \
-        #   --from-literal=prometheus-url=<url> \
-        #   --from-literal=loki-username=<id>        --from-literal=loki-password=<token> \
-        #   --from-literal=loki-url=<url> \
-        #   --from-literal=otlp-username=<id>        --from-literal=otlp-password=<token> \
-        #   --from-literal=otlp-url=<url>
-        #
-        # Coprocessor pods must set:
-        #   OTEL_EXPORTER_OTLP_ENDPOINT=http://k8s-monitoring-alloy-receiver.monitoring.svc.cluster.local:4317
-        values = <<-YAML
-          alloy-metrics:
-            enabled: true
-
-          alloy-logs:
-            enabled: true
-
-          clusterMetrics:
-            enabled: true
-
-          prometheusOperatorObjects:
-            enabled: true
-            serviceMonitors:
-              enabled: true
-              namespaces:
-                - monitoring
-                - coproc
-                - gw-blockchain
-                - eth-blockchain
-                - kube-system
-
-          podLogs:
-            enabled: true
-            namespaces:
-              - coproc
-              - gw-blockchain
-              - eth-blockchain
-
-          traces:
-            enabled: true
-
-          receivers:
-            otlp:
-              enabled: true
-              grpc:
-                enabled: true
-                port: 4317
-              http:
-                enabled: false
-
-          destinations:
-            - name: grafana-cloud-metrics
-              type: prometheus
-              url: # CHANGE ME
-              externalLabels:
-                partner: __partner__
-                network: __network__
-              auth:
-                type: basic
-                usernameKey: prometheus-username
-                passwordKey: prometheus-password
-              secret:
-                create: false
-                name: grafana-cloud-credentials
-                namespace: monitoring
-
-            - name: grafana-cloud-logs
-              type: loki
-              url: # CHANGE ME
-              tenantIdKey: loki-username
-              externalLabels:
-                partner: __partner__
-                network: __network__
-              auth:
-                type: basic
-                usernameKey: loki-username
-                passwordKey: loki-password
-              secret:
-                create: false
-                name: grafana-cloud-credentials
-                namespace: monitoring
-
-            - name: grafana-cloud-traces
-              type: otlp
-              url: # CHANGE ME - e.g. https://otlp-gateway-prod-us-east-0.grafana.net/otlp
-              protocol: http  # Grafana Cloud OTLP gateway requires http, not grpc (default)
-              externalLabels:
-                partner: __partner__
-                network: __network__
-              auth:
-                type: basic
-                usernameKey: otlp-username
-                passwordKey: otlp-password
-              secret:
-                create: false
-                name: grafana-cloud-credentials
-                namespace: monitoring
-        YAML
-      }
-    }
-
-    # ── Example 5: namespace + service account only, no Helm chart ───────────
+    # ── Example 3: namespace + service account only, no Helm chart ───────────
     # Useful for pre-creating a namespace or SA before an app is deployed.
     my-namespace-only = {
       namespace = {
-        name   = "my-app"
+        name   = "my-other-app"
         create = true
       }
 
       # helm_chart omitted entirely — only the namespace is created.
-    }
-  }
-}
-
-
-# ==============================================================================
-#  S3
-#
-#  Default: { buckets = {} }
-# ==============================================================================
-s3 = {
-  # Map of buckets to create. The map key is a short logical name used in
-  # Terraform resource addressing and output maps.
-  buckets = {
-    coprocessor = {
-      # Required. Human-readable description used for tagging.
-      purpose = "coprocessor-storage"
-
-      # Override the computed bucket name "<partner>-<env>-<key>-<random_suffix>".
-      # Use when importing a pre-existing bucket.
-      # Default: null (uses computed name)
-      name_override = null
-
-      # Allow Terraform destroy to delete the bucket even if it contains objects.
-      # Default: false
-      force_destroy = false
-
-      # Enable S3 object versioning.
-      # Default: true
-      versioning = true
-
-      # Public access configuration.
-      # Default: { enabled = false }
-      public_access = {
-        # true  = all four public access block flags set to false (bucket is publicly accessible)
-        # false = bucket is fully private
-        enabled = false
-      }
-
-      # CloudFront distribution in front of this bucket.
-      # Default: { enabled = false }
-      cloudfront = {
-        # Default: false
-        enabled = true
-
-        # Edge location coverage.
-        # "PriceClass_100" = EU + NA only (cheapest)
-        # "PriceClass_200" = above + Asia Pacific, Middle East, Africa
-        # "PriceClass_All" = all edge locations globally (best cache hit rate)
-        # Default: "PriceClass_All"
-        price_class = "PriceClass_All"
-
-        # Compress objects automatically (Gzip / Brotli). Default: true
-        compress = true
-
-        # "redirect-to-https" | "https-only" | "allow-all"
-        # Default: "redirect-to-https"
-        viewer_protocol_policy = "redirect-to-https"
-
-        # HTTP methods CloudFront accepts and forwards to the origin.
-        # Default: ["GET", "HEAD"]
-        allowed_methods = ["GET", "HEAD"]
-
-        # Methods whose responses CloudFront caches. Must be a subset of allowed_methods.
-        # Default: ["GET", "HEAD"]
-        cached_methods = ["GET", "HEAD"]
-
-        # AWS managed cache policy ID. Default is CachingOptimized — recommended for S3.
-        # Default: "658327ea-f89d-4fab-a63d-7e88639e58f6"
-        cache_policy_id = "658327ea-f89d-4fab-a63d-7e88639e58f6"
-
-        # "none" | "whitelist" | "blacklist". Default: "none"
-        geo_restriction_type = "none"
-
-        # ISO 3166-1 alpha-2 country codes. Only used when geo_restriction_type != "none".
-        # Default: []
-        geo_restriction_locations = []
-
-        # ACM certificate ARN for a custom domain. Must be in us-east-1.
-        # null = use the default *.cloudfront.net certificate.
-        # Default: null
-        acm_certificate_arn = null
-
-        # Only relevant when acm_certificate_arn is set.
-        # "sni-only" (recommended) | "vip". Default: "sni-only"
-        ssl_support_method = "sni-only"
-
-        # Only relevant when acm_certificate_arn is set.
-        # Default: "TLSv1.2_2021"
-        minimum_protocol_version = "TLSv1.2_2021"
-      }
-
-      # CORS configuration for browser-based access.
-      # Default: { enabled = false, all lists empty }
-      cors = {
-        enabled         = false
-        allowed_origins = ["https://example.com"]
-        allowed_methods = ["GET", "HEAD"]
-        allowed_headers = ["Authorization"]
-        expose_headers  = ["Access-Control-Allow-Origin"]
-      }
-
-      # IAM bucket policy statements.
-      # resources aliases: "bucket" → bucket ARN, "objects" → bucket ARN + "/*"
-      # Default: []
-      policy_statements = [
-        {
-          sid        = "PublicRead"
-          effect     = "Allow"
-          principals = { "*" = ["*"] }  # wildcard principal
-          actions    = ["s3:GetObject"]
-          resources  = ["objects"]
-
-          # Optional conditions on the policy statement.
-          # Default: []
-          conditions = [
-            {
-              test     = "StringEquals"
-              variable = "aws:SourceVpc"
-              values   = ["vpc-0123456789abcdef0"]
-            }
-          ]
-        },
-        {
-          sid        = "AccountAccess"
-          effect     = "Allow"
-          principals = { AWS = ["arn:aws:iam::123456789012:root"] }  # typed principal
-          actions    = ["s3:*"]
-          resources  = ["bucket", "objects"]
-          conditions = []
-        },
-      ]
     }
   }
 }

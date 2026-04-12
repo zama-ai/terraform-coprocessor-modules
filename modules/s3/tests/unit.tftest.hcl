@@ -366,3 +366,138 @@ run "multiple_buckets_produce_separate_resources" {
     error_message = "Each bucket must have an ownership controls resource."
   }
 }
+
+# =============================================================================
+#  CloudFront
+# =============================================================================
+
+run "cloudfront_not_created_by_default" {
+  command = plan
+
+  variables {
+    buckets = {
+      coprocessor = { purpose = "test" }
+    }
+  }
+
+  assert {
+    condition     = length(aws_cloudfront_distribution.this) == 0
+    error_message = "No CloudFront distribution must be created when cloudfront.enabled = false (default)."
+  }
+}
+
+run "cloudfront_created_when_enabled" {
+  command = plan
+
+  variables {
+    buckets = {
+      coprocessor = {
+        purpose    = "test"
+        cloudfront = { enabled = true }
+      }
+    }
+  }
+
+  assert {
+    condition     = length(aws_cloudfront_distribution.this) == 1
+    error_message = "A CloudFront distribution must be created when cloudfront.enabled = true."
+  }
+
+  assert {
+    condition     = contains(keys(aws_cloudfront_distribution.this), "coprocessor")
+    error_message = "CloudFront distribution key must match the bucket key."
+  }
+}
+
+run "cloudfront_uses_default_certificate_without_aliases" {
+  command = plan
+
+  variables {
+    buckets = {
+      coprocessor = {
+        purpose    = "test"
+        cloudfront = { enabled = true }
+      }
+    }
+  }
+
+  assert {
+    condition     = aws_cloudfront_distribution.this["coprocessor"].viewer_certificate[0].cloudfront_default_certificate == true
+    error_message = "CloudFront must use the default certificate when no acm_certificate_arn is set."
+  }
+
+  assert {
+    condition     = length(aws_cloudfront_distribution.this["coprocessor"].aliases) == 0
+    error_message = "CloudFront aliases must be empty when none are configured."
+  }
+}
+
+run "cloudfront_aliases_are_set" {
+  command = plan
+
+  variables {
+    buckets = {
+      coprocessor = {
+        purpose = "test"
+        cloudfront = {
+          enabled             = true
+          aliases             = ["assets.example.com", "cdn.example.com"]
+          acm_certificate_arn = "arn:aws:acm:us-east-1:123456789012:certificate/abc-12345"
+        }
+      }
+    }
+  }
+
+  assert {
+    condition     = aws_cloudfront_distribution.this["coprocessor"].aliases == toset(["assets.example.com", "cdn.example.com"])
+    error_message = "CloudFront aliases must match the configured values."
+  }
+}
+
+run "cloudfront_uses_acm_certificate_when_provided" {
+  command = plan
+
+  variables {
+    buckets = {
+      coprocessor = {
+        purpose = "test"
+        cloudfront = {
+          enabled             = true
+          aliases             = ["assets.example.com"]
+          acm_certificate_arn = "arn:aws:acm:us-east-1:123456789012:certificate/abc-12345"
+        }
+      }
+    }
+  }
+
+  assert {
+    condition     = aws_cloudfront_distribution.this["coprocessor"].viewer_certificate[0].cloudfront_default_certificate == false
+    error_message = "CloudFront must not use the default certificate when acm_certificate_arn is set."
+  }
+
+  assert {
+    condition     = aws_cloudfront_distribution.this["coprocessor"].viewer_certificate[0].acm_certificate_arn == "arn:aws:acm:us-east-1:123456789012:certificate/abc-12345"
+    error_message = "CloudFront must use the provided ACM certificate ARN."
+  }
+}
+
+run "cloudfront_only_created_for_buckets_that_enable_it" {
+  command = plan
+
+  variables {
+    buckets = {
+      public  = { purpose = "test", cloudfront = { enabled = true } }
+      private = { purpose = "test" }
+    }
+  }
+
+  assert {
+    condition     = length(aws_cloudfront_distribution.this) == 1
+    error_message = "CloudFront distribution must only be created for buckets where cloudfront.enabled = true."
+  }
+
+  assert {
+    condition     = contains(keys(aws_cloudfront_distribution.this), "public")
+    error_message = "CloudFront distribution must exist for the 'public' bucket."
+  }
+}

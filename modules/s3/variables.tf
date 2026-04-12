@@ -63,6 +63,7 @@ variable "buckets" {
         cache_policy_id           = optional(string, "658327ea-f89d-4fab-a63d-7e88639e58f6") # AWS managed CachingOptimized
         geo_restriction_type      = optional(string, "none")
         geo_restriction_locations = optional(list(string), [])
+        aliases                   = optional(list(string), [])       # custom hostnames (CNAMEs) for the distribution; requires acm_certificate_arn
         acm_certificate_arn       = optional(string, null)           # if set, used instead of default CloudFront certificate
         ssl_support_method        = optional(string, "sni-only")     # only relevant when acm_certificate_arn is set
         minimum_protocol_version  = optional(string, "TLSv1.2_2021") # only relevant when acm_certificate_arn is set

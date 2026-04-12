@@ -148,10 +148,10 @@ k8s_coprocessor_deps = {
 #  k8s System Charts
 # =============================================================================
 k8s_system_charts = {
-  enabled = false
+  enabled = false # CHANGE ME: refer to operator documentation regarding order of deployments
 
   defaults = {
-    karpenter_nodepools          = { enabled = true }
+    karpenter_nodepools          = { enabled = false } # CHANGE ME: refer to operator documentation regarding order of deployments
     prometheus_operator_crds     = { enabled = true }
     metrics_server               = { enabled = true }
     karpenter                    = { enabled = true }

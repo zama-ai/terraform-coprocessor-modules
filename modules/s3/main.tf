@@ -163,6 +163,7 @@ resource "aws_cloudfront_distribution" "this" {
   enabled         = true
   is_ipv6_enabled = true
   price_class     = each.value.cloudfront.price_class
+  aliases         = each.value.cloudfront.aliases
 
   origin {
     domain_name = aws_s3_bucket.this[each.key].bucket_regional_domain_name
