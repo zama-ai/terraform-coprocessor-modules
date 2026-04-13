@@ -23,10 +23,10 @@ default_tags = {
 #  Kubernetes Provider — required when eks.enabled = false
 # =============================================================================
 kubernetes_provider = {
-  host                   = "https://XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX.gr7.eu-west-1.eks.amazonaws.com"                                     # CHANGE ME
+  host                   = "https://XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX.gr7.eu-west-1.eks.amazonaws.com"                                     # CHANGE ME: your EKS cluster API endpoint
   cluster_ca_certificate = "LS0tLS1CRUdJTi..."                                                                                            # CHANGE ME: base64-encoded CA cert from your cluster
   cluster_name           = "acme-testnet"                                                                                                 # CHANGE ME: your existing cluster name
-  oidc_provider_arn      = "arn:aws:iam::123456789012:oidc-provider/oidc.eks.eu-west-1.amazonaws.com/id/EXAMPLED539D4633E53DE1B716D3041E" # CHANGE ME
+  oidc_provider_arn      = "arn:aws:iam::123456789012:oidc-provider/oidc.eks.eu-west-1.amazonaws.com/id/EXAMPLED539D4633E53DE1B716D3041E" # CHANGE ME: your OIDC provider ARN
 }
 
 # =============================================================================
@@ -78,7 +78,9 @@ s3 = {
       }
 
       cloudfront = {
-        enabled = true
+        enabled             = true
+        acm_certificate_arn = "arn:aws:acm:us-east-1:123456789012:certificate/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" # CHANGE ME: ACM cert ARN (must be in us-east-1)
+        aliases             = ["assets.example.com"]                                                                # CHANGE ME: your CloudFront custom hostname(s)
       }
 
       cors = {
@@ -118,44 +120,19 @@ k8s_coprocessor_deps = {
   default_namespace = "coproc"
 
   namespaces = {
-    coproc         = {}
-    coproc-admin   = {}
-    gw-blockchain  = {}
-    eth-blockchain = {}
+    coproc         = { enabled = true }
+    coproc-admin   = { enabled = true }
+    gw-blockchain  = { enabled = true }
+    eth-blockchain = { enabled = true }
   }
 
   service_accounts = {
-    coprocessor = {
-      name      = "coprocessor"
-      namespace = "coproc"
-      s3_bucket_access = {
-        coprocessor = { actions = ["s3:*Object", "s3:ListBucket"] }
-      }
-    }
-
-    db-admin = {
-      # Used by k8s Jobs/Pods that need superuser access to RDS:
-      # pg_restore, CREATE USER, schema migrations, etc.
-      name                     = "db-admin"
-      namespace                = "coproc-admin"
-      rds_master_secret_access = true
-    }
+    coprocessor = { enabled = true }
+    db_admin    = { enabled = true }
   }
 
   storage_classes = {
-    gp3 = {
-      provisioner         = "ebs.csi.aws.com"
-      reclaim_policy      = "Delete"
-      volume_binding_mode = "WaitForFirstConsumer"
-      parameters = {
-        type      = "gp3"
-        fsType    = "ext4"
-        encrypted = "true"
-      }
-      annotations = {
-        "storageclass.kubernetes.io/is-default-class" = "true"
-      }
-    }
+    gp3 = { enabled = true }
   }
 
   external_name_services = {

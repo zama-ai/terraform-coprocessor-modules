@@ -114,6 +114,8 @@ module "k8s_coprocessor_deps" {
   s3_bucket_arns        = module.s3.bucket_arns
 
   k8s = local.k8s_config
+
+  depends_on = [module.eks]
 }
 
 # ******************************************************
@@ -158,4 +160,6 @@ module "k8s_system_charts" {
       "serviceMonitor.relabelings[0].replacement" = var.environment
     }
   }
+
+  depends_on = [module.eks]
 }

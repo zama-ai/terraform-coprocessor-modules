@@ -85,7 +85,9 @@ s3 = {
       }
 
       cloudfront = {
-        enabled = true
+        enabled             = true
+        acm_certificate_arn = "arn:aws:acm:us-east-1:123456789012:certificate/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" # CHANGE ME: ACM cert ARN (must be in us-east-1)
+        aliases             = ["assets.example.com"]                                                                # CHANGE ME: your CloudFront custom hostname(s)
       }
 
       cors = {
@@ -161,9 +163,9 @@ k8s_system_charts = {
     k8s_monitoring = {
       enabled = true
 
-      prometheus_url = "" # CHANGE ME
-      loki_url       = "" # CHANGE ME
-      otlp_url       = "" # CHANGE ME
+      prometheus_url = "https://prometheus-prod-XX-eu-west-0.grafana.net/api/prom/push" # CHANGE ME
+      loki_url       = "https://logs-prod-eu-west-0.grafana.net/loki/api/v1/push"       # CHANGE ME
+      otlp_url       = "https://otlp-gateway-prod-eu-west-0.grafana.net/otlp"           # CHANGE ME
     }
   }
 }
