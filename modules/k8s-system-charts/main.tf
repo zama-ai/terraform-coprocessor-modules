@@ -60,11 +60,23 @@ locals {
       alloy-logs: {}
       alloy-receiver: {}
 
+    alloy-logs:
+      presets:
+        - filesystem-log-reader
+
+    telemetryServices:
+      kube-state-metrics:
+        deploy: true
+      node-exporter:
+        deploy: true
+
     clusterMetrics:
       enabled: true
+      collector: alloy-metrics
 
     prometheusOperatorObjects:
       enabled: true
+      collector: alloy-metrics
       serviceMonitors:
         enabled: true
         namespaces:
@@ -76,6 +88,7 @@ locals {
 
     podLogsViaLoki:
       enabled: true
+      collector: alloy-logs
       namespaces:
         - coproc
         - gw-blockchain
@@ -83,6 +96,7 @@ locals {
 
     applicationObservability:
       enabled: true
+      collector: alloy-receiver
       receivers:
         otlp:
           grpc:
@@ -311,7 +325,7 @@ locals {
   }
 
   builtin_karpenter = {
-    namespace            = { name = "karpenter", create = true }
+    namespace            = { name = "karpenter", create = false }
     service_account      = { create = false, name = "karpenter", labels = {}, annotations = {} }
     irsa                 = { enabled = false, role_name = null, policy_statements = [] }
     additional_manifests = { enabled = false, manifests = {} }
@@ -392,8 +406,14 @@ locals {
       create_namespace = false
       wait             = true
       timeout          = 300
-      set              = {}
-      values           = join("\n", compact([local.k8s_monitoring_base_values, local.k8s_monitoring_destinations_values, var.defaults.k8s_monitoring.values]))
+      set = {
+        # alloy-logs preset must be set via --set (highest precedence) because
+        # user-supplied values files include a `collectors:` key that replaces
+        # our base `collectors:` block in the single joined YAML document, and
+        # some chart validation paths check collectors.alloy-logs.presets.
+        "alloy-logs.presets[0]" = "filesystem-log-reader"
+      }
+      values = join("\n", compact([local.k8s_monitoring_base_values, local.k8s_monitoring_destinations_values, var.defaults.k8s_monitoring.values]))
     }
   }
 

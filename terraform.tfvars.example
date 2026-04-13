@@ -903,12 +903,13 @@ k8s_system_charts = {
       enabled    = true
       repository = "oci://public.ecr.aws/karpenter"
       chart      = "karpenter"
-      version    = "1.8.2"
+      version    = "1.11.0"
       values     = <<-YAML
         controller:
           image:
             repository: hub.zama.org/zama-protocol/zama.ai/karpenter
-            tag: 1.8.2
+            tag: v1.11.0
+            digest: ""
         imagePullSecrets:
           - name: registry-credentials
       YAML
@@ -934,39 +935,44 @@ k8s_system_charts = {
       loki_url       = "https://logs-prod-eu-west-0.grafana.net/loki/api/v1/push"        # CHANGE ME
       otlp_url       = "https://otlp-gateway-prod-eu-west-0.grafana.net/otlp"            # CHANGE ME
 
-      # Override Alloy images with Chainguard-hardened equivalents.
-      # Only the three collectors we enable are overridden (alloy-metrics, alloy-logs,
-      # alloy-receiver). alloy-singleton and alloy-profiles are not used.
-      # configmap-reload is left as upstream — Chainguard image uses incompatible flags.
+      # Override Alloy images to pull from the Zama mirror registry.
+      # global.imagePullSecrets propagates to all collector (alloy) pods.
+      # alloy-operator uses its own image.pullSecrets (does not inherit global).
       values = <<-YAML
+        global:
+          imagePullSecrets:
+            - name: registry-credentials
+
         alloy-operator:
           image:
             registry: hub.zama.org
             repository: zama-protocol/zama.ai/grafana-alloy-operator
             tag: v0.5.3
-          imagePullSecrets:
-            - name: registry-credentials
+            pullSecrets:
+              - name: registry-credentials
 
         collectors:
           alloy-metrics:
             image:
               registry: hub.zama.org
               repository: zama-protocol/zama.ai/grafana-alloy
-              tag: 1.15.0
+              tag: v1.15.0
               pullSecrets:
                 - registry-credentials
           alloy-logs:
+            presets:
+              - filesystem-log-reader
             image:
               registry: hub.zama.org
               repository: zama-protocol/zama.ai/grafana-alloy
-              tag: 1.15.0
+              tag: v1.15.0
               pullSecrets:
                 - registry-credentials
           alloy-receiver:
             image:
               registry: hub.zama.org
               repository: zama-protocol/zama.ai/grafana-alloy
-              tag: 1.15.0
+              tag: v1.15.0
               pullSecrets:
                 - registry-credentials
       YAML

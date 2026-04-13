@@ -130,6 +130,7 @@ k8s_coprocessor_deps = {
     monitoring     = { enabled = true }
     gw-blockchain  = { enabled = true }
     eth-blockchain = { enabled = true }
+    karpenter      = { enabled = true }
   }
 
   service_accounts = {
@@ -150,10 +151,10 @@ k8s_coprocessor_deps = {
 #  k8s System Charts
 # =============================================================================
 k8s_system_charts = {
-  enabled = false # CHANGE ME: refer to operator documentation regarding order of deployments
+  enabled = true # CHANGE ME: refer to operator documentation regarding order of deployments
 
   defaults = {
-    karpenter_nodepools = { enabled = false } # CHANGE ME: refer to operator documentation regarding order of deployments
+    karpenter_nodepools = { enabled = true } # CHANGE ME: refer to operator documentation regarding order of deployments
 
     prometheus_operator_crds = {
       enabled    = true
@@ -170,7 +171,7 @@ k8s_system_charts = {
       values     = <<-YAML
         image:
           repository: hub.zama.org/zama-protocol/zama.ai/metrics-server
-          tag: v0.8.0
+          tag: v0.8-dev
         imagePullSecrets:
           - name: registry-credentials
       YAML
@@ -180,12 +181,13 @@ k8s_system_charts = {
       enabled    = true
       repository = "oci://public.ecr.aws/karpenter"
       chart      = "karpenter"
-      version    = "1.11.0"
+      version    = "1.10.0"
       values     = <<-YAML
         controller:
           image:
             repository: hub.zama.org/zama-protocol/zama.ai/karpenter
-            tag: v1.11.0
+            tag: v1.10.0
+            digest: ""
         imagePullSecrets:
           - name: registry-credentials
       YAML
@@ -205,10 +207,11 @@ k8s_system_charts = {
       version    = "7.3.0"
       values     = <<-YAML
         image:
-          repository: hub.zama.org/cgr/zama.ai/postgres-exporter
-          tag: v0.18.1
-        imagePullSecrets:
-          - name: registry-credentials
+          registry: hub.zama.org
+          repository: zama-protocol/zama.ai/prometheus-postgres-exporter
+          tag: v0.19.1
+          pullSecrets:
+            - registry-credentials
       YAML
     }
 
@@ -218,39 +221,45 @@ k8s_system_charts = {
       chart      = "k8s-monitoring"
       version    = "4.0.1"
 
-      prometheus_url = "https://prometheus-prod-XX-eu-west-0.grafana.net/api/prom/push" # CHANGE ME
-      loki_url       = "https://logs-prod-eu-west-0.grafana.net/loki/api/v1/push"       # CHANGE ME
-      otlp_url       = "https://otlp-gateway-prod-eu-west-0.grafana.net/otlp"           # CHANGE ME
+      prometheus_url = "https://prometheus-prod-13-prod-us-east-0.grafana.net/api/prom/push" # CHANGE ME
+      loki_url       = "https://logs-prod-006.grafana.net/loki/api/v1/push"                  # CHANGE ME
+      otlp_url       = "https://otlp-gateway-prod-us-east-0.grafana.net/otlp"                # CHANGE ME
 
       values = <<-YAML
+        global:
+          imagePullSecrets:
+            - name: registry-credentials
+
         alloy-operator:
           image:
             registry: hub.zama.org
             repository: zama-protocol/zama.ai/grafana-alloy-operator
-            tag: v0.5.3
-          imagePullSecrets:
-            - name: registry-credentials
+            tag: v0.5.3-dev
+            pullSecrets:
+              - name: registry-credentials
 
         collectors:
           alloy-metrics:
             image:
               registry: hub.zama.org
               repository: zama-protocol/zama.ai/grafana-alloy
-              tag: 1.15.0
+              tag: v1.15.0
               pullSecrets:
                 - registry-credentials
           alloy-logs:
+            presets:
+              - filesystem-log-reader
             image:
               registry: hub.zama.org
               repository: zama-protocol/zama.ai/grafana-alloy
-              tag: 1.15.0
+              tag: v1.15.0
               pullSecrets:
                 - registry-credentials
           alloy-receiver:
             image:
               registry: hub.zama.org
               repository: zama-protocol/zama.ai/grafana-alloy
-              tag: 1.15.0
+              tag: v1.15.0
               pullSecrets:
                 - registry-credentials
       YAML
