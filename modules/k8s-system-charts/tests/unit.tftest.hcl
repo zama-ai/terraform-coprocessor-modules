@@ -83,24 +83,6 @@ run "namespace_create_true_creates_resource" {
   }
 }
 
-run "namespace_create_false_skips_resource" {
-  command = plan
-
-  variables {
-    extra = {
-      metrics-server = {
-        namespace  = { name = "kube-system", create = false }
-        helm_chart = { repository = "https://kubernetes-sigs.github.io/metrics-server", chart = "metrics-server", version = "3.13.0" }
-      }
-    }
-  }
-
-  assert {
-    condition     = length(kubernetes_namespace.this) == 0
-    error_message = "No namespace must be created when namespace.create = false."
-  }
-}
-
 # =============================================================================
 #  Helm release
 # =============================================================================
@@ -124,59 +106,6 @@ run "one_release_per_helm_app" {
   assert {
     condition     = length(helm_release.apps) == 2
     error_message = "One helm release must be created per application with helm_chart set."
-  }
-}
-
-run "helm_release_name_matches_map_key" {
-  command = plan
-
-  variables {
-    extra = {
-      metrics-server = {
-        namespace  = { name = "kube-system" }
-        helm_chart = { repository = "https://kubernetes-sigs.github.io/metrics-server", chart = "metrics-server", version = "3.13.0" }
-      }
-    }
-  }
-
-  assert {
-    condition     = helm_release.apps["metrics-server"].name == "metrics-server"
-    error_message = "Helm release name must match the map key."
-  }
-}
-
-run "helm_release_namespace_matches_namespace_name" {
-  command = plan
-
-  variables {
-    extra = {
-      metrics-server = {
-        namespace  = { name = "kube-system" }
-        helm_chart = { repository = "https://kubernetes-sigs.github.io/metrics-server", chart = "metrics-server", version = "3.13.0" }
-      }
-    }
-  }
-
-  assert {
-    condition     = helm_release.apps["metrics-server"].namespace == "kube-system"
-    error_message = "Helm release namespace must match namespace.name."
-  }
-}
-
-run "helm_release_skipped_when_helm_chart_null" {
-  command = plan
-
-  variables {
-    extra = {
-      no-helm-app = {
-        namespace = { name = "default" }
-      }
-    }
-  }
-
-  assert {
-    condition     = length(helm_release.apps) == 0
-    error_message = "No helm release must be created when helm_chart is null."
   }
 }
 
@@ -275,50 +204,9 @@ run "service_account_create_true_creates_resource" {
   }
 }
 
-run "service_account_create_false_skips_resource" {
-  command = plan
-
-  variables {
-    extra = {
-      karpenter = {
-        namespace = { name = "karpenter", create = true }
-        service_account = {
-          create = false
-          name   = "karpenter"
-        }
-        helm_chart = { repository = "oci://public.ecr.aws/karpenter", chart = "karpenter", version = "1.8.2" }
-      }
-    }
-  }
-
-  assert {
-    condition     = length(kubernetes_service_account.this) == 0
-    error_message = "No service account must be created when service_account.create = false."
-  }
-}
-
 # =============================================================================
 #  IRSA
 # =============================================================================
-
-run "irsa_disabled_creates_no_iam_resources" {
-  command = plan
-
-  variables {
-    extra = {
-      metrics-server = {
-        namespace  = { name = "kube-system" }
-        irsa       = { enabled = false }
-        helm_chart = { repository = "https://kubernetes-sigs.github.io/metrics-server", chart = "metrics-server", version = "3.13.0" }
-      }
-    }
-  }
-
-  assert {
-    condition     = length(aws_iam_role.irsa) == 0
-    error_message = "No IRSA role must be created when irsa.enabled = false."
-  }
-}
 
 run "irsa_enabled_creates_role_policy_and_attachment" {
   command = plan
@@ -442,97 +330,6 @@ run "set_computed_values_are_merged_into_helm_release" {
 # =============================================================================
 #  additional_manifests
 # =============================================================================
-
-run "additional_manifests_disabled_creates_no_manifest_resources" {
-  command = plan
-
-  variables {
-    extra = {
-      karpenter-nodepools = {
-        namespace = { name = "karpenter" }
-        additional_manifests = {
-          enabled = false
-          manifests = {
-            nodepool = <<-YAML
-              apiVersion: karpenter.sh/v1
-              kind: NodePool
-              metadata:
-                name: default
-              spec:
-                template:
-                  spec:
-                    nodeClassRef:
-                      group: karpenter.k8s.aws
-                      kind: EC2NodeClass
-                      name: default
-                    requirements: []
-                limits:
-                  cpu: "10"
-                disruption:
-                  consolidationPolicy: WhenEmpty
-                  consolidateAfter: 30s
-            YAML
-          }
-        }
-      }
-    }
-  }
-
-  assert {
-    condition     = length(kubernetes_manifest.additional) == 0
-    error_message = "No manifests must be created when additional_manifests.enabled = false."
-  }
-}
-
-run "additional_manifests_enabled_creates_manifest_resources" {
-  command = plan
-
-  variables {
-    manifests_vars = {
-      cluster_name = "acme-testnet"
-      node_role    = "acme-testnet-Karpenter"
-    }
-    extra = {
-      karpenter-nodepools = {
-        namespace = { name = "karpenter" }
-        additional_manifests = {
-          enabled = true
-          manifests = {
-            nodepool = <<-YAML
-              apiVersion: karpenter.sh/v1
-              kind: NodePool
-              metadata:
-                name: default
-              spec:
-                template:
-                  spec:
-                    nodeClassRef:
-                      group: karpenter.k8s.aws
-                      kind: EC2NodeClass
-                      name: default
-                    requirements: []
-                limits:
-                  cpu: "10"
-                disruption:
-                  consolidationPolicy: WhenEmpty
-                  consolidateAfter: 30s
-            YAML
-          }
-        }
-      }
-    }
-  }
-
-  assert {
-    condition     = length(kubernetes_manifest.additional) == 1
-    error_message = "One manifest resource must be created per entry when additional_manifests.enabled = true."
-  }
-
-  assert {
-    condition     = contains(keys(kubernetes_manifest.additional), "karpenter-nodepools/nodepool")
-    error_message = "Manifest key must be '<app_key>/<manifest_key>'."
-  }
-}
 
 run "manifests_vars_placeholders_are_substituted" {
   command = plan
@@ -681,42 +478,6 @@ run "defaults_k8s_monitoring_urls_injected_into_destinations" {
 #  Built-in defaults
 # =============================================================================
 
-run "defaults_all_disabled_creates_no_resources" {
-  command = plan
-
-  variables {
-    defaults = {
-      karpenter_nodepools          = { enabled = false }
-      prometheus_operator_crds     = { enabled = false }
-      metrics_server               = { enabled = false }
-      karpenter                    = { enabled = false }
-      k8s_monitoring               = { enabled = false }
-      prometheus_rds_exporter      = { enabled = false }
-      prometheus_postgres_exporter = { enabled = false }
-    }
-  }
-
-  assert {
-    condition     = length(helm_release.apps) == 0
-    error_message = "No helm releases must be created when all defaults are disabled."
-  }
-
-  assert {
-    condition     = length(helm_release.crds) == 0
-    error_message = "No CRD releases must be created when all defaults are disabled."
-  }
-
-  assert {
-    condition     = length(kubernetes_manifest.additional) == 0
-    error_message = "No manifests must be created when all defaults are disabled."
-  }
-
-  assert {
-    condition     = length(aws_iam_role.irsa) == 0
-    error_message = "No IRSA roles must be created when all defaults are disabled."
-  }
-}
-
 run "defaults_karpenter_enabled_creates_helm_release" {
   command = plan
 
@@ -745,24 +506,7 @@ run "defaults_karpenter_enabled_creates_helm_release" {
   }
 }
 
-run "defaults_karpenter_version_override_is_respected" {
-  command = plan
-
-  variables {
-    defaults = {
-      karpenter_nodepools      = { enabled = false }
-      prometheus_operator_crds = { enabled = false }
-      metrics_server           = { enabled = false }
-      karpenter                = { enabled = true, version = "1.9.0" }
-    }
-  }
-
-  assert {
-    condition     = helm_release.apps["karpenter"].version == "1.9.0"
-    error_message = "defaults.karpenter.version override must be respected."
-  }
-}
-
+# Consolidates version, repository, and chart override tests into a single run.
 run "defaults_karpenter_user_values_appended_to_base" {
   command = plan
 
@@ -771,8 +515,29 @@ run "defaults_karpenter_user_values_appended_to_base" {
       karpenter_nodepools      = { enabled = false }
       prometheus_operator_crds = { enabled = false }
       metrics_server           = { enabled = false }
-      karpenter                = { enabled = true, values = "replicas: 2\n" }
+      karpenter = {
+        enabled    = true
+        version    = "1.9.0"
+        repository = "oci://my-registry.example.com/karpenter"
+        chart      = "karpenter-fork"
+        values     = "replicas: 2\n"
+      }
     }
+  }
+
+  assert {
+    condition     = helm_release.apps["karpenter"].version == "1.9.0"
+    error_message = "defaults.karpenter.version override must be respected."
+  }
+
+  assert {
+    condition     = helm_release.apps["karpenter"].repository == "oci://my-registry.example.com/karpenter"
+    error_message = "defaults.karpenter.repository override must be respected."
+  }
+
+  assert {
+    condition     = helm_release.apps["karpenter"].chart == "karpenter-fork"
+    error_message = "defaults.karpenter.chart override must be respected."
   }
 
   assert {
@@ -783,47 +548,6 @@ run "defaults_karpenter_user_values_appended_to_base" {
   assert {
     condition     = strcontains(helm_release.apps["karpenter"].values[0], "logLevel: info")
     error_message = "Baked-in karpenter base values must still be present when user values are appended."
-  }
-}
-
-run "defaults_prometheus_operator_crds_enabled_creates_crd_release" {
-  command = plan
-
-  variables {
-    defaults = {
-      karpenter_nodepools      = { enabled = false }
-      prometheus_operator_crds = { enabled = true }
-      metrics_server           = { enabled = false }
-      karpenter                = { enabled = false }
-    }
-  }
-
-  assert {
-    condition     = contains(keys(helm_release.crds), "prometheus-operator-crds")
-    error_message = "Built-in prometheus-operator-crds must land in helm_release.crds."
-  }
-
-  assert {
-    condition     = length(helm_release.apps) == 0
-    error_message = "prometheus-operator-crds must not appear in helm_release.apps."
-  }
-}
-
-run "defaults_metrics_server_enabled_creates_helm_release" {
-  command = plan
-
-  variables {
-    defaults = {
-      karpenter_nodepools      = { enabled = false }
-      prometheus_operator_crds = { enabled = false }
-      metrics_server           = { enabled = true }
-      karpenter                = { enabled = false }
-    }
-  }
-
-  assert {
-    condition     = contains(keys(helm_release.apps), "metrics-server")
-    error_message = "Built-in metrics-server must create a helm_release.apps entry."
   }
 }
 

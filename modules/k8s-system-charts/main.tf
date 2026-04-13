@@ -55,11 +55,10 @@ locals {
     global:
       scrapeInterval: 10m
 
-    alloy-metrics:
-      enabled: true
-
-    alloy-logs:
-      enabled: true
+    collectors:
+      alloy-metrics: {}
+      alloy-logs: {}
+      alloy-receiver: {}
 
     clusterMetrics:
       enabled: true
@@ -75,60 +74,57 @@ locals {
           - eth-blockchain
           - kube-system
 
-    podLogs:
+    podLogsViaLoki:
       enabled: true
       namespaces:
         - coproc
         - gw-blockchain
         - eth-blockchain
 
-    traces:
+    applicationObservability:
       enabled: true
-
-    receivers:
-      otlp:
-        enabled: true
-        grpc:
-          enabled: true
-          port: 4317
-        http:
-          enabled: false
+      receivers:
+        otlp:
+          grpc:
+            enabled: true
+            port: 4317
+          http:
+            enabled: false
   YAML
 
   prometheus_rds_exporter_base_values = <<-YAML
-    irsa:
-      create: false
+    replicaCount: 1
 
-    prometheus-rds-exporter-chart:
+    resources:
+      requests:
+        cpu: 100m
+        memory: 128Mi
+      limits:
+        cpu: 500m
+        memory: 256Mi
+
+    serviceAccount:
+      create: false
+      name: prometheus-rds-exporter
+
+    serviceMonitor:
       enabled: true
-      replicaCount: 1
-      resources:
-        requests:
-          cpu: 100m
-          memory: 128Mi
-        limits:
-          cpu: 500m
-          memory: 256Mi
-      serviceAccount:
-        create: false
-        name: prometheus-rds-exporter
-      serviceMonitor:
-        enabled: true
-        relabelings:
-          - action: replace
-            targetLabel: network
-      config:
-        metrics-path: /metrics
-        listen-address: ":9043"
-        enable-otel-traces: false
-        collect-instance-metrics: true
-        collect-instance-tags: true
-        collect-instance-types: true
-        collect-logs-size: true
-        collect-serverless-logs-size: false
-        collect-maintenances: true
-        collect-quotas: true
-        collect-usages: true
+      relabelings:
+        - action: replace
+          targetLabel: network
+
+    config:
+      metrics-path: /metrics
+      listen-address: ":9043"
+      enable-otel-traces: false
+      collect-instance-metrics: true
+      collect-instance-tags: true
+      collect-instance-types: true
+      collect-logs-size: true
+      collect-serverless-logs-size: false
+      collect-maintenances: true
+      collect-quotas: true
+      collect-usages: true
   YAML
 
   prometheus_postgres_exporter_base_values = <<-YAML
@@ -281,8 +277,8 @@ locals {
     additional_manifests = { enabled = false, manifests = {} }
     helm_chart = {
       enabled          = true
-      repository       = "https://prometheus-community.github.io/helm-charts"
-      chart            = "prometheus-operator-crds"
+      repository       = var.defaults.prometheus_operator_crds.repository
+      chart            = var.defaults.prometheus_operator_crds.chart
       version          = var.defaults.prometheus_operator_crds.version
       crd_chart        = true
       atomic           = false
@@ -301,15 +297,15 @@ locals {
     additional_manifests = { enabled = false, manifests = {} }
     helm_chart = {
       enabled          = true
-      repository       = "https://kubernetes-sigs.github.io/metrics-server"
-      chart            = "metrics-server"
+      repository       = var.defaults.metrics_server.repository
+      chart            = var.defaults.metrics_server.chart
       version          = var.defaults.metrics_server.version
       crd_chart        = false
       atomic           = true
       create_namespace = false
       wait             = true
       timeout          = 300
-      values           = ""
+      values           = var.defaults.metrics_server.values
       set              = {}
     }
   }
@@ -321,8 +317,8 @@ locals {
     additional_manifests = { enabled = false, manifests = {} }
     helm_chart = {
       enabled          = true
-      repository       = "oci://public.ecr.aws/karpenter"
-      chart            = "karpenter"
+      repository       = var.defaults.karpenter.repository
+      chart            = var.defaults.karpenter.chart
       version          = var.defaults.karpenter.version
       crd_chart        = false
       atomic           = true
@@ -337,10 +333,10 @@ locals {
   # __partner__ and __network__ placeholders are substituted by resolved_helm_values.
   k8s_monitoring_destinations_values = <<-YAML
     destinations:
-      - name: grafana-cloud-metrics
+      grafana-cloud-metrics:
         type: prometheus
         url: ${var.defaults.k8s_monitoring.prometheus_url}
-        externalLabels:
+        extraLabels:
           partner: __partner__
           network: __network__
         auth:
@@ -352,11 +348,10 @@ locals {
           name: grafana-cloud-credentials
           namespace: monitoring
 
-      - name: grafana-cloud-logs
+      grafana-cloud-logs:
         type: loki
         url: ${var.defaults.k8s_monitoring.loki_url}
-        tenantIdKey: loki-username
-        externalLabels:
+        extraLabels:
           partner: __partner__
           network: __network__
         auth:
@@ -368,13 +363,10 @@ locals {
           name: grafana-cloud-credentials
           namespace: monitoring
 
-      - name: grafana-cloud-traces
+      grafana-cloud-traces:
         type: otlp
         url: ${var.defaults.k8s_monitoring.otlp_url}
         protocol: http
-        externalLabels:
-          partner: __partner__
-          network: __network__
         auth:
           type: basic
           usernameKey: otlp-username
@@ -392,8 +384,8 @@ locals {
     additional_manifests = { enabled = false, manifests = {} }
     helm_chart = {
       enabled          = true
-      repository       = "https://grafana.github.io/helm-charts"
-      chart            = "k8s-monitoring"
+      repository       = var.defaults.k8s_monitoring.repository
+      chart            = var.defaults.k8s_monitoring.chart
       version          = var.defaults.k8s_monitoring.version
       crd_chart        = false
       atomic           = true
@@ -417,6 +409,7 @@ locals {
         { sid = "", effect = "Allow", actions = ["rds:DescribeDBClusters"], resources = ["arn:aws:rds:*:*:cluster:*"] },
         { sid = "", effect = "Allow", actions = ["rds:DescribePendingMaintenanceActions"], resources = ["*"] },
         { sid = "", effect = "Allow", actions = ["rds:DescribeAccountAttributes"], resources = ["*"] },
+        { sid = "", effect = "Allow", actions = ["rds:DescribeDBMajorEngineVersions"], resources = ["*"] },
         { sid = "", effect = "Allow", actions = ["cloudwatch:GetMetricData"], resources = ["*"] },
         { sid = "", effect = "Allow", actions = ["servicequotas:GetServiceQuota"], resources = ["*"] },
         { sid = "", effect = "Allow", actions = ["ec2:DescribeInstanceTypes"], resources = ["*"] },
@@ -425,8 +418,8 @@ locals {
     additional_manifests = { enabled = false, manifests = {} }
     helm_chart = {
       enabled          = true
-      repository       = "oci://hub.zama.org/ghcr/zama-zws/helm-charts"
-      chart            = "prometheus-rds-exporter"
+      repository       = var.defaults.prometheus_rds_exporter.repository
+      chart            = var.defaults.prometheus_rds_exporter.chart
       version          = var.defaults.prometheus_rds_exporter.version
       crd_chart        = false
       atomic           = true
@@ -445,8 +438,8 @@ locals {
     additional_manifests = { enabled = false, manifests = {} }
     helm_chart = {
       enabled          = true
-      repository       = "https://prometheus-community.github.io/helm-charts"
-      chart            = "prometheus-postgres-exporter"
+      repository       = var.defaults.prometheus_postgres_exporter.repository
+      chart            = var.defaults.prometheus_postgres_exporter.chart
       version          = var.defaults.prometheus_postgres_exporter.version
       crd_chart        = false
       atomic           = true
@@ -454,7 +447,7 @@ locals {
       wait             = true
       timeout          = 300
       set              = {}
-      values           = local.prometheus_postgres_exporter_base_values
+      values           = join("\n", compact([local.prometheus_postgres_exporter_base_values, var.defaults.prometheus_postgres_exporter.values]))
     }
   }
 

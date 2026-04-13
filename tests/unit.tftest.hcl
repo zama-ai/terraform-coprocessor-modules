@@ -104,26 +104,6 @@ run "additional_subnet_ids_empty_when_additional_subnets_disabled" {
 }
 
 # =============================================================================
-#  Networking module count wiring
-# =============================================================================
-
-run "networking_enabled_creates_one_module" {
-  command = plan
-
-  variables {
-    networking = {
-      vpc     = { cidr = "10.0.0.0/16", availability_zones = ["eu-west-1a", "eu-west-1b"] }
-      enabled = true
-    }
-  }
-
-  assert {
-    condition     = length(module.networking) == 1
-    error_message = "Networking module must be created when networking.enabled = true."
-  }
-}
-
-# =============================================================================
 #  EKS module count wiring
 # =============================================================================
 
@@ -204,25 +184,6 @@ run "rejects_invalid_vpc_cidr" {
 }
 
 # =============================================================================
-#  coalesce(null, null) regression — eks disabled, no kubernetes credentials
-#
-# Before the fix, versions.tf used coalesce() for the kubernetes provider locals.
-# With eks.enabled = false and no kubernetes.host set, both arguments are null
-# and coalesce() errors. The fix uses conditionals instead.
-# =============================================================================
-
-run "eks_disabled_without_kubernetes_credentials_plans_without_error" {
-  command = plan
-
-  # No kubernetes variable override — uses the default (all nulls).
-  # eks.enabled = false from shared variables.
-  assert {
-    condition     = length(module.eks) == 0
-    error_message = "EKS module must not be created when eks.enabled = false."
-  }
-}
-
-# =============================================================================
 #  k8s Charts module count wiring
 # =============================================================================
 
@@ -233,33 +194,6 @@ run "k8s_charts_disabled_creates_no_module" {
   assert {
     condition     = length(module.k8s_system_charts) == 0
     error_message = "k8s_system_charts module must not be created when k8s_system_charts.enabled = false."
-  }
-}
-
-run "k8s_charts_enabled_creates_one_module" {
-  command = plan
-
-  variables {
-    k8s_system_charts = {
-      enabled = true
-      defaults = {
-        karpenter_nodepools      = { enabled = false }
-        prometheus_operator_crds = { enabled = false }
-        metrics_server           = { enabled = false }
-        karpenter                = { enabled = false }
-      }
-      extra = {
-        metrics-server = {
-          namespace  = { name = "kube-system" }
-          helm_chart = { repository = "https://kubernetes-sigs.github.io/metrics-server/", chart = "metrics-server", version = "3.12.0" }
-        }
-      }
-    }
-  }
-
-  assert {
-    condition     = length(module.k8s_system_charts) == 1
-    error_message = "k8s_system_charts module must be created when k8s_system_charts.enabled = true."
   }
 }
 

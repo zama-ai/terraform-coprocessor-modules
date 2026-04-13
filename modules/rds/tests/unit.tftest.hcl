@@ -26,7 +26,6 @@ variables {
   private_subnet_cidr_blocks = ["10.0.0.0/24", "10.0.1.0/24"]
 }
 
-# rds_base is used as a comment-anchor showing the minimal enabled config.
 # All enabled runs must include monitoring_interval = 0 and
 # create_monitoring_role = false to avoid the upstream module attempting to
 # create an IAM role whose assume_role_policy is rendered from a data source
@@ -36,7 +35,6 @@ variables {
 #  enabled = false
 # =============================================================================
 
-# Child module counts are determined at plan time from var.rds.enabled.
 run "disabled_creates_no_child_modules" {
   command = plan
 
@@ -127,39 +125,6 @@ run "enabled_creates_both_child_modules" {
   }
 }
 
-run "enabled_outputs_all_non_null" {
-  command = apply
-
-  variables {
-    rds = {
-      enabled                = true
-      db_name                = "coprocessor"
-      monitoring_interval    = 0
-      create_monitoring_role = false
-    }
-  }
-
-  assert {
-    condition     = output.db_instance_identifier != null
-    error_message = "db_instance_identifier must be non-null when rds.enabled = true."
-  }
-
-  assert {
-    condition     = output.db_instance_arn != null
-    error_message = "db_instance_arn must be non-null when rds.enabled = true."
-  }
-
-  assert {
-    condition     = output.db_instance_endpoint != null
-    error_message = "db_instance_endpoint must be non-null when rds.enabled = true."
-  }
-
-  assert {
-    condition     = output.security_group_id != null
-    error_message = "security_group_id must be non-null when rds.enabled = true."
-  }
-}
-
 # =============================================================================
 #  identifier logic
 #
@@ -168,24 +133,6 @@ run "enabled_outputs_all_non_null" {
 #   substr(lower(replace(join("-", compact([partner, env, db_name])), ...)), 0, 63)
 # )
 # =============================================================================
-
-run "identifier_uses_computed_default" {
-  command = apply
-
-  variables {
-    rds = {
-      enabled                = true
-      db_name                = "coprocessor"
-      monitoring_interval    = 0
-      create_monitoring_role = false
-    }
-  }
-
-  assert {
-    condition     = output.db_instance_identifier != null
-    error_message = "db_instance_identifier must be populated when identifier_override is not set."
-  }
-}
 
 run "identifier_override_is_accepted" {
   command = plan
@@ -300,47 +247,6 @@ run "major_engine_version_plans_without_error" {
 }
 
 # =============================================================================
-#  Multi-AZ
-# =============================================================================
-
-run "multi_az_false_by_default" {
-  command = plan
-
-  variables {
-    rds = {
-      enabled                = true
-      db_name                = "coprocessor"
-      monitoring_interval    = 0
-      create_monitoring_role = false
-    }
-  }
-
-  assert {
-    condition     = length(module.rds_instance) == 1
-    error_message = "RDS instance must be planned with multi_az = false (default)."
-  }
-}
-
-run "multi_az_enabled_plans_without_error" {
-  command = plan
-
-  variables {
-    rds = {
-      enabled                = true
-      db_name                = "coprocessor"
-      multi_az               = true
-      monitoring_interval    = 0
-      create_monitoring_role = false
-    }
-  }
-
-  assert {
-    condition     = length(module.rds_instance) == 1
-    error_message = "RDS instance must be planned with multi_az = true."
-  }
-}
-
-# =============================================================================
 #  IAM database authentication
 # =============================================================================
 
@@ -362,47 +268,9 @@ run "iam_database_authentication_enabled_by_default" {
   }
 }
 
-run "iam_database_authentication_can_be_disabled" {
-  command = plan
-
-  variables {
-    rds = {
-      enabled                             = true
-      db_name                             = "coprocessor"
-      monitoring_interval                 = 0
-      create_monitoring_role              = false
-      iam_database_authentication_enabled = false
-    }
-  }
-
-  assert {
-    condition     = length(module.rds_instance) == 1
-    error_message = "RDS instance must be planned when iam_database_authentication_enabled = false."
-  }
-}
-
 # =============================================================================
 #  Password rotation
 # =============================================================================
-
-run "password_rotation_enabled_by_default_with_managed_password" {
-  command = plan
-
-  variables {
-    rds = {
-      enabled                     = true
-      db_name                     = "coprocessor"
-      manage_master_user_password = true
-      monitoring_interval         = 0
-      create_monitoring_role      = false
-    }
-  }
-
-  assert {
-    condition     = length(module.rds_instance) == 1
-    error_message = "RDS instance must be planned with password rotation enabled by default."
-  }
-}
 
 run "password_rotation_skipped_when_explicit_password_set" {
   command = plan

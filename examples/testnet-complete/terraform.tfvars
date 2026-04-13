@@ -153,19 +153,107 @@ k8s_system_charts = {
   enabled = false # CHANGE ME: refer to operator documentation regarding order of deployments
 
   defaults = {
-    karpenter_nodepools          = { enabled = false } # CHANGE ME: refer to operator documentation regarding order of deployments
-    prometheus_operator_crds     = { enabled = true }
-    metrics_server               = { enabled = true }
-    karpenter                    = { enabled = true }
-    prometheus_rds_exporter      = { enabled = true }
-    prometheus_postgres_exporter = { enabled = true }
+    karpenter_nodepools = { enabled = false } # CHANGE ME: refer to operator documentation regarding order of deployments
+
+    prometheus_operator_crds = {
+      enabled    = true
+      repository = "https://prometheus-community.github.io/helm-charts"
+      chart      = "prometheus-operator-crds"
+      version    = "28.0.1"
+    }
+
+    metrics_server = {
+      enabled    = true
+      repository = "https://kubernetes-sigs.github.io/metrics-server"
+      chart      = "metrics-server"
+      version    = "3.13.0"
+      values     = <<-YAML
+        image:
+          repository: hub.zama.org/zama-protocol/zama.ai/metrics-server
+          tag: v0.8.0
+        imagePullSecrets:
+          - name: registry-credentials
+      YAML
+    }
+
+    karpenter = {
+      enabled    = true
+      repository = "oci://public.ecr.aws/karpenter"
+      chart      = "karpenter"
+      version    = "1.11.0"
+      values     = <<-YAML
+        controller:
+          image:
+            repository: hub.zama.org/zama-protocol/zama.ai/karpenter
+            tag: v1.11.0
+        imagePullSecrets:
+          - name: registry-credentials
+      YAML
+    }
+
+    prometheus_rds_exporter = {
+      enabled    = true
+      repository = "oci://public.ecr.aws/qonto"
+      chart      = "prometheus-rds-exporter-chart"
+      version    = "0.16.0"
+    }
+
+    prometheus_postgres_exporter = {
+      enabled    = true
+      repository = "https://prometheus-community.github.io/helm-charts"
+      chart      = "prometheus-postgres-exporter"
+      version    = "7.3.0"
+      values     = <<-YAML
+        image:
+          repository: hub.zama.org/cgr/zama.ai/postgres-exporter
+          tag: v0.18.1
+        imagePullSecrets:
+          - name: registry-credentials
+      YAML
+    }
 
     k8s_monitoring = {
-      enabled = true
+      enabled    = true
+      repository = "https://grafana.github.io/helm-charts"
+      chart      = "k8s-monitoring"
+      version    = "4.0.1"
 
       prometheus_url = "https://prometheus-prod-XX-eu-west-0.grafana.net/api/prom/push" # CHANGE ME
       loki_url       = "https://logs-prod-eu-west-0.grafana.net/loki/api/v1/push"       # CHANGE ME
       otlp_url       = "https://otlp-gateway-prod-eu-west-0.grafana.net/otlp"           # CHANGE ME
+
+      values = <<-YAML
+        alloy-operator:
+          image:
+            registry: hub.zama.org
+            repository: zama-protocol/zama.ai/grafana-alloy-operator
+            tag: v0.5.3
+          imagePullSecrets:
+            - name: registry-credentials
+
+        collectors:
+          alloy-metrics:
+            image:
+              registry: hub.zama.org
+              repository: zama-protocol/zama.ai/grafana-alloy
+              tag: 1.15.0
+              pullSecrets:
+                - registry-credentials
+          alloy-logs:
+            image:
+              registry: hub.zama.org
+              repository: zama-protocol/zama.ai/grafana-alloy
+              tag: 1.15.0
+              pullSecrets:
+                - registry-credentials
+          alloy-receiver:
+            image:
+              registry: hub.zama.org
+              repository: zama-protocol/zama.ai/grafana-alloy
+              tag: 1.15.0
+              pullSecrets:
+                - registry-credentials
+      YAML
     }
   }
 }
