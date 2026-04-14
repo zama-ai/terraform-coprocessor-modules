@@ -534,6 +534,7 @@ variable "k8s_system_charts" {
         repository = optional(string, "oci://public.ecr.aws/qonto")
         chart      = optional(string, "prometheus-rds-exporter-chart")
         version    = optional(string, "0.16.0")
+        values     = optional(string, "")
       }), {})
       prometheus_postgres_exporter = optional(object({
         enabled    = optional(bool, false)

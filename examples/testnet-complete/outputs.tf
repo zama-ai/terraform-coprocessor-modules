@@ -74,3 +74,8 @@ output "s3_bucket_arns" {
   description = "Map of logical bucket key to bucket ARN."
   value       = module.coprocessor.s3_bucket_arns
 }
+
+output "s3_cloudfront_domain_names" {
+  description = "Map of logical bucket key to CloudFront distribution hostname (e.g. d1234abcd.cloudfront.net)."
+  value       = module.coprocessor.s3_cloudfront_domain_names
+}

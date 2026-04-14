@@ -450,17 +450,17 @@ run "defaults_k8s_monitoring_urls_injected_into_destinations" {
 
   assert {
     condition     = strcontains(helm_release.apps["k8s-monitoring"].values[0], "https://prometheus.example.com/push")
-    error_message = "prometheus_url must be injected into the destinations values."
+    error_message = "prometheus_url must be injected into the base values fragment."
   }
 
   assert {
     condition     = strcontains(helm_release.apps["k8s-monitoring"].values[0], "https://loki.example.com/push")
-    error_message = "loki_url must be injected into the destinations values."
+    error_message = "loki_url must be injected into the base values fragment."
   }
 
   assert {
     condition     = strcontains(helm_release.apps["k8s-monitoring"].values[0], "https://otlp.example.com/push")
-    error_message = "otlp_url must be injected into the destinations values."
+    error_message = "otlp_url must be injected into the base values fragment."
   }
 
   assert {
@@ -469,8 +469,18 @@ run "defaults_k8s_monitoring_urls_injected_into_destinations" {
   }
 
   assert {
-    condition     = strcontains(helm_release.apps["k8s-monitoring"].values[0], "scrapeInterval")
-    error_message = "Baked-in k8s_monitoring base values must still be present."
+    condition     = strcontains(helm_release.apps["k8s-monitoring"].values[0], "scrapeInterval: 2m")
+    error_message = "Baked-in k8s_monitoring base values must include scrapeInterval: 2m."
+  }
+
+  assert {
+    condition     = strcontains(helm_release.apps["k8s-monitoring"].values[0], "clusterMetrics")
+    error_message = "Baked-in k8s_monitoring base values must be present in the first fragment."
+  }
+
+  assert {
+    condition     = strcontains(helm_release.apps["k8s-monitoring"].values[0], "kube-state-metrics")
+    error_message = "telemetryServices.kube-state-metrics must be present in the base values fragment."
   }
 }
 
@@ -541,13 +551,13 @@ run "defaults_karpenter_user_values_appended_to_base" {
   }
 
   assert {
-    condition     = strcontains(helm_release.apps["karpenter"].values[0], "replicas: 2")
-    error_message = "User-supplied karpenter values must be present in the rendered values."
+    condition     = strcontains(helm_release.apps["karpenter"].values[1], "replicas: 2")
+    error_message = "User-supplied karpenter values must be present in the second fragment (after base)."
   }
 
   assert {
     condition     = strcontains(helm_release.apps["karpenter"].values[0], "logLevel: info")
-    error_message = "Baked-in karpenter base values must still be present when user values are appended."
+    error_message = "Baked-in karpenter base values must still be present in the first fragment."
   }
 }
 

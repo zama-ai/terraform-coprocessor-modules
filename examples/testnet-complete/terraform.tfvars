@@ -86,8 +86,8 @@ s3 = {
 
       cloudfront = {
         enabled             = true
-        acm_certificate_arn = "arn:aws:acm:us-east-1:187242616723:certificate/6596c0a6-e8e6-4796-b9a2-a8e8a507ce0d" # CHANGE ME: ACM cert ARN (must be in us-east-1)
-        aliases             = ["test.hrvldz.com"]                                                                   # CHANGE ME: your CloudFront custom hostname(s)
+        acm_certificate_arn = ""   # CHANGE ME: ACM cert ARN (must be in us-east-1)
+        aliases             = [""] # CHANGE ME: your CloudFront custom hostname(s)
       }
 
       cors = {
@@ -151,7 +151,7 @@ k8s_coprocessor_deps = {
 #  k8s System Charts
 # =============================================================================
 k8s_system_charts = {
-  enabled = false # CHANGE ME: refer to operator documentation regarding order of deployments
+  enabled = true # CHANGE ME: refer to operator documentation regarding order of deployments
 
   defaults = {
     karpenter_nodepools = { enabled = false } # CHANGE ME: refer to operator documentation regarding order of deployments
@@ -170,7 +170,7 @@ k8s_system_charts = {
       version    = "3.13.0"
       values     = <<-YAML
         image:
-          repository: hub.zama.org/zama-system/zama.ai/metrics-server
+          repository: hub.zama.org/zama-protocol/zama.ai/metrics-server
           tag: v0.8.0
         imagePullSecrets:
           - name: registry-credentials
@@ -185,7 +185,7 @@ k8s_system_charts = {
       values     = <<-YAML
         controller:
           image:
-            repository: hub.zama.org/zama-system/zama.ai/karpenter
+            repository: hub.zama.org/zama-protocol/zama.ai/karpenter
             tag: v1.11.0
             digest: ""
         imagePullSecrets:
@@ -208,7 +208,7 @@ k8s_system_charts = {
       values     = <<-YAML
         image:
           registry: hub.zama.org
-          repository: zama-system/zama.ai/prometheus-postgres-exporter
+          repository: zama-protocol/zama.ai/prometheus-postgres-exporter
           tag: v0.19.1
           pullSecrets:
             - registry-credentials
@@ -227,13 +227,14 @@ k8s_system_charts = {
 
       values = <<-YAML
         global:
+          scrapeInterval: 10m
           imagePullSecrets:
             - name: registry-credentials
 
         alloy-operator:
           image:
             registry: hub.zama.org
-            repository: zama-system/zama.ai/grafana-alloy-operator
+            repository: zama-protocol/zama.ai/grafana-alloy-operator
             tag: v0.5.3
             pullSecrets:
               - name: registry-credentials
@@ -242,32 +243,32 @@ k8s_system_charts = {
           alloy-metrics:
             image:
               registry: hub.zama.org
-              repository: zama-system/zama.ai/grafana-alloy
+              repository: zama-protocol/zama.ai/grafana-alloy
               tag: v1.15.0
               pullSecrets:
-                - registry-credentials
+                - name: registry-credentials
           alloy-logs:
             presets:
               - filesystem-log-reader
             image:
               registry: hub.zama.org
-              repository: zama-system/zama.ai/grafana-alloy
+              repository: zama-protocol/zama.ai/grafana-alloy
               tag: v1.15.0
               pullSecrets:
-                - registry-credentials
+                - name: registry-credentials
           alloy-receiver:
             image:
               registry: hub.zama.org
-              repository: zama-system/zama.ai/grafana-alloy
+              repository: zama-protocol/zama.ai/grafana-alloy
               tag: v1.15.0
               pullSecrets:
-                - registry-credentials
+                - name: registry-credentials
 
-        telemetry-services:
+        telemetryServices:
           node-exporter:
             image:
               registry: hub.zama.org
-              repository: zama-system/zama.ai/prometheus-node-exporter
+              repository: zama-protocol/zama.ai/prometheus-node-exporter
               tag: v1.11.0
             imagePullSecrets:
               - name: registry-credentials

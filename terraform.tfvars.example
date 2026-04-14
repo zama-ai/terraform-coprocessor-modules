@@ -888,7 +888,7 @@ k8s_system_charts = {
       version    = "3.13.0"
       values     = <<-YAML
         image:
-          repository: hub.zama.org/cgr/zama.ai/metrics-server
+          repository: hub.zama.org/zama-protocol/zama.ai/metrics-server
           tag: v0.8.0
         imagePullSecrets:
           - name: registry-credentials
@@ -939,6 +939,9 @@ k8s_system_charts = {
       # global.imagePullSecrets propagates to all collector (alloy) pods.
       # alloy-operator uses its own image.pullSecrets (does not inherit global).
       values = <<-YAML
+        # How frequently to scrape metrics. Default: 2m (baked in). Override here if needed.
+        scrapeInterval: 2m
+
         global:
           imagePullSecrets:
             - name: registry-credentials
@@ -958,7 +961,7 @@ k8s_system_charts = {
               repository: zama-protocol/zama.ai/grafana-alloy
               tag: v1.15.0
               pullSecrets:
-                - registry-credentials
+                - name: registry-credentials
           alloy-logs:
             presets:
               - filesystem-log-reader
@@ -967,14 +970,23 @@ k8s_system_charts = {
               repository: zama-protocol/zama.ai/grafana-alloy
               tag: v1.15.0
               pullSecrets:
-                - registry-credentials
+                - name: registry-credentials
           alloy-receiver:
             image:
               registry: hub.zama.org
               repository: zama-protocol/zama.ai/grafana-alloy
               tag: v1.15.0
               pullSecrets:
-                - registry-credentials
+                - name: registry-credentials
+
+        telemetryServices:
+          node-exporter:
+            image:
+              registry: hub.zama.org
+              repository: zama-protocol/zama.ai/prometheus-node-exporter
+              tag: v1.11.0
+            imagePullSecrets:
+              - name: registry-credentials
       YAML
     }
 
@@ -985,6 +997,7 @@ k8s_system_charts = {
       repository = "oci://public.ecr.aws/qonto"
       chart      = "prometheus-rds-exporter-chart"
       version    = "0.16.0"
+      values     = ""
     }
 
     # Prometheus Postgres exporter.
@@ -996,8 +1009,8 @@ k8s_system_charts = {
       version    = "7.3.0"
       values     = <<-YAML
         image:
-          repository: hub.zama.org/cgr/zama.ai/postgres-exporter
-          tag: v0.18.1
+          repository: hub.zama.org/zama-protocol/zama.ai/prometheus-postgres-exporter
+          tag: v0.19.1
         imagePullSecrets:
           - name: registry-credentials
       YAML

@@ -51,9 +51,10 @@ locals {
       enabled: true
   YAML
 
+  # __partner__ and __network__ placeholders are substituted by resolved_helm_values.
   k8s_monitoring_base_values = <<-YAML
     global:
-      scrapeInterval: 10m
+      scrapeInterval: 2m
 
     collectors:
       alloy-metrics: {}
@@ -104,6 +105,50 @@ locals {
             port: 4317
           http:
             enabled: false
+
+    destinations:
+      grafana-cloud-metrics:
+        type: prometheus
+        url: ${var.defaults.k8s_monitoring.prometheus_url}
+        extraLabels:
+          partner: __partner__
+          network: __network__
+        auth:
+          type: basic
+          usernameKey: prometheus-username
+          passwordKey: prometheus-password
+        secret:
+          create: false
+          name: grafana-cloud-credentials
+          namespace: monitoring
+
+      grafana-cloud-logs:
+        type: loki
+        url: ${var.defaults.k8s_monitoring.loki_url}
+        extraLabels:
+          partner: __partner__
+          network: __network__
+        auth:
+          type: basic
+          usernameKey: loki-username
+          passwordKey: loki-password
+        secret:
+          create: false
+          name: grafana-cloud-credentials
+          namespace: monitoring
+
+      grafana-cloud-traces:
+        type: otlp
+        url: ${var.defaults.k8s_monitoring.otlp_url}
+        protocol: http
+        auth:
+          type: basic
+          usernameKey: otlp-username
+          passwordKey: otlp-password
+        secret:
+          create: false
+          name: grafana-cloud-credentials
+          namespace: monitoring
   YAML
 
   prometheus_rds_exporter_base_values = <<-YAML
@@ -319,7 +364,7 @@ locals {
       create_namespace = false
       wait             = true
       timeout          = 300
-      values           = var.defaults.metrics_server.values
+      values           = ""
       set              = {}
     }
   }
@@ -340,56 +385,9 @@ locals {
       wait             = true
       timeout          = 300
       set              = {}
-      values           = join("\n", compact([local.karpenter_base_values, var.defaults.karpenter.values]))
+      values           = ""
     }
   }
-
-  # __partner__ and __network__ placeholders are substituted by resolved_helm_values.
-  k8s_monitoring_destinations_values = <<-YAML
-    destinations:
-      grafana-cloud-metrics:
-        type: prometheus
-        url: ${var.defaults.k8s_monitoring.prometheus_url}
-        extraLabels:
-          partner: __partner__
-          network: __network__
-        auth:
-          type: basic
-          usernameKey: prometheus-username
-          passwordKey: prometheus-password
-        secret:
-          create: false
-          name: grafana-cloud-credentials
-          namespace: monitoring
-
-      grafana-cloud-logs:
-        type: loki
-        url: ${var.defaults.k8s_monitoring.loki_url}
-        extraLabels:
-          partner: __partner__
-          network: __network__
-        auth:
-          type: basic
-          usernameKey: loki-username
-          passwordKey: loki-password
-        secret:
-          create: false
-          name: grafana-cloud-credentials
-          namespace: monitoring
-
-      grafana-cloud-traces:
-        type: otlp
-        url: ${var.defaults.k8s_monitoring.otlp_url}
-        protocol: http
-        auth:
-          type: basic
-          usernameKey: otlp-username
-          passwordKey: otlp-password
-        secret:
-          create: false
-          name: grafana-cloud-credentials
-          namespace: monitoring
-  YAML
 
   builtin_k8s_monitoring = {
     namespace            = { name = "monitoring", create = false }
@@ -406,14 +404,8 @@ locals {
       create_namespace = false
       wait             = true
       timeout          = 300
-      set = {
-        # alloy-logs preset must be set via --set (highest precedence) because
-        # user-supplied values files include a `collectors:` key that replaces
-        # our base `collectors:` block in the single joined YAML document, and
-        # some chart validation paths check collectors.alloy-logs.presets.
-        "alloy-logs.presets[0]" = "filesystem-log-reader"
-      }
-      values = join("\n", compact([local.k8s_monitoring_base_values, local.k8s_monitoring_destinations_values, var.defaults.k8s_monitoring.values]))
+      set              = {}
+      values           = ""
     }
   }
 
@@ -447,7 +439,7 @@ locals {
       wait             = true
       timeout          = 300
       set              = {}
-      values           = local.prometheus_rds_exporter_base_values
+      values           = ""
     }
   }
 
@@ -467,7 +459,7 @@ locals {
       wait             = true
       timeout          = 300
       set              = {}
-      values           = join("\n", compact([local.prometheus_postgres_exporter_base_values, var.defaults.prometheus_postgres_exporter.values]))
+      values           = ""
     }
   }
 
@@ -504,18 +496,48 @@ locals {
     if app.helm_chart != null && app.helm_chart.enabled
   }
 
-  # Substitute standard placeholders in helm values so that computed or
-  # partner-specific values can be embedded directly in the tfvars YAML block
-  # without requiring root-level set_computed overrides.
+  # Per-chart ordered list of YAML fragments passed to Helm as separate values
+  # files. Helm deep-merges them in order (later entries win on conflicts), which
+  # avoids the duplicate-key last-wins pitfall of concatenating them into one
+  # YAML string. Built-in base values come first; user-supplied tfvars values
+  # come last so they always take precedence.
+  #
+  # Extra (non-builtin) charts fall back to their single app.helm_chart.values
+  # string via the lookup default.
+  helm_value_fragments = {
+    "metrics-server" = compact([
+      var.defaults.metrics_server.values,
+    ])
+    "karpenter" = compact([
+      local.karpenter_base_values,
+      var.defaults.karpenter.values,
+    ])
+    "k8s-monitoring" = compact([
+      local.k8s_monitoring_base_values,
+      var.defaults.k8s_monitoring.values,
+    ])
+    "prometheus-rds-exporter" = compact([
+      local.prometheus_rds_exporter_base_values,
+      var.defaults.prometheus_rds_exporter.values,
+    ])
+    "prometheus-postgres-exporter" = compact([
+      local.prometheus_postgres_exporter_base_values,
+      var.defaults.prometheus_postgres_exporter.values,
+    ])
+  }
+
+  # Substitute standard placeholders in each fragment and return a list(string)
+  # ready to pass directly to helm_release.values.
   #
   # Supported placeholders:
   #   __partner__ → var.partner_name
   #   __network__ → var.environment
   resolved_helm_values = {
-    for key, app in local.helm_apps : key => replace(
-      replace(app.helm_chart.values, "__partner__", var.partner_name),
-      "__network__", var.environment
-    )
+    for key, app in local.helm_apps : key => [
+      for v in lookup(local.helm_value_fragments, key, compact([app.helm_chart.values])) :
+      replace(replace(v, "__partner__", var.partner_name), "__network__", var.environment)
+      if trimspace(v) != ""
+    ]
   }
 
   # CRD-only releases are deployed first; all other releases depend on them.
@@ -653,7 +675,7 @@ resource "helm_release" "crds" {
   wait             = each.value.helm_chart.wait
   timeout          = each.value.helm_chart.timeout
 
-  values = local.resolved_helm_values[each.key] != "" ? [local.resolved_helm_values[each.key]] : []
+  values = local.resolved_helm_values[each.key]
 
   set = [for key, value in merge(
     each.value.helm_chart.set,
@@ -679,7 +701,7 @@ resource "helm_release" "apps" {
   wait             = each.value.helm_chart.wait
   timeout          = each.value.helm_chart.timeout
 
-  values = local.resolved_helm_values[each.key] != "" ? [local.resolved_helm_values[each.key]] : []
+  values = local.resolved_helm_values[each.key]
 
   set = [for key, value in merge(
     each.value.helm_chart.set,
