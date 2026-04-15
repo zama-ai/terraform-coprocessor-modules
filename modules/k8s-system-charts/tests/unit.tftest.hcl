@@ -440,10 +440,13 @@ run "defaults_k8s_monitoring_urls_injected_into_destinations" {
       metrics_server           = { enabled = false }
       karpenter                = { enabled = false }
       k8s_monitoring = {
-        enabled        = true
-        prometheus_url = "https://prometheus.example.com/push"
-        loki_url       = "https://loki.example.com/push"
-        otlp_url       = "https://otlp.example.com/push"
+        enabled                  = true
+        prometheus_url           = "https://prometheus.example.com/push"
+        loki_url                 = "https://loki.example.com/push"
+        otlp_url                 = "https://otlp.example.com/push"
+        alloy_operator_image_tag = "v9.9.1"
+        alloy_image_tag          = "v9.9.2"
+        node_exporter_image_tag  = "v9.9.3"
       }
     }
   }
@@ -481,6 +484,26 @@ run "defaults_k8s_monitoring_urls_injected_into_destinations" {
   assert {
     condition     = strcontains(helm_release.apps["k8s-monitoring"].values[0], "kube-state-metrics")
     error_message = "telemetryServices.kube-state-metrics must be present in the base values fragment."
+  }
+
+  assert {
+    condition     = strcontains(helm_release.apps["k8s-monitoring"].values[0], "repository: zama-protocol/zama.ai/grafana-alloy-operator")
+    error_message = "Baked-in k8s_monitoring values must set the alloy operator image repository."
+  }
+
+  assert {
+    condition     = strcontains(helm_release.apps["k8s-monitoring"].values[0], "tag: v9.9.1")
+    error_message = "alloy_operator_image_tag must be injected into the alloy operator image block."
+  }
+
+  assert {
+    condition     = strcontains(helm_release.apps["k8s-monitoring"].values[0], "tag: v9.9.2")
+    error_message = "alloy_image_tag must be injected into the collector image blocks."
+  }
+
+  assert {
+    condition     = strcontains(helm_release.apps["k8s-monitoring"].values[0], "tag: v9.9.3")
+    error_message = "node_exporter_image_tag must be injected into the node-exporter image block."
   }
 }
 
@@ -526,11 +549,12 @@ run "defaults_karpenter_user_values_appended_to_base" {
       prometheus_operator_crds = { enabled = false }
       metrics_server           = { enabled = false }
       karpenter = {
-        enabled    = true
-        version    = "1.9.0"
-        repository = "oci://my-registry.example.com/karpenter"
-        chart      = "karpenter-fork"
-        values     = "replicas: 2\n"
+        enabled              = true
+        version              = "1.9.0"
+        repository           = "oci://my-registry.example.com/karpenter"
+        chart                = "karpenter-fork"
+        controller_image_tag = "v9.9.9"
+        values               = "replicas: 2\n"
       }
     }
   }
@@ -558,6 +582,56 @@ run "defaults_karpenter_user_values_appended_to_base" {
   assert {
     condition     = strcontains(helm_release.apps["karpenter"].values[0], "logLevel: info")
     error_message = "Baked-in karpenter base values must still be present in the first fragment."
+  }
+
+  assert {
+    condition     = strcontains(helm_release.apps["karpenter"].values[0], "repository: hub.zama.org/zama-protocol/zama.ai/karpenter")
+    error_message = "Baked-in karpenter values must set the controller image repository."
+  }
+
+  assert {
+    condition     = strcontains(helm_release.apps["karpenter"].values[0], "tag: v9.9.9")
+    error_message = "controller_image_tag must be injected into the baked-in karpenter values."
+  }
+}
+
+run "defaults_metrics_server_and_postgres_exporter_image_tags_are_injected" {
+  command = plan
+
+  variables {
+    defaults = {
+      karpenter_nodepools      = { enabled = false }
+      prometheus_operator_crds = { enabled = false }
+      metrics_server = {
+        enabled   = true
+        image_tag = "v9.8.7"
+      }
+      karpenter = { enabled = false }
+      prometheus_postgres_exporter = {
+        enabled   = true
+        image_tag = "v7.8.9"
+      }
+    }
+  }
+
+  assert {
+    condition     = strcontains(helm_release.apps["metrics-server"].values[0], "repository: hub.zama.org/zama-protocol/zama.ai/metrics-server")
+    error_message = "Baked-in metrics-server values must set the image repository."
+  }
+
+  assert {
+    condition     = strcontains(helm_release.apps["metrics-server"].values[0], "tag: v9.8.7")
+    error_message = "metrics_server.image_tag must be injected into the baked-in values."
+  }
+
+  assert {
+    condition     = strcontains(helm_release.apps["prometheus-postgres-exporter"].values[0], "repository: zama-protocol/zama.ai/prometheus-postgres-exporter")
+    error_message = "Baked-in prometheus-postgres-exporter values must set the image repository."
+  }
+
+  assert {
+    condition     = strcontains(helm_release.apps["prometheus-postgres-exporter"].values[0], "tag: v7.8.9")
+    error_message = "prometheus_postgres_exporter.image_tag must be injected into the baked-in values."
   }
 }
 

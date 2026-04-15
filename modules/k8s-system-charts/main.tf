@@ -10,6 +10,14 @@ locals {
   oidc_provider_id = replace(var.oidc_provider_arn, "/^.*oidc-provider\\//", "")
 
   # ── Baked-in Helm values strings ────────────────────────────────────────────
+  metrics_server_base_values = <<-YAML
+    image:
+      repository: hub.zama.org/zama-protocol/zama.ai/metrics-server
+      tag: ${var.defaults.metrics_server.image_tag}
+    imagePullSecrets:
+      - name: registry-credentials
+  YAML
+
   karpenter_base_values = <<-YAML
     logLevel: info
 
@@ -29,6 +37,10 @@ locals {
       name: karpenter
 
     controller:
+      image:
+        repository: hub.zama.org/zama-protocol/zama.ai/karpenter
+        tag: ${var.defaults.karpenter.controller_image_tag}
+        digest: ""
       resources:
         requests:
           cpu: 1
@@ -47,6 +59,9 @@ locals {
         timeoutSeconds: 5
         failureThreshold: 18
 
+    imagePullSecrets:
+      - name: registry-credentials
+
     webhook:
       enabled: true
   YAML
@@ -55,21 +70,53 @@ locals {
   k8s_monitoring_base_values = <<-YAML
     global:
       scrapeInterval: 2m
+      imagePullSecrets:
+        - name: registry-credentials
+
+    alloy-operator:
+      image:
+        registry: hub.zama.org
+        repository: zama-protocol/zama.ai/grafana-alloy-operator
+        tag: ${var.defaults.k8s_monitoring.alloy_operator_image_tag}
+        pullSecrets:
+          - name: registry-credentials
 
     collectors:
-      alloy-metrics: {}
-      alloy-logs: {}
-      alloy-receiver: {}
-
-    alloy-logs:
-      presets:
-        - filesystem-log-reader
+      alloy-metrics:
+        image:
+          registry: hub.zama.org
+          repository: zama-protocol/zama.ai/grafana-alloy
+          tag: ${var.defaults.k8s_monitoring.alloy_image_tag}
+          pullSecrets:
+            - name: registry-credentials
+      alloy-logs:
+        presets:
+          - filesystem-log-reader
+        image:
+          registry: hub.zama.org
+          repository: zama-protocol/zama.ai/grafana-alloy
+          tag: ${var.defaults.k8s_monitoring.alloy_image_tag}
+          pullSecrets:
+            - name: registry-credentials
+      alloy-receiver:
+        image:
+          registry: hub.zama.org
+          repository: zama-protocol/zama.ai/grafana-alloy
+          tag: ${var.defaults.k8s_monitoring.alloy_image_tag}
+          pullSecrets:
+            - name: registry-credentials
 
     telemetryServices:
       kube-state-metrics:
         deploy: true
       node-exporter:
         deploy: true
+        image:
+          registry: hub.zama.org
+          repository: zama-protocol/zama.ai/prometheus-node-exporter
+          tag: ${var.defaults.k8s_monitoring.node_exporter_image_tag}
+        imagePullSecrets:
+          - name: registry-credentials
 
     clusterMetrics:
       enabled: true
@@ -190,6 +237,13 @@ locals {
     replicaCount: 1
 
     automountServiceAccountToken: false
+
+    image:
+      registry: hub.zama.org
+      repository: zama-protocol/zama.ai/prometheus-postgres-exporter
+      tag: ${var.defaults.prometheus_postgres_exporter.image_tag}
+      pullSecrets:
+        - registry-credentials
 
     serviceAccount:
       create: true
@@ -506,6 +560,7 @@ locals {
   # string via the lookup default.
   helm_value_fragments = {
     "metrics-server" = compact([
+      local.metrics_server_base_values,
       var.defaults.metrics_server.values,
     ])
     "karpenter" = compact([

@@ -168,29 +168,15 @@ k8s_system_charts = {
       repository = "https://kubernetes-sigs.github.io/metrics-server"
       chart      = "metrics-server"
       version    = "3.13.0"
-      values     = <<-YAML
-        image:
-          repository: hub.zama.org/zama-protocol/zama.ai/metrics-server
-          tag: v0.8.0
-        imagePullSecrets:
-          - name: registry-credentials
-      YAML
+      image_tag  = "v0.8.0"
     }
 
     karpenter = {
-      enabled    = true
-      repository = "oci://public.ecr.aws/karpenter"
-      chart      = "karpenter"
-      version    = "1.10.0"
-      values     = <<-YAML
-        controller:
-          image:
-            repository: hub.zama.org/zama-protocol/zama.ai/karpenter
-            tag: v1.11.0
-            digest: ""
-        imagePullSecrets:
-          - name: registry-credentials
-      YAML
+      enabled              = true
+      repository           = "oci://public.ecr.aws/karpenter"
+      chart                = "karpenter"
+      version              = "1.10.0"
+      controller_image_tag = "v1.11.0"
     }
 
     prometheus_rds_exporter = {
@@ -205,14 +191,7 @@ k8s_system_charts = {
       repository = "https://prometheus-community.github.io/helm-charts"
       chart      = "prometheus-postgres-exporter"
       version    = "7.3.0"
-      values     = <<-YAML
-        image:
-          registry: hub.zama.org
-          repository: zama-protocol/zama.ai/prometheus-postgres-exporter
-          tag: v0.19.1
-          pullSecrets:
-            - registry-credentials
-      YAML
+      image_tag  = "v0.19.1"
     }
 
     k8s_monitoring = {
@@ -221,57 +200,16 @@ k8s_system_charts = {
       chart      = "k8s-monitoring"
       version    = "4.0.1"
 
-      prometheus_url = "" # CHANGE ME
-      loki_url       = "" # CHANGE ME
-      otlp_url       = "" # CHANGE ME
+      prometheus_url           = "" # CHANGE ME
+      loki_url                 = "" # CHANGE ME
+      otlp_url                 = "" # CHANGE ME
+      alloy_operator_image_tag = "v0.5.3"
+      alloy_image_tag          = "v1.15.0"
+      node_exporter_image_tag  = "v1.11.0"
 
       values = <<-YAML
         global:
           scrapeInterval: 10m
-          imagePullSecrets:
-            - name: registry-credentials
-
-        alloy-operator:
-          image:
-            registry: hub.zama.org
-            repository: zama-protocol/zama.ai/grafana-alloy-operator
-            tag: v0.5.3
-            pullSecrets:
-              - name: registry-credentials
-
-        collectors:
-          alloy-metrics:
-            image:
-              registry: hub.zama.org
-              repository: zama-protocol/zama.ai/grafana-alloy
-              tag: v1.15.0
-              pullSecrets:
-                - name: registry-credentials
-          alloy-logs:
-            presets:
-              - filesystem-log-reader
-            image:
-              registry: hub.zama.org
-              repository: zama-protocol/zama.ai/grafana-alloy
-              tag: v1.15.0
-              pullSecrets:
-                - name: registry-credentials
-          alloy-receiver:
-            image:
-              registry: hub.zama.org
-              repository: zama-protocol/zama.ai/grafana-alloy
-              tag: v1.15.0
-              pullSecrets:
-                - name: registry-credentials
-
-        telemetryServices:
-          node-exporter:
-            image:
-              registry: hub.zama.org
-              repository: zama-protocol/zama.ai/prometheus-node-exporter
-              tag: v1.11.0
-            imagePullSecrets:
-              - name: registry-credentials
       YAML
     }
   }
