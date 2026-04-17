@@ -164,25 +164,5 @@ No resources.
 
 | Name | Description |
 |------|-------------|
-| <a name="output_additional_subnet_ids"></a> [additional\_subnet\_ids](#output\_additional\_subnet\_ids) | List of additional subnet IDs. |
-| <a name="output_eks_cluster_certificate_authority_data"></a> [eks\_cluster\_certificate\_authority\_data](#output\_eks\_cluster\_certificate\_authority\_data) | Base64-encoded certificate authority data for the EKS cluster. |
-| <a name="output_eks_cluster_endpoint"></a> [eks\_cluster\_endpoint](#output\_eks\_cluster\_endpoint) | The EKS cluster API endpoint. |
-| <a name="output_eks_cluster_name"></a> [eks\_cluster\_name](#output\_eks\_cluster\_name) | The EKS cluster name. |
-| <a name="output_eks_karpenter_iam_role_arn"></a> [eks\_karpenter\_iam\_role\_arn](#output\_eks\_karpenter\_iam\_role\_arn) | IAM role ARN for the Karpenter controller. |
-| <a name="output_eks_karpenter_node_iam_role_arn"></a> [eks\_karpenter\_node\_iam\_role\_arn](#output\_eks\_karpenter\_node\_iam\_role\_arn) | IAM role ARN for Karpenter-managed nodes. |
-| <a name="output_eks_karpenter_queue_name"></a> [eks\_karpenter\_queue\_name](#output\_eks\_karpenter\_queue\_name) | SQS queue name for Karpenter interruption handling. |
-| <a name="output_eks_oidc_provider_arn"></a> [eks\_oidc\_provider\_arn](#output\_eks\_oidc\_provider\_arn) | The ARN of the OIDC provider for IRSA. |
-| <a name="output_private_subnet_ids"></a> [private\_subnet\_ids](#output\_private\_subnet\_ids) | List of private subnet IDs. |
-| <a name="output_rds_db_instance_address"></a> [rds\_db\_instance\_address](#output\_rds\_db\_instance\_address) | The RDS instance hostname (without port). |
-| <a name="output_rds_db_instance_arn"></a> [rds\_db\_instance\_arn](#output\_rds\_db\_instance\_arn) | The ARN of the RDS instance. |
-| <a name="output_rds_db_instance_endpoint"></a> [rds\_db\_instance\_endpoint](#output\_rds\_db\_instance\_endpoint) | The RDS instance connection endpoint (host:port). |
-| <a name="output_rds_db_instance_identifier"></a> [rds\_db\_instance\_identifier](#output\_rds\_db\_instance\_identifier) | The identifier of the RDS instance. |
-| <a name="output_rds_db_instance_port"></a> [rds\_db\_instance\_port](#output\_rds\_db\_instance\_port) | The port the RDS instance is listening on. |
-| <a name="output_rds_master_secret_arn"></a> [rds\_master\_secret\_arn](#output\_rds\_master\_secret\_arn) | ARN of the Secrets Manager secret containing the RDS master user password. Null when manage\_master\_user\_password = false or rds.enabled = false. |
-| <a name="output_rds_security_group_id"></a> [rds\_security\_group\_id](#output\_rds\_security\_group\_id) | The ID of the RDS security group. |
-| <a name="output_s3_bucket_arns"></a> [s3\_bucket\_arns](#output\_s3\_bucket\_arns) | Map of logical bucket key to bucket ARN. |
-| <a name="output_s3_bucket_names"></a> [s3\_bucket\_names](#output\_s3\_bucket\_names) | Map of logical bucket key to bucket name. |
-| <a name="output_s3_cloudfront_distribution_ids"></a> [s3\_cloudfront\_distribution\_ids](#output\_s3\_cloudfront\_distribution\_ids) | Map of logical bucket key to CloudFront distribution ID. |
-| <a name="output_s3_cloudfront_domain_names"></a> [s3\_cloudfront\_domain\_names](#output\_s3\_cloudfront\_domain\_names) | Map of logical bucket key to CloudFront distribution domain name. |
-| <a name="output_vpc_id"></a> [vpc\_id](#output\_vpc\_id) | The ID of the VPC. |
+| <a name="output_outputs"></a> [outputs](#output\_outputs) | Consolidated root module outputs. |
 <!-- END_TF_DOCS -->
