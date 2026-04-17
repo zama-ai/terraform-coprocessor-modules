@@ -212,6 +212,29 @@ resource "aws_iam_role_policy_attachment" "service_account" {
 }
 
 # ***************************************
+#  Kubernetes Configmap
+# ***************************************
+resource "kubernetes_config_map" "db_admin_secret_id" {
+  metadata {
+    name      = "rds-admin-secret-id"
+    namespace = "coproc-admin"
+
+    labels = merge({
+      "app.kubernetes.io/name"       = "coprocessor"
+      "app.kubernetes.io/component"  = "rds-admin-secret-id"
+      "app.kubernetes.io/part-of"    = "zama-protocol"
+      "app.kubernetes.io/managed-by" = "terraform"
+    })
+  }
+
+  data = {
+    RDS_ADMIN_SECRET_ID: var.rds_master_secret_arn
+  }
+
+  depends_on = [kubernetes_namespace.this, aws_iam_role_policy_attachment.service_account]
+}
+
+# ***************************************
 #  Kubernetes Service Accounts
 # ***************************************
 resource "kubernetes_service_account" "this" {
