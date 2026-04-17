@@ -31,6 +31,7 @@ variable "kubernetes_provider" {
     host                   = optional(string, null)
     cluster_ca_certificate = optional(string, null)
     cluster_name           = optional(string, null)
+    oidc_provider_arn      = optional(string, null)
   })
   default = {}
 }
@@ -288,7 +289,7 @@ variable "rds" {
 
     # Maintenance & backups
     maintenance_window      = optional(string, "Mon:00:00-Mon:03:00")
-    backup_retention_period = optional(number, 7)
+    backup_retention_period = optional(number, 30)
     deletion_protection     = optional(bool, true)
 
     # Monitoring
@@ -358,6 +359,23 @@ variable "s3" {
         expose_headers  = []
       })
 
+      # CloudFront distribution
+      cloudfront = optional(object({
+        enabled                   = optional(bool, false)
+        price_class               = optional(string, "PriceClass_All")
+        compress                  = optional(bool, true)
+        viewer_protocol_policy    = optional(string, "redirect-to-https")
+        allowed_methods           = optional(list(string), ["GET", "HEAD"])
+        cached_methods            = optional(list(string), ["GET", "HEAD"])
+        cache_policy_id           = optional(string, "658327ea-f89d-4fab-a63d-7e88639e58f6") # AWS managed CachingOptimized
+        geo_restriction_type      = optional(string, "none")
+        geo_restriction_locations = optional(list(string), [])
+        aliases                   = optional(list(string), [])       # custom hostnames (CNAMEs) for the distribution; requires acm_certificate_arn
+        acm_certificate_arn       = optional(string, null)           # if set, used instead of default CloudFront certificate
+        ssl_support_method        = optional(string, "sni-only")     # only relevant when acm_certificate_arn is set
+        minimum_protocol_version  = optional(string, "TLSv1.2_2021") # only relevant when acm_certificate_arn is set
+      }), { enabled = false })
+
       # Bucket policies
       policy_statements = optional(list(object({
         sid        = string
@@ -380,4 +398,199 @@ variable "s3" {
     condition     = length(var.s3.buckets) > 0
     error_message = "s3.buckets must contain at least one bucket definition."
   }
+}
+
+# ******************************************************
+#  k8s Coprocessor Dependencies
+# ******************************************************
+variable "k8s_coprocessor_deps" {
+  description = "Kubernetes coprocessor resource configuration (namespaces, service accounts, storage classes, ExternalName services)."
+  type = object({
+    enabled = optional(bool, false)
+
+    default_namespace = optional(string, "coproc")
+
+    # Namespaces
+    namespaces = optional(map(object({
+      enabled     = optional(bool, true)
+      labels      = optional(map(string), {})
+      annotations = optional(map(string), {})
+    })), {})
+
+    # Service accounts — built-in toggles + custom extras.
+    service_accounts = optional(object({
+      # coprocessor: IRSA role with S3 access (s3:*Object + s3:ListBucket).
+      coprocessor = optional(object({
+        enabled       = optional(bool, true)
+        s3_bucket_key = optional(string, "coprocessor")
+      }), {})
+
+      # db_admin: IRSA role with RDS master secret (GetSecretValue + DescribeSecret).
+      db_admin = optional(object({
+        enabled = optional(bool, true)
+      }), {})
+
+      # Additional service accounts. An entry with the same key as a built-in overrides it.
+      extra = optional(map(object({
+        name                   = string
+        namespace              = optional(string, null)
+        iam_role_name_override = optional(string, null)
+        s3_bucket_access = optional(map(object({
+          actions = list(string)
+        })), {})
+        rds_master_secret_access = optional(bool, false)
+        iam_policy_statements = optional(list(object({
+          sid       = optional(string, "")
+          effect    = string
+          actions   = list(string)
+          resources = list(string)
+          conditions = optional(list(object({
+            test     = string
+            variable = string
+            values   = list(string)
+          })), [])
+        })), [])
+        labels      = optional(map(string), {})
+        annotations = optional(map(string), {})
+      })), {})
+    }), {})
+
+    # Storage classes — built-in toggles + custom extras.
+    storage_classes = optional(object({
+      # gp3: encrypted EBS gp3, WaitForFirstConsumer, set as cluster default.
+      gp3 = optional(object({
+        enabled = optional(bool, true)
+      }), {})
+
+      # Additional storage classes. An entry with the same key as a built-in overrides it.
+      extra = optional(map(object({
+        provisioner            = string
+        reclaim_policy         = optional(string, "Delete")
+        volume_binding_mode    = optional(string, "WaitForFirstConsumer")
+        allow_volume_expansion = optional(bool, true)
+        parameters             = optional(map(string), {})
+        annotations            = optional(map(string), {})
+        labels                 = optional(map(string), {})
+      })), {})
+    }), {})
+
+    # ExternalName services — map key becomes the Service name.
+    # When endpoint is omitted the root module resolves it from the matching module output (see local.module_endpoints).
+    external_name_services = optional(map(object({
+      enabled     = optional(bool, true)
+      endpoint    = optional(string, null)
+      namespace   = optional(string, null)
+      annotations = optional(map(string), {})
+    })), {})
+  })
+  default = { enabled = false }
+}
+
+# ******************************************************
+#  k8s System Charts
+# ******************************************************
+variable "k8s_system_charts" {
+  description = "Kubernetes system-level applications to deploy via Helm."
+  type = object({
+    enabled = optional(bool, false)
+
+    # Toggle built-in applications on/off. See modules/k8s-system-charts for full docs.
+    defaults = optional(object({
+      karpenter_nodepools = optional(object({
+        enabled = optional(bool, true)
+      }), {})
+      prometheus_operator_crds = optional(object({
+        enabled    = optional(bool, true)
+        repository = optional(string, "https://prometheus-community.github.io/helm-charts")
+        chart      = optional(string, "prometheus-operator-crds")
+        version    = optional(string, "28.0.1")
+      }), {})
+      metrics_server = optional(object({
+        enabled    = optional(bool, true)
+        repository = optional(string, "https://kubernetes-sigs.github.io/metrics-server")
+        chart      = optional(string, "metrics-server")
+        version    = optional(string, "3.13.0")
+        image_tag  = optional(string, "v0.8.0")
+        values     = optional(string, "")
+      }), {})
+      karpenter = optional(object({
+        enabled              = optional(bool, true)
+        repository           = optional(string, "oci://public.ecr.aws/karpenter")
+        chart                = optional(string, "karpenter")
+        version              = optional(string, "1.8.2")
+        controller_image_tag = optional(string, "v1.11.0")
+        values               = optional(string, "")
+      }), {})
+      k8s_monitoring = optional(object({
+        enabled                  = optional(bool, false)
+        repository               = optional(string, "https://grafana.github.io/helm-charts")
+        chart                    = optional(string, "k8s-monitoring")
+        version                  = optional(string, "4.0.1")
+        prometheus_url           = optional(string, "")
+        loki_url                 = optional(string, "")
+        otlp_url                 = optional(string, "")
+        alloy_operator_image_tag = optional(string, "v0.5.3")
+        alloy_image_tag          = optional(string, "v1.15.0")
+        node_exporter_image_tag  = optional(string, "v1.11.0")
+        values                   = optional(string, "")
+      }), {})
+      prometheus_rds_exporter = optional(object({
+        enabled    = optional(bool, false)
+        repository = optional(string, "oci://public.ecr.aws/qonto")
+        chart      = optional(string, "prometheus-rds-exporter-chart")
+        version    = optional(string, "0.16.0")
+        values     = optional(string, "")
+      }), {})
+      prometheus_postgres_exporter = optional(object({
+        enabled    = optional(bool, false)
+        repository = optional(string, "https://prometheus-community.github.io/helm-charts")
+        chart      = optional(string, "prometheus-postgres-exporter")
+        version    = optional(string, "7.3.0")
+        image_tag  = optional(string, "v0.19.1")
+        values     = optional(string, "")
+      }), {})
+    }), {})
+
+    # Additional custom applications. An entry with the same key as a built-in overrides it.
+    extra = optional(map(object({
+      namespace = object({
+        name   = string
+        create = optional(bool, false)
+      })
+      service_account = optional(object({
+        create      = optional(bool, false)
+        name        = optional(string, null)
+        labels      = optional(map(string), {})
+        annotations = optional(map(string), {})
+      }), null)
+      irsa = optional(object({
+        enabled   = optional(bool, false)
+        role_name = optional(string, null)
+        policy_statements = optional(list(object({
+          sid       = optional(string, "")
+          effect    = string
+          actions   = list(string)
+          resources = list(string)
+        })), [])
+      }), { enabled = false })
+      helm_chart = optional(object({
+        enabled          = optional(bool, true)
+        repository       = string
+        chart            = string
+        version          = string
+        values           = optional(string, "")
+        set              = optional(map(string), {})
+        crd_chart        = optional(bool, false)
+        create_namespace = optional(bool, false)
+        atomic           = optional(bool, true)
+        wait             = optional(bool, true)
+        timeout          = optional(number, 300)
+      }), null)
+      additional_manifests = optional(object({
+        enabled   = optional(bool, false)
+        manifests = optional(map(string), {})
+      }), { enabled = false })
+    })), {})
+  })
+  default = { enabled = false }
 }

@@ -87,6 +87,11 @@ output "rds_db_instance_port" {
   value       = module.rds.db_instance_port
 }
 
+output "rds_master_secret_arn" {
+  description = "ARN of the Secrets Manager secret containing the RDS master user password. Null when manage_master_user_password = false or rds.enabled = false."
+  value       = module.rds.rds_master_secret_arn
+}
+
 # ******************************************************
 #  S3
 # ******************************************************
@@ -98,4 +103,14 @@ output "s3_bucket_names" {
 output "s3_bucket_arns" {
   description = "Map of logical bucket key to bucket ARN."
   value       = module.s3.bucket_arns
+}
+
+output "s3_cloudfront_domain_names" {
+  description = "Map of logical bucket key to CloudFront distribution domain name."
+  value       = module.s3.cloudfront_domain_names
+}
+
+output "s3_cloudfront_distribution_ids" {
+  description = "Map of logical bucket key to CloudFront distribution ID."
+  value       = module.s3.cloudfront_distribution_ids
 }

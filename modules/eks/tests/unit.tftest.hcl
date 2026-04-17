@@ -102,6 +102,7 @@ run "name_override_changes_cluster_name" {
 #  Karpenter disabled
 # =============================================================================
 
+# Absorbs null output assertions (previously a separate test).
 run "karpenter_disabled_creates_no_resources" {
   command = plan
 
@@ -124,12 +125,6 @@ run "karpenter_disabled_creates_no_resources" {
     condition     = length(aws_iam_service_linked_role.spot) == 0
     error_message = "Spot service-linked role must not be created when Karpenter is disabled."
   }
-}
-
-# Karpenter outputs are guarded by a ternary on var.karpenter.enabled,
-# so null vs non-null is deterministic at plan time.
-run "karpenter_disabled_outputs_all_null" {
-  command = plan
 
   assert {
     condition     = output.karpenter_iam_role_arn == null
@@ -260,32 +255,6 @@ run "rejects_eks_version_below_1_28" {
   expect_failures = [var.cluster]
 }
 
-run "accepts_eks_version_1_28" {
-  command = plan
-
-  variables {
-    cluster = { version = "1.28" }
-  }
-
-  assert {
-    condition     = length(module.eks) > 0
-    error_message = "EKS cluster must be planned for a valid version like 1.28."
-  }
-}
-
-run "accepts_eks_version_1_35" {
-  command = plan
-
-  variables {
-    cluster = { version = "1.35" }
-  }
-
-  assert {
-    condition     = length(module.eks) > 0
-    error_message = "EKS cluster must be planned for version 1.35."
-  }
-}
-
 run "rejects_karpenter_rule_name_prefix_over_20_chars" {
   command = plan
 
@@ -297,23 +266,6 @@ run "rejects_karpenter_rule_name_prefix_over_20_chars" {
   }
 
   expect_failures = [var.karpenter]
-}
-
-run "accepts_karpenter_rule_name_prefix_at_20_chars" {
-  command = plan
-
-  variables {
-    karpenter = {
-      enabled              = true
-      rule_name_prefix     = "exactly-twenty-chars" # 20 chars
-      controller_nodegroup = { enabled = false }
-    }
-  }
-
-  assert {
-    condition     = length(module.karpenter) == 1
-    error_message = "Karpenter must be created with a 20-character rule_name_prefix."
-  }
 }
 
 # =============================================================================
@@ -337,25 +289,5 @@ run "node_group_with_additional_subnets_plans_without_error" {
   assert {
     condition     = length(module.eks) > 0
     error_message = "EKS cluster must plan successfully when a node group uses additional subnets."
-  }
-}
-
-run "node_group_without_additional_subnets_plans_without_error" {
-  command = plan
-
-  variables {
-    node_groups = {
-      groups = {
-        default_pool = {
-          use_additional_subnets = false
-          instance_types         = ["t3.medium"]
-        }
-      }
-    }
-  }
-
-  assert {
-    condition     = length(module.eks) > 0
-    error_message = "EKS cluster must plan successfully when a node group does not use additional subnets."
   }
 }

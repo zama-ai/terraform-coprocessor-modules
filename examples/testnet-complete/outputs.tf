@@ -57,6 +57,11 @@ output "rds_db_instance_identifier" {
   value       = module.coprocessor.rds_db_instance_identifier
 }
 
+output "rds_master_secret_arn" {
+  description = "ARN of the Secrets Manager secret containing the RDS master user password."
+  value       = module.coprocessor.rds_master_secret_arn
+}
+
 # ******************************************************
 #  S3
 # ******************************************************
@@ -68,4 +73,9 @@ output "s3_bucket_names" {
 output "s3_bucket_arns" {
   description = "Map of logical bucket key to bucket ARN."
   value       = module.coprocessor.s3_bucket_arns
+}
+
+output "s3_cloudfront_domain_names" {
+  description = "Map of logical bucket key to CloudFront distribution hostname (e.g. d1234abcd.cloudfront.net)."
+  value       = module.coprocessor.s3_cloudfront_domain_names
 }

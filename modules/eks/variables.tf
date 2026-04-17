@@ -193,7 +193,7 @@ variable "karpenter" {
       desired_size   = optional(number, 1)
       instance_types = optional(list(string), ["t3.small"])
       ami_type       = optional(string, "AL2023_x86_64_STANDARD")
-      disk_size      = optional(number, 50)
+      disk_size      = optional(number, 30)
       disk_type      = optional(string, "gp3")
       labels         = optional(map(string), { "karpenter.sh/controller" = "true" })
       taints = optional(map(object({

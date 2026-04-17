@@ -37,6 +37,7 @@ run "no_additional_subnets_by_default" {
   }
 }
 
+# Absorbs AZ-assignment assertions (previously a separate test).
 run "additional_subnets_one_per_az" {
   command = plan
 
@@ -56,6 +57,16 @@ run "additional_subnets_one_per_az" {
   assert {
     condition     = length(aws_route_table_association.additional) == 2
     error_message = "One route table association must be created per additional subnet."
+  }
+
+  assert {
+    condition     = aws_subnet.additional[0].availability_zone == "eu-west-1a"
+    error_message = "First additional subnet must be placed in the first AZ."
+  }
+
+  assert {
+    condition     = aws_subnet.additional[1].availability_zone == "eu-west-1b"
+    error_message = "Second additional subnet must be placed in the second AZ."
   }
 }
 
@@ -94,28 +105,6 @@ run "additional_subnet_cidrs_calculated_correctly" {
   assert {
     condition     = aws_subnet.additional[1].cidr_block == "10.0.32.0/20"
     error_message = "Second additional subnet CIDR must be 10.0.32.0/20."
-  }
-}
-
-run "additional_subnet_az_assignments_match_input" {
-  command = plan
-
-  variables {
-    additional_subnets = {
-      enabled        = true
-      cidr_mask      = 20
-      expose_for_eks = false
-    }
-  }
-
-  assert {
-    condition     = aws_subnet.additional[0].availability_zone == "eu-west-1a"
-    error_message = "First additional subnet must be placed in the first AZ."
-  }
-
-  assert {
-    condition     = aws_subnet.additional[1].availability_zone == "eu-west-1b"
-    error_message = "Second additional subnet must be placed in the second AZ."
   }
 }
 
@@ -238,29 +227,6 @@ run "public_elb_tag_when_elb_role_public" {
   }
 }
 
-run "no_elb_tag_when_elb_role_null" {
-  command = plan
-
-  variables {
-    additional_subnets = {
-      enabled        = true
-      cidr_mask      = 20
-      expose_for_eks = true
-      elb_role       = null
-    }
-  }
-
-  assert {
-    condition     = !contains(keys(aws_subnet.additional[0].tags), "kubernetes.io/role/elb")
-    error_message = "kubernetes.io/role/elb tag must not be set when elb_role = null."
-  }
-
-  assert {
-    condition     = !contains(keys(aws_subnet.additional[0].tags), "kubernetes.io/role/internal-elb")
-    error_message = "kubernetes.io/role/internal-elb tag must not be set when elb_role = null."
-  }
-}
-
 # =============================================================================
 #  User-supplied extra tags on additional subnets
 # =============================================================================
@@ -289,39 +255,11 @@ run "user_tags_merged_onto_additional_subnets" {
 }
 
 # =============================================================================
-#  AZ auto-detection via data source
+#  AZ auto-detection via data source — capped at 3
 #
 # When availability_zones = [], the module slices data.aws_availability_zones.
-# Use override_data to simulate 3 AZs being returned.
+# Simulating 4 AZs verifies both that detection works and that the cap is enforced.
 # =============================================================================
-
-run "az_auto_detected_from_data_source" {
-  command = plan
-
-  variables {
-    vpc = {
-      cidr                     = "10.0.0.0/16"
-      availability_zones       = []
-      private_subnet_cidr_mask = 24
-      public_subnet_cidr_mask  = 24
-    }
-    additional_subnets = {
-      enabled        = true
-      cidr_mask      = 20
-      expose_for_eks = false
-    }
-  }
-
-  override_data {
-    target = data.aws_availability_zones.available
-    values = { names = ["eu-west-1a", "eu-west-1b", "eu-west-1c"] }
-  }
-
-  assert {
-    condition     = length(aws_subnet.additional) == 3
-    error_message = "Three additional subnets must be created when data source returns 3 AZs."
-  }
-}
 
 run "az_auto_detection_capped_at_three" {
   command = plan

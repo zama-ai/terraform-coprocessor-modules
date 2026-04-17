@@ -18,7 +18,7 @@ variable "vpc" {
 
     # Subnet CIDR calculation
     private_subnet_cidr_mask = optional(number, 20)
-    public_subnet_cidr_mask  = optional(number, 24)
+    public_subnet_cidr_mask  = optional(number, 20)
 
     # Flow logs
     flow_log_enabled         = optional(bool, false)

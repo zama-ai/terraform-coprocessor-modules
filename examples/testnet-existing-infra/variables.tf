@@ -45,3 +45,15 @@ variable "s3" {
   type        = any
   default     = { buckets = {} }
 }
+
+variable "k8s_coprocessor_deps" {
+  description = "Kubernetes coprocessor resource configuration. See root module variables.tf for full schema."
+  type        = any
+  default     = { enabled = false }
+}
+
+variable "kubernetes_provider" {
+  description = "Kubernetes provider configuration for BYOC deployments. See root module variables.tf for full schema."
+  type        = any
+  default     = {}
+}

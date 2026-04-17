@@ -234,12 +234,13 @@ eks = {
     }
 
     # IAM policies attached to every node group's IAM role.
-    # Default: the four policies shown below.
+    # Default: the five policies shown below.
     default_iam_policies = {
       AmazonEBSCSIDriverPolicy           = "arn:aws:iam::aws:policy/service-role/AmazonEBSCSIDriverPolicy"
       AmazonEC2ContainerRegistryReadOnly = "arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly"
       AmazonEKSWorkerNodePolicy          = "arn:aws:iam::aws:policy/AmazonEKSWorkerNodePolicy"
       AmazonEKS_CNI_Policy               = "arn:aws:iam::aws:policy/AmazonEKS_CNI_Policy"
+      AmazonSSMManagedInstanceCore       = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
     }
 
     # Map of node groups. Key becomes the node group name and the EC2 Name tag.
@@ -314,9 +315,7 @@ eks = {
         # Additional IAM policies attached only to this node group's role.
         # Merged with default_iam_policies.
         # Default: {}
-        iam_role_additional_policies = {
-          AmazonSSMManagedInstanceCore = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
-        }
+        iam_role_additional_policies = {}
 
         # IMDSv2 configuration. hop_limit = 1 prevents non-hostNetwork pods from
         # reaching instance metadata (recommended). Raise to 2 only if pods need IMDS.
@@ -436,15 +435,15 @@ rds = {
 
   # ── Instance ────────────────────────────────────────────────────────────────
 
-  # Default: "db.t4g.medium"
+  # Default: "db.m5.4xlarge"
   instance_class = "db.m5.4xlarge"
 
   # Initial allocated storage in GiB.
-  # Default: 20
+  # Default: 400
   allocated_storage = 400
 
   # Maximum storage for autoscaling. Set equal to allocated_storage to disable.
-  # Default: 100
+  # Default: 1000
   max_allocated_storage = 1000
 
   # Deploy a standby replica in a second AZ for automatic failover.
@@ -495,7 +494,7 @@ rds = {
   maintenance_window = "Mon:00:00-Mon:03:00"
 
   # Days to retain automated backups. 0 disables backups.
-  # Default: 7
+  # Default: 30
   backup_retention_period = 7
 
   # Prevent accidental deletion via Terraform destroy.
@@ -575,6 +574,64 @@ s3 = {
         enabled = false
       }
 
+      # CloudFront distribution in front of this bucket.
+      # Default: { enabled = false }
+      cloudfront = {
+        # Default: false
+        enabled = true
+
+        # Edge location coverage.
+        # "PriceClass_100" = EU + NA only (cheapest)
+        # "PriceClass_200" = above + Asia Pacific, Middle East, Africa
+        # "PriceClass_All" = all edge locations globally (best cache hit rate)
+        # Default: "PriceClass_All"
+        price_class = "PriceClass_All"
+
+        # Compress objects automatically (Gzip / Brotli). Default: true
+        compress = true
+
+        # "redirect-to-https" | "https-only" | "allow-all"
+        # Default: "redirect-to-https"
+        viewer_protocol_policy = "redirect-to-https"
+
+        # HTTP methods CloudFront accepts and forwards to the origin.
+        # Default: ["GET", "HEAD"]
+        allowed_methods = ["GET", "HEAD"]
+
+        # Methods whose responses CloudFront caches. Must be a subset of allowed_methods.
+        # Default: ["GET", "HEAD"]
+        cached_methods = ["GET", "HEAD"]
+
+        # AWS managed cache policy ID. Default is CachingOptimized — recommended for S3.
+        # Default: "658327ea-f89d-4fab-a63d-7e88639e58f6"
+        cache_policy_id = "658327ea-f89d-4fab-a63d-7e88639e58f6"
+
+        # "none" | "whitelist" | "blacklist". Default: "none"
+        geo_restriction_type = "none"
+
+        # ISO 3166-1 alpha-2 country codes. Only used when geo_restriction_type != "none".
+        # Default: []
+        geo_restriction_locations = []
+
+        # Custom hostnames (CNAMEs) for this distribution.
+        # Requires acm_certificate_arn to be set. ACM cert must be in us-east-1.
+        # Default: []
+        aliases = ["assets.example.com"]
+
+        # ACM certificate ARN for a custom domain. Must be in us-east-1.
+        # null = use the default *.cloudfront.net certificate.
+        # Default: null
+        acm_certificate_arn = "arn:aws:acm:us-east-1:123456789012:certificate/abc-12345"
+
+        # Only relevant when acm_certificate_arn is set.
+        # "sni-only" (recommended) | "vip". Default: "sni-only"
+        ssl_support_method = "sni-only"
+
+        # Only relevant when acm_certificate_arn is set.
+        # Default: "TLSv1.2_2021"
+        minimum_protocol_version = "TLSv1.2_2021"
+      }
+
       # CORS configuration for browser-based access.
       # Default: { enabled = false, all lists empty }
       cors = {
@@ -615,6 +672,401 @@ s3 = {
           conditions = []
         },
       ]
+    }
+  }
+}
+
+
+# ==============================================================================
+#  k8s Coprocessor Dependencies
+#
+#  Kubernetes-native resources: namespaces, service accounts (with IRSA),
+#  storage classes, and ExternalName services.
+#
+#  Default: { enabled = false }
+# ==============================================================================
+k8s_coprocessor_deps = {
+  # Default: false
+  enabled = true
+
+  # Fallback namespace for service accounts and ExternalName services that do
+  # not specify their own namespace. Does not need to be a key in namespaces
+  # (may reference a pre-existing namespace).
+  # Default: "coproc"
+  default_namespace = "coproc"
+
+  # ── Namespaces ───────────────────────────────────────────────────────────────
+  # Map of Kubernetes namespaces to create. The map key is the namespace name.
+  # Default: {}
+  namespaces = {
+    coproc = {
+      # Default: true
+      enabled = true
+
+      # Default: {}
+      labels = {
+        "app.kubernetes.io/managed-by" = "terraform"
+      }
+
+      # Default: {}
+      annotations = {
+        "owner" = "platform-team"
+      }
+    }
+
+    coproc-admin   = { enabled = true }
+    monitoring     = { enabled = true }
+    gw-blockchain  = { enabled = true }
+    eth-blockchain = { enabled = true }
+  }
+
+  # ── Service Accounts ─────────────────────────────────────────────────────────
+  service_accounts = {
+    # Toggle built-in service accounts on/off.
+    # coprocessor: IRSA role with S3 access (GetObject, PutObject, DeleteObject, ListBucket).
+    # db_admin:    IRSA role with RDS master secret (GetSecretValue + DescribeSecret).
+    coprocessor = { enabled = true }
+    db_admin    = { enabled = true }
+
+    # Additional service accounts beyond the built-ins. An entry with the same
+    # key as a built-in overrides it entirely.
+    # Default: {}
+    extra = {
+      sns-worker = {
+        # Required. Kubernetes service account name.
+        name = "sns-worker"
+
+        # Namespace override. Defaults to k8s_coprocessor_deps.default_namespace when null.
+        # Default: null
+        namespace = null
+
+        # Override the computed IAM role name "<key>-<partner_name>-<environment>".
+        # Default: null (uses computed name)
+        iam_role_name_override = null
+
+        # Grant access to specific S3 buckets (keys must match s3.buckets keys).
+        # Default: {}
+        s3_bucket_access = {}
+
+        # Grant GetSecretValue + DescribeSecret on the RDS master Secrets Manager secret.
+        # Default: false
+        rds_master_secret_access = false
+
+        # Arbitrary additional IAM policy statements appended to the generated role.
+        # Default: []
+        iam_policy_statements = [
+          {
+            effect    = "Allow"
+            actions   = ["sns:Publish"]
+            resources = ["arn:aws:sns:eu-west-1:123456789012:my-topic"]
+          }
+        ]
+
+        # Default: {}
+        labels = {}
+
+        # Default: {}
+        annotations = {}
+      }
+    }
+  }
+
+  # ── Storage Classes ──────────────────────────────────────────────────────────
+  storage_classes = {
+    # Toggle built-in storage classes on/off.
+    # gp3: encrypted EBS gp3, WaitForFirstConsumer, set as cluster default.
+    gp3 = { enabled = true }
+
+    # Additional storage classes beyond the built-ins. An entry with the same
+    # key as a built-in overrides it entirely.
+    # Default: {}
+    extra = {
+      gp3-retain = {
+        # Required. CSI driver name.
+        provisioner = "ebs.csi.aws.com"
+
+        # "Retain" | "Delete"
+        # Default: "Delete"
+        reclaim_policy = "Retain"
+
+        # "WaitForFirstConsumer" | "Immediate"
+        # Default: "WaitForFirstConsumer"
+        volume_binding_mode = "WaitForFirstConsumer"
+
+        # Default: true
+        allow_volume_expansion = true
+
+        # Driver-specific parameters passed verbatim to the StorageClass.
+        # Default: {}
+        parameters = {
+          type      = "gp3"
+          fsType    = "ext4"
+          encrypted = "true"
+        }
+
+        # Default: {}
+        annotations = {}
+
+        # Default: {}
+        labels = {}
+      }
+    }
+  }
+
+  # ── ExternalName Services ─────────────────────────────────────────────────────
+  # Map of Kubernetes ExternalName services that proxy to external dependencies
+  # (e.g. RDS). The map key becomes the Kubernetes service name.
+  # The port is stripped from the endpoint automatically; the app connects on
+  # its own configured port.
+  # When endpoint is omitted, the root module injects the RDS hostname automatically.
+  # Default: {}
+  external_name_services = {
+    coprocessor-database = {
+      # Default: true
+      enabled = true
+
+      # Omit endpoint to have the root module inject the RDS hostname automatically.
+      # Or provide an explicit host:port / bare hostname.
+      # Default: null
+      endpoint = null
+
+      # Namespace override. Defaults to k8s_coprocessor_deps.default_namespace when null.
+      # Default: null
+      namespace = "coproc"
+
+      # Default: {}
+      annotations = {}
+    }
+  }
+}
+
+
+# ==============================================================================
+#  k8s System Charts
+#
+#  System-level Helm chart deployments. Requires eks.enabled = true or a valid
+#  kubernetes_provider configuration.
+#
+#  Helm values support the following placeholder substitutions applied automatically
+#  by the module at apply time:
+#    __partner__      → var.partner_name
+#    __network__      → var.environment
+#    __region__       → current AWS region (in additional_manifests only)
+#    __cluster_name__ → EKS cluster name (in additional_manifests only)
+#    __node_role__    → Karpenter node IAM role name (in additional_manifests only)
+#
+#  Default: { enabled = false }
+# ==============================================================================
+k8s_system_charts = {
+  # Default: false
+  enabled = true
+
+  # ── Built-in applications ─────────────────────────────────────────────────
+  # Toggle and configure the bundled chart deployments.
+  # All built-ins are enabled by default except k8s_monitoring, prometheus_rds_exporter,
+  # and prometheus_postgres_exporter which require explicit opt-in.
+  defaults = {
+    # Karpenter EC2NodeClass + NodePool manifests.
+    # Default: { enabled = true }
+    karpenter_nodepools = { enabled = true }
+
+    # Prometheus Operator CRD chart (deployed before other monitoring charts).
+    # Default: { enabled = true, repository = "https://prometheus-community.github.io/helm-charts", chart = "prometheus-operator-crds", version = "28.0.1" }
+    prometheus_operator_crds = {
+      enabled    = true
+      repository = "https://prometheus-community.github.io/helm-charts"
+      chart      = "prometheus-operator-crds"
+      version    = "28.0.1"
+    }
+
+    # Kubernetes Metrics Server.
+    # Default: { enabled = true, repository = "https://kubernetes-sigs.github.io/metrics-server", chart = "metrics-server", version = "3.13.0", image_tag = "v0.8.0", values = "" }
+    metrics_server = {
+      enabled    = true
+      repository = "https://kubernetes-sigs.github.io/metrics-server"
+      chart      = "metrics-server"
+      version    = "3.13.0"
+      image_tag  = "v0.8.0"
+      values     = ""
+    }
+
+    # Karpenter controller Helm chart.
+    # settings.clusterName, settings.interruptionQueue, and settings.eksControlPlane
+    # are injected automatically — no set block needed.
+    # Default: { enabled = true, repository = "oci://public.ecr.aws/karpenter", chart = "karpenter", version = "1.8.2", controller_image_tag = "v1.11.0", values = "" }
+    karpenter = {
+      enabled              = true
+      repository           = "oci://public.ecr.aws/karpenter"
+      chart                = "karpenter"
+      version              = "1.11.0"
+      controller_image_tag = "v1.11.0"
+      values               = ""
+    }
+
+    # Grafana k8s-monitoring (Alloy-based metrics, logs, and traces pipeline).
+    # Prerequisites — create this secret before applying:
+    #   kubectl create secret generic grafana-cloud-credentials -n monitoring \
+    #     --from-literal=prometheus-username=<id>  --from-literal=prometheus-password=<token> \
+    #     --from-literal=loki-username=<id>        --from-literal=loki-password=<token> \
+    #     --from-literal=otlp-username=<id>        --from-literal=otlp-password=<token>
+    #
+    # Coprocessor pods must set:
+    #   OTEL_EXPORTER_OTLP_ENDPOINT=http://k8s-monitoring-alloy-receiver.monitoring.svc.cluster.local:4317
+    #
+    # Default: { enabled = false, repository = "https://grafana.github.io/helm-charts", chart = "k8s-monitoring", version = "4.0.1", all urls = "", alloy_operator_image_tag = "v0.5.3", alloy_image_tag = "v1.15.0", node_exporter_image_tag = "v1.11.0", values = "" }
+    k8s_monitoring = {
+      enabled                  = true
+      repository               = "https://grafana.github.io/helm-charts"
+      chart                    = "k8s-monitoring"
+      version                  = "4.0.1"
+      prometheus_url           = "https://prometheus-prod-XX-eu-west-0.grafana.net/api/prom/push"  # CHANGE ME
+      loki_url                 = "https://logs-prod-eu-west-0.grafana.net/loki/api/v1/push"        # CHANGE ME
+      otlp_url                 = "https://otlp-gateway-prod-eu-west-0.grafana.net/otlp"            # CHANGE ME
+      alloy_operator_image_tag = "v0.5.3"
+      alloy_image_tag          = "v1.15.0"
+      node_exporter_image_tag  = "v1.11.0"
+
+      # The module now bakes in the Zama mirror registry, image repositories,
+      # and pull secrets. Use values only for additional chart overrides.
+      values = <<-YAML
+        global:
+          scrapeInterval: 10m
+      YAML
+    }
+
+    # Prometheus RDS exporter.
+    # Default: { enabled = false, repository = "oci://public.ecr.aws/qonto", chart = "prometheus-rds-exporter-chart", version = "0.16.0" }
+    prometheus_rds_exporter = {
+      enabled    = false
+      repository = "oci://public.ecr.aws/qonto"
+      chart      = "prometheus-rds-exporter-chart"
+      version    = "0.16.0"
+      values     = ""
+    }
+
+    # Prometheus Postgres exporter.
+    # Default: { enabled = false, repository = "https://prometheus-community.github.io/helm-charts", chart = "prometheus-postgres-exporter", version = "7.3.0", image_tag = "v0.19.1", values = "" }
+    prometheus_postgres_exporter = {
+      enabled    = false
+      repository = "https://prometheus-community.github.io/helm-charts"
+      chart      = "prometheus-postgres-exporter"
+      version    = "7.3.0"
+      image_tag  = "v0.19.1"
+      values     = ""
+    }
+  }
+
+  # ── Custom applications ───────────────────────────────────────────────────
+  # Additional Helm releases beyond the built-ins. An entry with the same key
+  # as a built-in overrides it entirely.
+  # Default: {}
+  extra = {
+
+    # ── Example 1: simple chart, no service account or IRSA ──────────────────
+    my-app = {
+      # Required. Namespace the release is deployed into.
+      namespace = {
+        # Required. Kubernetes namespace name.
+        name = "my-app"
+
+        # false = namespace already exists; true = Terraform creates it.
+        # Default: false
+        create = true
+      }
+
+      # helm_chart is optional. Omit entirely if you only need a namespace or SA.
+      helm_chart = {
+        # Required.
+        repository = "https://charts.example.com"
+        chart      = "my-app"
+        version    = "1.0.0"
+
+        # Raw YAML values (equivalent to a values.yaml file). Default: ""
+        values = ""
+
+        # Individual key=value overrides merged on top of values. Default: {}
+        set = {
+          "replicas" = "2"
+        }
+
+        # false disables atomic rollback — useful for CRD-only charts.
+        # Default: true
+        atomic = true
+
+        # Default: true
+        wait = true
+
+        # Default: 300
+        timeout = 300
+      }
+    }
+
+    # ── Example 2: chart with Terraform-managed service account + IRSA ────────
+    prometheus-rds-exporter = {
+      namespace = {
+        name   = "monitoring"
+        create = false
+      }
+
+      # service_account is optional.
+      # Default: null (no service account resource created)
+      service_account = {
+        # false = do not create via Terraform; let Helm or another tool manage it.
+        # Default: false
+        create = true
+
+        # Service account name. Default: null
+        name = "prometheus-rds-exporter"
+
+        # Default: {}
+        labels = {}
+
+        # Default: {}
+        annotations = {}
+      }
+
+      # irsa provisions an IAM role annotated onto the service account.
+      # Default: { enabled = false }
+      irsa = {
+        # Default: false
+        enabled = true
+
+        # Override the computed role name "<app_key>-<partner_name>-<environment>".
+        # Default: null (uses computed name)
+        role_name = null
+
+        # IAM policy statements granted to this role.
+        # Default: []
+        policy_statements = [
+          {
+            sid       = ""
+            effect    = "Allow"
+            actions   = ["rds:DescribeDBInstances"]
+            resources = ["arn:aws:rds:*:*:db:*"]
+          },
+        ]
+      }
+
+      helm_chart = {
+        repository = "oci://hub.zama.org/ghcr/zama-zws/helm-charts"
+        chart      = "prometheus-rds-exporter"
+        version    = "1.1.0"
+        values     = ""
+        atomic     = true
+        wait       = true
+        timeout    = 300
+      }
+    }
+
+    # ── Example 3: namespace + service account only, no Helm chart ───────────
+    # Useful for pre-creating a namespace or SA before an app is deployed.
+    my-namespace-only = {
+      namespace = {
+        name   = "my-other-app"
+        create = true
+      }
+
+      # helm_chart omitted entirely — only the namespace is created.
     }
   }
 }

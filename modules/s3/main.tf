@@ -20,6 +20,10 @@ locals {
     for key in keys(var.buckets) :
     key => coalesce(var.buckets[key].name_override, "${var.partner_name}-${var.environment}-${key}-${random_id.suffix[key].hex}")
   }
+  cloudfront_buckets = {
+    for key, config in var.buckets : key => config
+    if config.cloudfront.enabled
+  }
 }
 
 # ***************************************
@@ -146,5 +150,46 @@ resource "aws_s3_bucket_cors_configuration" "this" {
     allowed_methods = each.value.cors.allowed_methods
     allowed_headers = each.value.cors.allowed_headers
     expose_headers  = each.value.cors.expose_headers
+  }
+}
+
+# ***************************************
+#  CloudFront
+# ***************************************
+resource "aws_cloudfront_distribution" "this" {
+  for_each = local.cloudfront_buckets
+
+  comment         = "${var.partner_name}-${var.environment}-${each.key}"
+  enabled         = true
+  is_ipv6_enabled = true
+  price_class     = each.value.cloudfront.price_class
+  aliases         = each.value.cloudfront.aliases
+
+  origin {
+    domain_name = aws_s3_bucket.this[each.key].bucket_regional_domain_name
+    origin_id   = "s3-${each.key}"
+  }
+
+  default_cache_behavior {
+    target_origin_id       = "s3-${each.key}"
+    allowed_methods        = each.value.cloudfront.allowed_methods
+    cached_methods         = each.value.cloudfront.cached_methods
+    viewer_protocol_policy = each.value.cloudfront.viewer_protocol_policy
+    compress               = each.value.cloudfront.compress
+    cache_policy_id        = each.value.cloudfront.cache_policy_id
+  }
+
+  restrictions {
+    geo_restriction {
+      restriction_type = each.value.cloudfront.geo_restriction_type
+      locations        = each.value.cloudfront.geo_restriction_locations
+    }
+  }
+
+  viewer_certificate {
+    cloudfront_default_certificate = each.value.cloudfront.acm_certificate_arn == null
+    acm_certificate_arn            = each.value.cloudfront.acm_certificate_arn
+    ssl_support_method             = each.value.cloudfront.acm_certificate_arn != null ? each.value.cloudfront.ssl_support_method : null
+    minimum_protocol_version       = each.value.cloudfront.acm_certificate_arn != null ? each.value.cloudfront.minimum_protocol_version : "TLSv1"
   }
 }
