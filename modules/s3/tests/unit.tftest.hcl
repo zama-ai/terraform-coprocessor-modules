@@ -298,3 +298,79 @@ run "cloudfront_uses_acm_certificate_when_provided" {
     error_message = "CloudFront must use the provided ACM certificate ARN."
   }
 }
+
+# =============================================================================
+#  preconfigured_bucket_access_profile
+# =============================================================================
+
+run "profile_public_applies_full_bundle_and_does_not_leak" {
+  command = plan
+
+  variables {
+    buckets = {
+      coprocessor = { preconfigured_bucket_access_profile = "public" }
+      private     = {}
+    }
+  }
+
+  assert {
+    condition     = aws_s3_bucket_public_access_block.this["coprocessor"].block_public_acls == false
+    error_message = "Profile 'public' must unblock public ACLs on the profiled bucket."
+  }
+
+  assert {
+    condition     = aws_s3_bucket_public_access_block.this["private"].block_public_acls == true
+    error_message = "Sibling buckets without a profile must remain fully blocked."
+  }
+
+  assert {
+    condition     = length(aws_s3_bucket_cors_configuration.this) == 1 && length(aws_s3_bucket_policy.this) == 1
+    error_message = "CORS and policy must be created only for the profiled bucket."
+  }
+
+  assert {
+    condition     = one([for r in aws_s3_bucket_cors_configuration.this["coprocessor"].cors_rule : r]).allowed_origins == toset(["*"])
+    error_message = "Profile 'public' CORS must allow origin '*'."
+  }
+}
+
+run "profile_rejects_unknown_value" {
+  command = plan
+
+  variables {
+    buckets = {
+      coprocessor = { preconfigured_bucket_access_profile = "totally-made-up" }
+    }
+  }
+
+  expect_failures = [var.buckets]
+}
+
+run "profile_rejects_mix_with_explicit_fields" {
+  command = plan
+
+  variables {
+    buckets = {
+      coprocessor = {
+        preconfigured_bucket_access_profile = "public"
+        public_access                       = { enabled = true }
+        cors = {
+          enabled         = true
+          allowed_origins = ["https://example.com"]
+          allowed_methods = ["GET"]
+          allowed_headers = []
+          expose_headers  = []
+        }
+        policy_statements = [{
+          sid        = "Custom"
+          effect     = "Allow"
+          principals = { "*" = ["*"] }
+          actions    = ["s3:GetObject"]
+          resources  = ["objects"]
+        }]
+      }
+    }
+  }
+
+  expect_failures = [var.buckets]
+}

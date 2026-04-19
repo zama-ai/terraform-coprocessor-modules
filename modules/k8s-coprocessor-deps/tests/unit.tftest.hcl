@@ -57,6 +57,11 @@ run "disabled_creates_no_resources" {
     condition     = length(kubernetes_storage_class_v1.this) == 0
     error_message = "No storage classes must be created when k8s.enabled = false."
   }
+
+  assert {
+    condition     = length(kubernetes_config_map.db_admin_secret_id) == 0
+    error_message = "No db-admin configmap must be created when k8s.enabled = false."
+  }
 }
 
 # =============================================================================
@@ -661,6 +666,45 @@ run "defaults_coprocessor_s3_bucket_key_override_is_respected" {
   assert {
     condition     = contains(keys(kubernetes_service_account.this), "coprocessor")
     error_message = "Coprocessor service account must still be created with a custom s3_bucket_key."
+  }
+}
+
+run "db_admin_secret_id_configmap_is_created" {
+  command = plan
+
+  variables {
+    rds_master_secret_arn = "arn:aws:secretsmanager:eu-west-1:123456789012:secret:rds!db-test"
+    k8s = {
+      enabled    = true
+      namespaces = { coproc-admin = {} }
+      service_accounts = {
+        coprocessor = { enabled = false }
+        db_admin    = { enabled = true }
+      }
+      storage_classes = {
+        gp3 = { enabled = false }
+      }
+    }
+  }
+
+  assert {
+    condition     = length(kubernetes_config_map.db_admin_secret_id) == 1
+    error_message = "db-admin configmap must be created when k8s.enabled = true."
+  }
+
+  assert {
+    condition     = kubernetes_config_map.db_admin_secret_id[0].metadata[0].name == "rds-admin-secret-id"
+    error_message = "Configmap name must be 'rds-admin-secret-id'."
+  }
+
+  assert {
+    condition     = kubernetes_config_map.db_admin_secret_id[0].metadata[0].namespace == "coproc-admin"
+    error_message = "Configmap must be created in the coproc-admin namespace."
+  }
+
+  assert {
+    condition     = kubernetes_config_map.db_admin_secret_id[0].data["RDS_ADMIN_SECRET_ID"] == "arn:aws:secretsmanager:eu-west-1:123456789012:secret:rds!db-test"
+    error_message = "Configmap data.RDS_ADMIN_SECRET_ID must equal the supplied rds_master_secret_arn."
   }
 }
 
