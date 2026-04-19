@@ -78,42 +78,13 @@ rds = {
 s3 = {
   buckets = {
     coprocessor = {
-      purpose = "coprocessor-storage"
-
-      public_access = {
-        enabled = true
-      }
+      preconfigured_bucket_access_profile = "public"
 
       cloudfront = {
         enabled             = true
         acm_certificate_arn = ""   # CHANGE ME: ACM cert ARN (must be in us-east-1)
         aliases             = [""] # CHANGE ME: your CloudFront custom hostname(s)
       }
-
-      cors = {
-        enabled         = true
-        allowed_origins = ["*"]
-        allowed_methods = ["GET", "HEAD"]
-        allowed_headers = ["Authorization"]
-        expose_headers  = ["Access-Control-Allow-Origin"]
-      }
-
-      policy_statements = [
-        {
-          sid        = "PublicRead"
-          effect     = "Allow"
-          principals = { "*" = ["*"] }
-          actions    = ["s3:GetObject"]
-          resources  = ["objects"]
-        },
-        {
-          sid        = "ZamaList"
-          effect     = "Allow"
-          principals = { "*" = ["*"] }
-          actions    = ["s3:ListBucket"]
-          resources  = ["bucket"]
-        }
-      ]
     }
   }
 }
@@ -151,7 +122,7 @@ k8s_coprocessor_deps = {
 #  k8s System Charts
 # =============================================================================
 k8s_system_charts = {
-  enabled = true # CHANGE ME: refer to operator documentation regarding order of deployments
+  enabled = false # CHANGE ME: refer to operator documentation regarding order of deployments
 
   defaults = {
     karpenter_nodepools = { enabled = false } # CHANGE ME: refer to operator documentation regarding order of deployments
@@ -200,17 +171,9 @@ k8s_system_charts = {
       chart      = "k8s-monitoring"
       version    = "4.0.1"
 
-      prometheus_url           = "" # CHANGE ME
-      loki_url                 = "" # CHANGE ME
-      otlp_url                 = "" # CHANGE ME
-      alloy_operator_image_tag = "v0.5.3"
-      alloy_image_tag          = "v1.15.0"
-      node_exporter_image_tag  = "v1.11.0"
-
-      values = <<-YAML
-        global:
-          scrapeInterval: 10m
-      YAML
+      prometheus_url = "" # CHANGE ME
+      loki_url       = "" # CHANGE ME
+      otlp_url       = "" # CHANGE ME
     }
   }
 }

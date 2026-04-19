@@ -20,8 +20,76 @@ locals {
     for key in keys(var.buckets) :
     key => coalesce(var.buckets[key].name_override, "${var.partner_name}-${var.environment}-${key}-${random_id.suffix[key].hex}")
   }
+
+  # Named bundles of public_access + cors + policy_statements applied when a
+  # bucket sets preconfigured_bucket_access_profile. Profile values are source
+  # of truth for the three fields when active; mixing with explicit values is
+  # rejected by variable validation.
+  access_profiles = {
+    public = {
+      public_access = { enabled = true }
+      cors = {
+        enabled         = true
+        allowed_origins = ["*"]
+        allowed_methods = ["GET", "HEAD"]
+        allowed_headers = ["Authorization"]
+        expose_headers  = ["Access-Control-Allow-Origin"]
+      }
+      policy_statements = [
+        {
+          sid        = "PublicRead"
+          effect     = "Allow"
+          principals = { "*" = ["*"] }
+          actions    = ["s3:GetObject"]
+          resources  = ["objects"]
+          conditions = []
+        },
+        {
+          sid        = "ZamaList"
+          effect     = "Allow"
+          principals = { "*" = ["*"] }
+          actions    = ["s3:ListBucket"]
+          resources  = ["bucket"]
+          conditions = []
+        },
+      ]
+    }
+  }
+
+  # Fallback values when neither a profile nor explicit values are supplied.
+  default_public_access = { enabled = false }
+  default_cors = {
+    enabled         = false
+    allowed_origins = []
+    allowed_methods = []
+    allowed_headers = []
+    expose_headers  = []
+  }
+  default_policy_statements = []
+
+  # Per-bucket resolved config: profile > explicit > default.
+  buckets = {
+    for key, bucket in var.buckets : key => merge(bucket, {
+      public_access = (
+        bucket.preconfigured_bucket_access_profile != null
+        ? local.access_profiles[bucket.preconfigured_bucket_access_profile].public_access
+        : bucket.public_access != null ? bucket.public_access : local.default_public_access
+      )
+      cors = (
+        bucket.preconfigured_bucket_access_profile != null
+        ? local.access_profiles[bucket.preconfigured_bucket_access_profile].cors
+        : bucket.cors != null ? bucket.cors : local.default_cors
+      )
+      policy_statements = (
+        bucket.preconfigured_bucket_access_profile != null
+        ? local.access_profiles[bucket.preconfigured_bucket_access_profile].policy_statements
+        : bucket.policy_statements != null ? bucket.policy_statements : local.default_policy_statements
+      )
+    })
+  }
+
   cloudfront_buckets = {
-    for key, config in var.buckets : key => config
+    for key, config in local.buckets : key => config
     if config.cloudfront.enabled
   }
 }
@@ -66,7 +134,7 @@ resource "aws_s3_bucket_versioning" "this" {
 #  Bucket Access
 # ***************************************
 resource "aws_s3_bucket_public_access_block" "this" {
-  for_each = var.buckets
+  for_each = local.buckets
   bucket   = aws_s3_bucket.this[each.key].id
 
   block_public_acls       = !each.value.public_access.enabled
@@ -77,7 +145,7 @@ resource "aws_s3_bucket_public_access_block" "this" {
 
 data "aws_iam_policy_document" "this" {
   for_each = {
-    for key, config in var.buckets : key => config
+    for key, config in local.buckets : key => config
     if length(config.policy_statements) > 0
   }
 
@@ -139,7 +207,7 @@ resource "aws_s3_bucket_policy" "this" {
 # ***************************************
 resource "aws_s3_bucket_cors_configuration" "this" {
   for_each = {
-    for key, config in var.buckets : key => config
+    for key, config in local.buckets : key => config
     if config.cors.enabled
   }
 

@@ -472,8 +472,8 @@ run "defaults_k8s_monitoring_urls_injected_into_destinations" {
   }
 
   assert {
-    condition     = strcontains(helm_release.apps["k8s-monitoring"].values[0], "scrapeInterval: 2m")
-    error_message = "Baked-in k8s_monitoring base values must include scrapeInterval: 2m."
+    condition     = strcontains(helm_release.apps["k8s-monitoring"].values[0], "scrapeInterval: 10m")
+    error_message = "Baked-in k8s_monitoring base values must include scrapeInterval: 10m."
   }
 
   assert {
