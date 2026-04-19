@@ -122,7 +122,7 @@ k8s_coprocessor_deps = {
 #  k8s System Charts
 # =============================================================================
 k8s_system_charts = {
-  enabled = true # CHANGE ME: refer to operator documentation regarding order of deployments
+  enabled = false # CHANGE ME: refer to operator documentation regarding order of deployments
 
   defaults = {
     karpenter_nodepools = { enabled = false } # CHANGE ME: refer to operator documentation regarding order of deployments
