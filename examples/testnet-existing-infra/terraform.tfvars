@@ -71,42 +71,13 @@ rds = {
 s3 = {
   buckets = {
     coprocessor = {
-      purpose = "coprocessor-storage"
-
-      public_access = {
-        enabled = true
-      }
+      preconfigured_bucket_access_profile = "public"
 
       cloudfront = {
         enabled             = true
         acm_certificate_arn = "arn:aws:acm:us-east-1:123456789012:certificate/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" # CHANGE ME: ACM cert ARN (must be in us-east-1)
         aliases             = ["assets.example.com"]                                                                # CHANGE ME: your CloudFront custom hostname(s)
       }
-
-      cors = {
-        enabled         = true
-        allowed_origins = ["*"]
-        allowed_methods = ["GET", "HEAD"]
-        allowed_headers = ["Authorization"]
-        expose_headers  = ["Access-Control-Allow-Origin"]
-      }
-
-      policy_statements = [
-        {
-          sid        = "PublicRead"
-          effect     = "Allow"
-          principals = { "*" = ["*"] }
-          actions    = ["s3:GetObject"]
-          resources  = ["objects"]
-        },
-        {
-          sid        = "ZamaList"
-          effect     = "Allow"
-          principals = { "*" = ["*"] }
-          actions    = ["s3:ListBucket"]
-          resources  = ["bucket"]
-        }
-      ]
     }
   }
 }

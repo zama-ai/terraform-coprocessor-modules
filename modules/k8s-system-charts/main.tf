@@ -69,7 +69,7 @@ locals {
   # __partner__ and __network__ placeholders are substituted by resolved_helm_values.
   k8s_monitoring_base_values = <<-YAML
     global:
-      scrapeInterval: 2m
+      scrapeInterval: 10m
       imagePullSecrets:
         - name: registry-credentials
 

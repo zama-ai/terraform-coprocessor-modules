@@ -19,7 +19,7 @@ variable "buckets" {
   type = map(
     object({
       # Human-readable description (used for tagging)
-      purpose = string
+      purpose = optional(string, "coprocessor-storage")
 
       # Override the computed bucket name (use when importing a pre-existing bucket)
       name_override = optional(string, null)
@@ -30,27 +30,24 @@ variable "buckets" {
       # Enable object versioning
       versioning = optional(bool, true)
 
-      # Public access configuration
+      # Preconfigured bundle of public_access + cors + policy_statements.
+      # When set, these three fields MUST be left unset. Allowed values:
+      #   - "public": bucket is publicly readable, CORS open, with PublicRead + ZamaList policy statements.
+      preconfigured_bucket_access_profile = optional(string, null)
+
+      # Public access configuration. Leave unset when preconfigured_bucket_access_profile is set.
       public_access = optional(object({
         enabled = bool
-        }), {
-        enabled = false
-      })
+      }), null)
 
-      # CORS configuration
+      # CORS configuration. Leave unset when preconfigured_bucket_access_profile is set.
       cors = optional(object({
         enabled         = bool
         allowed_origins = list(string)
         allowed_methods = list(string)
         allowed_headers = list(string)
         expose_headers  = list(string)
-        }), {
-        enabled         = false
-        allowed_origins = []
-        allowed_methods = []
-        allowed_headers = []
-        expose_headers  = []
-      })
+      }), null)
 
       # CloudFront distribution
       cloudfront = optional(object({
@@ -69,7 +66,7 @@ variable "buckets" {
         minimum_protocol_version  = optional(string, "TLSv1.2_2021") # only relevant when acm_certificate_arn is set
       }), { enabled = false })
 
-      # Bucket policies
+      # Bucket policies. Leave unset when preconfigured_bucket_access_profile is set.
       policy_statements = optional(list(object({
         sid        = string
         effect     = string
@@ -81,7 +78,25 @@ variable "buckets" {
           variable = string
           values   = list(string)
         })), [])
-      })), [])
+      })), null)
     })
   )
+
+  validation {
+    condition = alltrue([
+      for k, v in var.buckets :
+      v.preconfigured_bucket_access_profile == null
+      || contains(["public"], v.preconfigured_bucket_access_profile)
+    ])
+    error_message = "preconfigured_bucket_access_profile must be one of: \"public\" (or null/unset)."
+  }
+
+  validation {
+    condition = alltrue([
+      for k, v in var.buckets :
+      v.preconfigured_bucket_access_profile == null
+      || (v.public_access == null && v.cors == null && v.policy_statements == null)
+    ])
+    error_message = "When preconfigured_bucket_access_profile is set, public_access, cors, and policy_statements must be left unset. Use either the profile or explicit fields, not both."
+  }
 }
