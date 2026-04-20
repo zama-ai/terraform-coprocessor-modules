@@ -1,0 +1,173 @@
+diff --git a/main.tf b/main.tf
+index 913784c..14f3704 100644
+--- a/main.tf
++++ b/main.tf
+@@ -6,8 +6,10 @@ module "coprocessor" {
+   aws_region   = var.aws_region
+   default_tags = var.default_tags
+
+-  networking = var.networking
+-  eks        = var.eks
+-  rds        = var.rds
+-  s3         = var.s3
++  networking           = var.networking
++  eks                  = var.eks
++  rds                  = var.rds
++  s3                   = var.s3
++  k8s_coprocessor_deps = var.k8s_coprocessor_deps
++  k8s_system_charts    = var.k8s_system_charts
+ }
+diff --git a/outputs.tf b/outputs.tf
+index 974688d..f7ace6b 100644
+--- a/outputs.tf
++++ b/outputs.tf
+@@ -57,6 +57,11 @@ output "rds_db_instance_identifier" {
+   value       = module.coprocessor.rds_db_instance_identifier
+ }
+
++output "rds_master_secret_arn" {
++  description = "ARN of the Secrets Manager secret containing the RDS master user password."
++  value       = module.coprocessor.rds_master_secret_arn
++}
++
+ # ******************************************************
+ #  S3
+ # ******************************************************
+@@ -69,3 +74,8 @@ output "s3_bucket_arns" {
+   description = "Map of logical bucket key to bucket ARN."
+   value       = module.coprocessor.s3_bucket_arns
+ }
++
++output "s3_cloudfront_domain_names" {
++  description = "Map of logical bucket key to CloudFront distribution hostname (e.g. d1234abcd.cloudfront.net)."
++  value       = module.coprocessor.s3_cloudfront_domain_names
++}
+diff --git a/terraform.tfvars b/terraform.tfvars
+index 1822080..6a031e9 100644
+--- a/terraform.tfvars
++++ b/terraform.tfvars
+@@ -55,6 +55,11 @@ eks = {
+   karpenter = {
+     enabled          = true
+     rule_name_prefix = "coproc"
++
++    controller_nodegroup = {
++      enabled        = true
++      instance_types = ["t3.small"]
++    }
+   }
+ }
+
+@@ -73,36 +78,66 @@ rds = {
+ s3 = {
+   buckets = {
+     coprocessor = {
+-      purpose = "coprocessor-storage"
++      preconfigured_bucket_access_profile = "public"
+
+-      public_access = {
+-        enabled = true
++      cloudfront = {
++        enabled             = true
++        acm_certificate_arn = ""   # CHANGE ME: ACM cert ARN (must be in us-east-1)
++        aliases             = [""] # CHANGE ME: your CloudFront custom hostname(s)
+       }
++    }
++  }
++}
+
+-      cors = {
+-        enabled         = true
+-        allowed_origins = ["*"]
+-        allowed_methods = ["GET", "HEAD"]
+-        allowed_headers = ["Authorization"]
+-        expose_headers  = ["Access-Control-Allow-Origin"]
+-      }
++# =============================================================================
++#  k8s Coprocessor Dependencies
++# =============================================================================
++k8s_coprocessor_deps = {
++  enabled = true
++
++  namespaces = {
++    coproc         = { enabled = true }
++    coproc-admin   = { enabled = true }
++    monitoring     = { enabled = true }
++    gw-blockchain  = { enabled = true }
++    eth-blockchain = { enabled = true }
++    karpenter      = { enabled = true }
++  }
++
++  service_accounts = {
++    coprocessor = { enabled = true }
++    db_admin    = { enabled = true }
++  }
++
++  storage_classes = {
++    gp3 = { enabled = true }
++  }
++
++  external_name_services = {
++    coprocessor-database = { enabled = true }
++  }
++}
++
++# =============================================================================
++#  k8s System Charts
++# =============================================================================
++k8s_system_charts = {
++  enabled = false # CHANGE ME: refer to operator documentation regarding order of deployments
++
++  defaults = {
++    karpenter_nodepools          = { enabled = false } # CHANGE ME: refer to operator documentation regarding order of deployments
++    prometheus_operator_crds     = { enabled = true }
++    metrics_server               = { enabled = true }
++    karpenter                    = { enabled = true }
++    prometheus_rds_exporter      = { enabled = true }
++    prometheus_postgres_exporter = { enabled = true }
++
++    k8s_monitoring = {
++      enabled = true
+
+-      policy_statements = [
+-        {
+-          sid        = "PublicRead"
+-          effect     = "Allow"
+-          principals = { "*" = ["*"] }
+-          actions    = ["s3:GetObject"]
+-          resources  = ["objects"]
+-        },
+-        {
+-          sid        = "ZamaList"
+-          effect     = "Allow"
+-          principals = { "*" = ["*"] }
+-          actions    = ["s3:ListBucket"]
+-          resources  = ["bucket"]
+-        }
+-      ]
++      prometheus_url = "" # CHANGE ME
++      loki_url       = "" # CHANGE ME
++      otlp_url       = "" # CHANGE ME
+     }
+   }
+ }
+diff --git a/variables.tf b/variables.tf
+index 6f14d2e..4a6e698 100644
+--- a/variables.tf
++++ b/variables.tf
+@@ -45,3 +45,15 @@ variable "s3" {
+   type        = any
+   default     = { buckets = {} }
+ }
++
++variable "k8s_coprocessor_deps" {
++  description = "Kubernetes coprocessor resource configuration. See root module variables.tf for full schema."
++  type        = any
++  default     = { enabled = false }
++}
++
++variable "k8s_system_charts" {
++  description = "Kubernetes system-level application configuration. See root module variables.tf for full schema."
++  type        = any
++  default     = { enabled = false }
++}
