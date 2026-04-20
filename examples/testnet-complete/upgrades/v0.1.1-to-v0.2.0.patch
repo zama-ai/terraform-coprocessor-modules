@@ -58,7 +58,7 @@ index 1822080..6a031e9 100644
    }
  }
 
-@@ -73,36 +78,102 @@ rds = {
+@@ -73,36 +78,66 @@ rds = {
  s3 = {
    buckets = {
      coprocessor = {
@@ -119,51 +119,15 @@ index 1822080..6a031e9 100644
 +  enabled = false # CHANGE ME: refer to operator documentation regarding order of deployments
 +
 +  defaults = {
-+    karpenter_nodepools = { enabled = false } # CHANGE ME: refer to operator documentation regarding order of deployments
-+
-+    prometheus_operator_crds = {
-+      enabled    = true
-+      repository = "https://prometheus-community.github.io/helm-charts"
-+      chart      = "prometheus-operator-crds"
-+      version    = "28.0.1"
-+    }
-+
-+    metrics_server = {
-+      enabled    = true
-+      repository = "https://kubernetes-sigs.github.io/metrics-server"
-+      chart      = "metrics-server"
-+      version    = "3.13.0"
-+      image_tag  = "v0.8.0"
-+    }
-+
-+    karpenter = {
-+      enabled              = true
-+      repository           = "oci://public.ecr.aws/karpenter"
-+      chart                = "karpenter"
-+      version              = "1.10.0"
-+      controller_image_tag = "v1.11.0"
-+    }
-+
-+    prometheus_rds_exporter = {
-+      enabled    = true
-+      repository = "oci://public.ecr.aws/qonto"
-+      chart      = "prometheus-rds-exporter-chart"
-+      version    = "0.16.0"
-+    }
-+
-+    prometheus_postgres_exporter = {
-+      enabled    = true
-+      repository = "https://prometheus-community.github.io/helm-charts"
-+      chart      = "prometheus-postgres-exporter"
-+      version    = "7.3.0"
-+      image_tag  = "v0.19.1"
-+    }
++    karpenter_nodepools          = { enabled = false } # CHANGE ME: refer to operator documentation regarding order of deployments
++    prometheus_operator_crds     = { enabled = true }
++    metrics_server               = { enabled = true }
++    karpenter                    = { enabled = true }
++    prometheus_rds_exporter      = { enabled = true }
++    prometheus_postgres_exporter = { enabled = true }
 +
 +    k8s_monitoring = {
-+      enabled    = true
-+      repository = "https://grafana.github.io/helm-charts"
-+      chart      = "k8s-monitoring"
-+      version    = "4.0.1"
++      enabled = true
 
 -      policy_statements = [
 -        {
