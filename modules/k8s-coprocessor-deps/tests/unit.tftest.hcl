@@ -147,11 +147,12 @@ run "one_set_of_iam_resources_per_service_account" {
     k8s = {
       enabled = true
       service_accounts = {
-        coprocessor = { enabled = false }
-        db_admin    = { enabled = false }
+        sns_worker = { enabled = false }
+        db_admin   = { enabled = false }
+        tx_sender  = { enabled = false }
         extra = {
-          sns-worker = {
-            name = "sns-worker"
+          custom-sns = {
+            name = "custom-sns"
             iam_policy_statements = [
               {
                 effect    = "Allow"
@@ -520,8 +521,9 @@ run "defaults_all_disabled_creates_no_builtin_resources" {
     k8s = {
       enabled = true
       service_accounts = {
-        coprocessor = { enabled = false }
-        db_admin    = { enabled = false }
+        sns_worker = { enabled = false }
+        db_admin   = { enabled = false }
+        tx_sender  = { enabled = false }
       }
       storage_classes = {
         gp3 = { enabled = false }
@@ -540,7 +542,7 @@ run "defaults_all_disabled_creates_no_builtin_resources" {
   }
 }
 
-run "defaults_coprocessor_sa_is_created" {
+run "defaults_sns_worker_sa_is_created" {
   command = plan
 
   variables {
@@ -548,8 +550,9 @@ run "defaults_coprocessor_sa_is_created" {
     k8s = {
       enabled = true
       service_accounts = {
-        coprocessor = { enabled = true }
-        db_admin    = { enabled = false }
+        sns_worker = { enabled = true }
+        db_admin   = { enabled = false }
+        tx_sender  = { enabled = false }
       }
       storage_classes = {
         gp3 = { enabled = false }
@@ -559,23 +562,23 @@ run "defaults_coprocessor_sa_is_created" {
   }
 
   assert {
-    condition     = contains(keys(kubernetes_service_account.this), "coprocessor")
-    error_message = "Built-in coprocessor service account must be created."
+    condition     = contains(keys(kubernetes_service_account.this), "sns-worker")
+    error_message = "Built-in sns-worker service account must be created."
   }
 
   assert {
-    condition     = kubernetes_service_account.this["coprocessor"].metadata[0].name == "coprocessor"
-    error_message = "Built-in coprocessor service account name must be 'coprocessor'."
+    condition     = kubernetes_service_account.this["sns-worker"].metadata[0].name == "sns-worker"
+    error_message = "Built-in sns-worker service account name must be 'sns-worker'."
   }
 
   assert {
-    condition     = kubernetes_service_account.this["coprocessor"].metadata[0].namespace == "coproc"
-    error_message = "Built-in coprocessor service account must use default_namespace."
+    condition     = kubernetes_service_account.this["sns-worker"].metadata[0].namespace == "coproc"
+    error_message = "Built-in sns-worker service account must use default_namespace."
   }
 
   assert {
-    condition     = contains(keys(aws_iam_role.service_account), "coprocessor")
-    error_message = "Built-in coprocessor must create an IRSA role."
+    condition     = contains(keys(aws_iam_role.service_account), "sns-worker")
+    error_message = "Built-in sns-worker must create an IRSA role."
   }
 }
 
@@ -587,8 +590,9 @@ run "defaults_db_admin_sa_is_created" {
     k8s = {
       enabled = true
       service_accounts = {
-        coprocessor = { enabled = false }
-        db_admin    = { enabled = true }
+        sns_worker = { enabled = false }
+        db_admin   = { enabled = true }
+        tx_sender  = { enabled = false }
       }
       storage_classes = {
         gp3 = { enabled = false }
@@ -620,8 +624,9 @@ run "defaults_gp3_storage_class_is_created" {
     k8s = {
       enabled = true
       service_accounts = {
-        coprocessor = { enabled = false }
-        db_admin    = { enabled = false }
+        sns_worker = { enabled = false }
+        db_admin   = { enabled = false }
+        tx_sender  = { enabled = false }
       }
       storage_classes = {
         gp3 = { enabled = true }
@@ -650,7 +655,7 @@ run "defaults_gp3_storage_class_is_created" {
   }
 }
 
-run "defaults_coprocessor_s3_bucket_key_override_is_respected" {
+run "defaults_sns_worker_s3_bucket_key_override_is_respected" {
   command = plan
 
   variables {
@@ -658,8 +663,9 @@ run "defaults_coprocessor_s3_bucket_key_override_is_respected" {
     k8s = {
       enabled = true
       service_accounts = {
-        coprocessor = { enabled = true, s3_bucket_key = "my-custom-bucket" }
-        db_admin    = { enabled = false }
+        sns_worker = { enabled = true, s3_bucket_key = "my-custom-bucket" }
+        db_admin   = { enabled = false }
+        tx_sender  = { enabled = false }
       }
       storage_classes = {
         gp3 = { enabled = false }
@@ -669,8 +675,48 @@ run "defaults_coprocessor_s3_bucket_key_override_is_respected" {
   }
 
   assert {
-    condition     = contains(keys(kubernetes_service_account.this), "coprocessor")
-    error_message = "Coprocessor service account must still be created with a custom s3_bucket_key."
+    condition     = contains(keys(kubernetes_service_account.this), "sns-worker")
+    error_message = "sns-worker service account must still be created with a custom s3_bucket_key."
+  }
+}
+
+run "defaults_tx_sender_sa_is_created_with_kms_access" {
+  command = plan
+
+  variables {
+    kms_key_arn = "arn:aws:kms:eu-west-1:123456789012:key/abcd1234-ef56-7890-abcd-ef1234567890"
+    k8s = {
+      enabled = true
+      service_accounts = {
+        sns_worker = { enabled = false }
+        db_admin   = { enabled = false }
+        tx_sender  = { enabled = true }
+      }
+      storage_classes = {
+        gp3 = { enabled = false }
+      }
+      namespaces = { gw-blockchain = {} }
+    }
+  }
+
+  assert {
+    condition     = contains(keys(kubernetes_service_account.this), "tx-sender")
+    error_message = "Built-in tx-sender service account must be created."
+  }
+
+  assert {
+    condition     = kubernetes_service_account.this["tx-sender"].metadata[0].name == "tx-sender"
+    error_message = "Built-in tx-sender service account name must be 'tx-sender'."
+  }
+
+  assert {
+    condition     = kubernetes_service_account.this["tx-sender"].metadata[0].namespace == "gw-blockchain"
+    error_message = "Built-in tx-sender service account must be in the gw-blockchain namespace."
+  }
+
+  assert {
+    condition     = aws_iam_role.service_account["tx-sender"].name == "tx-sender-acme-testnet"
+    error_message = "tx-sender IAM role must follow '<key>-<partner_name>-<environment>' pattern."
   }
 }
 
@@ -683,8 +729,9 @@ run "db_admin_secret_id_configmap_is_created" {
       enabled    = true
       namespaces = { coproc-admin = {} }
       service_accounts = {
-        coprocessor = { enabled = false }
-        db_admin    = { enabled = true }
+        sns_worker = { enabled = false }
+        db_admin   = { enabled = true }
+        tx_sender  = { enabled = false }
       }
       storage_classes = {
         gp3 = { enabled = false }
@@ -729,8 +776,9 @@ run "coprocessor_config_configmap_is_created_per_target_namespace" {
         coprocessor-database = { endpoint = "mydb.abc.eu-west-1.rds.amazonaws.com:5432" }
       }
       service_accounts = {
-        coprocessor = { enabled = false }
-        db_admin    = { enabled = false }
+        sns_worker = { enabled = false }
+        db_admin   = { enabled = false }
+        tx_sender  = { enabled = false }
       }
       storage_classes = {
         gp3 = { enabled = false }
@@ -761,11 +809,12 @@ run "extra_service_account_overrides_builtin_with_same_key" {
     k8s = {
       enabled = true
       service_accounts = {
-        coprocessor = { enabled = true }
-        db_admin    = { enabled = false }
+        sns_worker = { enabled = true }
+        db_admin   = { enabled = false }
+        tx_sender  = { enabled = false }
         extra = {
-          coprocessor = {
-            name = "coprocessor"
+          sns-worker = {
+            name = "sns-worker"
             iam_policy_statements = [
               {
                 effect    = "Allow"
@@ -788,7 +837,7 @@ run "extra_service_account_overrides_builtin_with_same_key" {
   }
 
   assert {
-    condition     = contains(keys(kubernetes_service_account.this), "coprocessor")
-    error_message = "The coprocessor service account must still exist after the override."
+    condition     = contains(keys(kubernetes_service_account.this), "sns-worker")
+    error_message = "The sns-worker service account must still exist after the override."
   }
 }

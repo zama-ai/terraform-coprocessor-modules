@@ -34,6 +34,12 @@ variable "s3_bucket_names" {
   default     = {}
 }
 
+variable "kms_key_arn" {
+  description = "ARN of the coprocessor KMS keypair from the kms module. Required when any service account sets kms_key_access = true."
+  type        = string
+  default     = null
+}
+
 # ******************************************************
 #  Module configuration
 # ******************************************************
@@ -57,8 +63,8 @@ variable "k8s" {
 
     # Service accounts — built-in toggles + custom extras.
     service_accounts = optional(object({
-      # coprocessor: IRSA role with S3 access (s3:*Object + s3:ListBucket).
-      coprocessor = optional(object({
+      # sns_worker: IRSA role with S3 access (s3:*Object + s3:ListBucket).
+      sns_worker = optional(object({
         enabled = optional(bool, true)
         # Key in var.s3_bucket_arns to grant access to.
         s3_bucket_key = optional(string, "coprocessor")
@@ -67,6 +73,12 @@ variable "k8s" {
       # db_admin: IRSA role with RDS master secret (GetSecretValue + DescribeSecret).
       db_admin = optional(object({
         enabled = optional(bool, true)
+      }), {})
+
+      # tx_sender: IRSA role with KMS Sign/Verify on the coprocessor keypair.
+      tx_sender = optional(object({
+        enabled        = optional(bool, true)
+        kms_key_access = optional(bool, true)
       }), {})
 
       # Custom service accounts beyond the built-ins.
@@ -80,6 +92,7 @@ variable "k8s" {
           actions = list(string)
         })), {})
         rds_master_secret_access = optional(bool, false)
+        kms_key_access           = optional(bool, false)
         iam_policy_statements = optional(list(object({
           sid       = optional(string, "")
           effect    = string

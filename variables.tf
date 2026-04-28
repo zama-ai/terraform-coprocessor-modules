@@ -416,6 +416,33 @@ variable "s3" {
 }
 
 # ******************************************************
+#  KMS
+# ******************************************************
+variable "kms" {
+  description = <<-EOT
+    Coprocessor KMS keypair configuration.
+
+    Creates an asymmetric AWS KMS key (ECC_SECG_P256K1, SIGN_VERIFY) with
+    EXTERNAL origin so an Ethereum secp256k1 private key can be imported,
+    plus an alias `alias/<partner_name>-<environment>-coprocessor-keypair`.
+
+    Cross-account deployments are handled out-of-band: invoke the kms
+    submodule directly with an AWS provider configured for the target
+    account. The root module always creates the key in the same account
+    as the rest of the infrastructure.
+  EOT
+
+  type = object({
+    enabled                 = optional(bool, false)
+    consumer_role_arns      = optional(list(string), [])
+    deletion_window_in_days = optional(number, 30)
+    tags                    = optional(map(string), {})
+  })
+
+  default = { enabled = false }
+}
+
+# ******************************************************
 #  k8s Coprocessor Dependencies
 # ******************************************************
 variable "k8s_coprocessor_deps" {
@@ -434,8 +461,8 @@ variable "k8s_coprocessor_deps" {
 
     # Service accounts — built-in toggles + custom extras.
     service_accounts = optional(object({
-      # coprocessor: IRSA role with S3 access (s3:*Object + s3:ListBucket).
-      coprocessor = optional(object({
+      # sns_worker: IRSA role with S3 access (s3:*Object + s3:ListBucket).
+      sns_worker = optional(object({
         enabled       = optional(bool, true)
         s3_bucket_key = optional(string, "coprocessor")
       }), {})
@@ -443,6 +470,13 @@ variable "k8s_coprocessor_deps" {
       # db_admin: IRSA role with RDS master secret (GetSecretValue + DescribeSecret).
       db_admin = optional(object({
         enabled = optional(bool, true)
+      }), {})
+
+      # tx_sender: IRSA role with KMS Sign/Verify on the coprocessor keypair.
+      # Set kms_key_access = false to omit the KMS policy (e.g. when the key lives in another account).
+      tx_sender = optional(object({
+        enabled        = optional(bool, true)
+        kms_key_access = optional(bool, true)
       }), {})
 
       # Additional service accounts. An entry with the same key as a built-in overrides it.
@@ -454,6 +488,7 @@ variable "k8s_coprocessor_deps" {
           actions = list(string)
         })), {})
         rds_master_secret_access = optional(bool, false)
+        kms_key_access           = optional(bool, false)
         iam_policy_statements = optional(list(object({
           sid       = optional(string, "")
           effect    = string

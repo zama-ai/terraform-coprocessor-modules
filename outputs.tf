@@ -114,3 +114,26 @@ output "s3_cloudfront_distribution_ids" {
   description = "Map of logical bucket key to CloudFront distribution ID."
   value       = module.s3.cloudfront_distribution_ids
 }
+
+# ******************************************************
+#  KMS
+# ******************************************************
+output "kms_key_id" {
+  description = "KMS key ID of the coprocessor keypair. Null when kms.enabled = false."
+  value       = module.kms.key_id
+}
+
+output "kms_key_arn" {
+  description = "KMS key ARN of the coprocessor keypair. Null when kms.enabled = false."
+  value       = module.kms.key_arn
+}
+
+output "kms_alias_name" {
+  description = "KMS alias name. Null when kms.enabled = false."
+  value       = module.kms.alias_name
+}
+
+output "kms_alias_arn" {
+  description = "KMS alias ARN. Null when kms.enabled = false."
+  value       = module.kms.alias_arn
+}

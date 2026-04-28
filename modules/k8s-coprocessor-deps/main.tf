@@ -10,13 +10,14 @@ locals {
   oidc_provider_id = replace(var.oidc_provider_arn, "/^.*oidc-provider\\//", "")
 
   # ── Built-in service accounts ──────────────────────────────────────────────
-  builtin_coprocessor_sa = {
-    name      = "coprocessor"
+  builtin_sns_worker_sa = {
+    name      = "sns-worker"
     namespace = local.namespace
     s3_bucket_access = {
-      (var.k8s.service_accounts.coprocessor.s3_bucket_key) = { actions = ["s3:*Object", "s3:ListBucket"] }
+      (var.k8s.service_accounts.sns_worker.s3_bucket_key) = { actions = ["s3:*Object", "s3:ListBucket"] }
     }
     rds_master_secret_access = false
+    kms_key_access           = false
     iam_role_name_override   = null
     iam_policy_statements    = []
     labels                   = {}
@@ -28,6 +29,19 @@ locals {
     namespace                = "coproc-admin"
     s3_bucket_access         = {}
     rds_master_secret_access = true
+    kms_key_access           = false
+    iam_role_name_override   = null
+    iam_policy_statements    = []
+    labels                   = {}
+    annotations              = {}
+  }
+
+  builtin_tx_sender_sa = {
+    name                     = "tx-sender"
+    namespace                = "gw-blockchain"
+    s3_bucket_access         = {}
+    rds_master_secret_access = false
+    kms_key_access           = var.k8s.service_accounts.tx_sender.kms_key_access
     iam_role_name_override   = null
     iam_policy_statements    = []
     labels                   = {}
@@ -51,8 +65,9 @@ locals {
 
   # ── Merged maps — extra entries with the same key override the built-in ────
   service_accounts = merge(
-    var.k8s.service_accounts.coprocessor.enabled ? { coprocessor = local.builtin_coprocessor_sa } : {},
+    var.k8s.service_accounts.sns_worker.enabled ? { sns-worker = local.builtin_sns_worker_sa } : {},
     var.k8s.service_accounts.db_admin.enabled ? { db-admin = local.builtin_db_admin_sa } : {},
+    var.k8s.service_accounts.tx_sender.enabled ? { tx-sender = local.builtin_tx_sender_sa } : {},
     var.k8s.service_accounts.extra,
   )
 
@@ -168,6 +183,19 @@ data "aws_iam_policy_document" "service_account" {
       resources = [var.rds_master_secret_arn]
     }
   }
+
+  # Auto-generated KMS statement from kms_key_access.
+  # Grants Sign/Verify/DescribeKey/GetPublicKey on the coprocessor KMS keypair.
+  dynamic "statement" {
+    for_each = each.value.kms_key_access && var.kms_key_arn != null ? [1] : []
+
+    content {
+      sid       = "AllowKMSKeyAccess"
+      effect    = "Allow"
+      actions   = ["kms:DescribeKey", "kms:GetPublicKey", "kms:Sign", "kms:Verify"]
+      resources = [var.kms_key_arn]
+    }
+  }
 }
 
 data "aws_iam_policy_document" "service_account_assume_role" {
@@ -258,7 +286,7 @@ resource "kubernetes_config_map" "coprocessor_config" {
       "${kubernetes_service.external_name["coprocessor-database"].metadata[0].name}.${kubernetes_service.external_name["coprocessor-database"].metadata[0].namespace}.svc.cluster.local",
       null,
     )
-    S3_BUCKET_NAME = lookup(var.s3_bucket_names, var.k8s.service_accounts.coprocessor.s3_bucket_key, null)
+    S3_BUCKET_NAME = lookup(var.s3_bucket_names, var.k8s.service_accounts.sns_worker.s3_bucket_key, null)
   }
 
   depends_on = [kubernetes_namespace.this]

@@ -184,6 +184,41 @@ run "rejects_invalid_vpc_cidr" {
 }
 
 # =============================================================================
+#  KMS module
+# =============================================================================
+
+run "kms_disabled_creates_no_resources" {
+  command = plan
+
+  # kms.enabled defaults to false — no KMS key/alias created.
+  assert {
+    condition     = output.kms_key_arn == null
+    error_message = "kms_key_arn must be null when kms.enabled = false."
+  }
+
+  assert {
+    condition     = output.kms_alias_name == null
+    error_message = "kms_alias_name must be null when kms.enabled = false."
+  }
+}
+
+run "kms_enabled_creates_key_with_expected_alias" {
+  command = plan
+
+  variables {
+    kms = {
+      enabled            = true
+      consumer_role_arns = ["arn:aws:iam::555555555555:role/coprocessor-consumer"]
+    }
+  }
+
+  assert {
+    condition     = module.kms.alias_name == "alias/acme-mainnet-coprocessor-keypair"
+    error_message = "kms alias must follow alias/<partner>-<environment>-coprocessor-keypair pattern."
+  }
+}
+
+# =============================================================================
 #  k8s Charts module count wiring
 # =============================================================================
 

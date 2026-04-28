@@ -10,6 +10,7 @@ module "coprocessor" {
   eks                  = var.eks
   rds                  = var.rds
   s3                   = var.s3
+  kms                  = var.kms
   k8s_coprocessor_deps = var.k8s_coprocessor_deps
   kubernetes_provider  = var.kubernetes_provider
 }

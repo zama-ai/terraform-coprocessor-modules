@@ -73,7 +73,7 @@
         <mxCell id="eks" value="EKS Cluster"
           style="rounded=1;arcSize=2;fillColor=#FFF3E0;strokeColor=#D6A01E;strokeWidth=2;fontStyle=1;fontSize=13;verticalAlign=top;align=left;spacingLeft=12;spacingTop=10;html=1;"
           vertex="1" parent="1">
-          <mxGeometry x="60" y="360" width="1040" height="570" as="geometry"/>
+          <mxGeometry x="60" y="360" width="1040" height="620" as="geometry"/>
         </mxCell>
 
         <!-- Node Group: default -->
@@ -154,7 +154,7 @@
         <mxCell id="namespaces" value="Namespaces"
           style="rounded=1;arcSize=2;fillColor=#E8F4FD;strokeColor=#5592CC;strokeWidth=1;fontStyle=1;fontSize=11;verticalAlign=top;align=left;spacingLeft=8;spacingTop=6;html=1;"
           vertex="1" parent="1">
-          <mxGeometry x="85" y="645" width="280" height="265" as="geometry"/>
+          <mxGeometry x="85" y="645" width="280" height="320" as="geometry"/>
         </mxCell>
 
         <mxCell id="ns_coproc" value="coproc"
@@ -194,7 +194,7 @@
           <mxGeometry x="100" y="820" width="250" height="20" as="geometry"/>
         </mxCell>
 
-        <mxCell id="sa_coproc" value="coprocessor · coproc&lt;br/&gt;S3 access"
+        <mxCell id="sa_coproc" value="sns-worker · coproc&lt;br/&gt;S3 access"
           style="rounded=1;fillColor=#F3E5F5;strokeColor=#7B1FA2;fontSize=10;align=center;html=1;"
           vertex="1" parent="1">
           <mxGeometry x="100" y="845" width="115" height="50" as="geometry"/>
@@ -204,6 +204,12 @@
           style="rounded=1;fillColor=#F3E5F5;strokeColor=#7B1FA2;fontSize=10;align=center;html=1;"
           vertex="1" parent="1">
           <mxGeometry x="230" y="845" width="115" height="50" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="sa_txsender" value="tx-sender · gw-blockchain&lt;br/&gt;KMS Sign/Verify"
+          style="rounded=1;fillColor=#F3E5F5;strokeColor=#7B1FA2;fontSize=10;align=center;html=1;"
+          vertex="1" parent="1">
+          <mxGeometry x="100" y="905" width="135" height="50" as="geometry"/>
         </mxCell>
 
         <!-- ══════════════════════════════════════════════
@@ -231,6 +237,15 @@
           style="rounded=1;fillColor=#FCE4EC;strokeColor=#C62828;fontSize=11;align=center;verticalAlign=middle;html=1;"
           vertex="1" parent="1">
           <mxGeometry x="1190" y="325" width="240" height="90" as="geometry"/>
+        </mxCell>
+
+        <!-- ══════════════════════════════════════════════
+             KMS
+             ══════════════════════════════════════════════ -->
+        <mxCell id="kms" value="&lt;b&gt;KMS Keypair&lt;/b&gt;&lt;br/&gt;Asymmetric · ECC_SECG_P256K1&lt;br/&gt;SIGN_VERIFY · EXTERNAL origin"
+          style="rounded=1;fillColor=#FCE4EC;strokeColor=#C62828;fontSize=11;align=center;verticalAlign=middle;html=1;"
+          vertex="1" parent="1">
+          <mxGeometry x="1430" y="320" width="210" height="95" as="geometry"/>
         </mxCell>
 
         <!-- ══════════════════════════════════════════════
@@ -281,7 +296,7 @@
           <mxGeometry x="1190" y="870" width="180" height="80" as="geometry"/>
         </mxCell>
 
-        <mxCell id="irsa_coproc_role" value="&lt;b&gt;coprocessor SA&lt;/b&gt;&lt;br/&gt;IRSA Role · S3 access"
+        <mxCell id="irsa_coproc_role" value="&lt;b&gt;sns-worker SA&lt;/b&gt;&lt;br/&gt;IRSA Role · S3 access"
           style="rounded=1;fillColor=#FFF3E0;strokeColor=#D6A01E;fontSize=10;align=center;html=1;"
           vertex="1" parent="1">
           <mxGeometry x="1400" y="870" width="180" height="80" as="geometry"/>
@@ -290,7 +305,13 @@
         <mxCell id="irsa_dbadmin_role" value="&lt;b&gt;db-admin SA&lt;/b&gt;&lt;br/&gt;IRSA Role · Secrets Manager"
           style="rounded=1;fillColor=#FFF3E0;strokeColor=#D6A01E;fontSize=10;align=center;html=1;"
           vertex="1" parent="1">
-          <mxGeometry x="1295" y="990" width="180" height="80" as="geometry"/>
+          <mxGeometry x="1190" y="990" width="180" height="80" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="irsa_txsender_role" value="&lt;b&gt;tx-sender SA&lt;/b&gt;&lt;br/&gt;IRSA Role · KMS Sign/Verify"
+          style="rounded=1;fillColor=#FFF3E0;strokeColor=#D6A01E;fontSize=10;align=center;html=1;"
+          vertex="1" parent="1">
+          <mxGeometry x="1400" y="990" width="180" height="80" as="geometry"/>
         </mxCell>
 
         <!-- ══════════════════════════════════════════════
@@ -399,6 +420,20 @@
         <mxCell id="e_dbadmin_sm" value="GetSecretValue"
           style="edgeStyle=orthogonalEdgeStyle;dashed=1;fontSize=9;html=1;"
           edge="1" source="irsa_dbadmin_role" target="sm" parent="1">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+
+        <!-- tx-sender SA → IRSA Role -->
+        <mxCell id="e_sa_txsender_role" value="IRSA"
+          style="edgeStyle=orthogonalEdgeStyle;dashed=1;fontSize=9;html=1;"
+          edge="1" source="sa_txsender" target="irsa_txsender_role" parent="1">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+
+        <!-- tx-sender IRSA Role → KMS -->
+        <mxCell id="e_txsender_kms" value="Sign / Verify"
+          style="edgeStyle=orthogonalEdgeStyle;dashed=1;fontSize=9;html=1;"
+          edge="1" source="irsa_txsender_role" target="kms" parent="1">
           <mxGeometry relative="1" as="geometry"/>
         </mxCell>
 
