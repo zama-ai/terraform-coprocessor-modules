@@ -112,6 +112,7 @@ module "k8s_coprocessor_deps" {
 
   rds_master_secret_arn = module.rds.rds_master_secret_arn
   s3_bucket_arns        = module.s3.bucket_arns
+  s3_bucket_names       = module.s3.bucket_names
 
   k8s = local.k8s_config
 

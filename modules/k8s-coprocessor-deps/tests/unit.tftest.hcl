@@ -62,6 +62,11 @@ run "disabled_creates_no_resources" {
     condition     = length(kubernetes_config_map.db_admin_secret_id) == 0
     error_message = "No db-admin configmap must be created when k8s.enabled = false."
   }
+
+  assert {
+    condition     = length(kubernetes_config_map.coprocessor_config) == 0
+    error_message = "No coprocessor configmap must be created when k8s.enabled = false."
+  }
 }
 
 # =============================================================================
@@ -705,6 +710,47 @@ run "db_admin_secret_id_configmap_is_created" {
   assert {
     condition     = kubernetes_config_map.db_admin_secret_id[0].data["RDS_ADMIN_SECRET_ID"] == "arn:aws:secretsmanager:eu-west-1:123456789012:secret:rds!db-test"
     error_message = "Configmap data.RDS_ADMIN_SECRET_ID must equal the supplied rds_master_secret_arn."
+  }
+}
+
+run "coprocessor_config_configmap_is_created_per_target_namespace" {
+  command = plan
+
+  variables {
+    s3_bucket_names = { coprocessor = "acme-testnet-coprocessor-abc123" }
+    k8s = {
+      enabled = true
+      namespaces = {
+        coproc         = {}
+        eth-blockchain = {}
+        gw-blockchain  = {}
+      }
+      external_name_services = {
+        coprocessor-database = { endpoint = "mydb.abc.eu-west-1.rds.amazonaws.com:5432" }
+      }
+      service_accounts = {
+        coprocessor = { enabled = false }
+        db_admin    = { enabled = false }
+      }
+      storage_classes = {
+        gp3 = { enabled = false }
+      }
+    }
+  }
+
+  assert {
+    condition     = length(kubernetes_config_map.coprocessor_config) == 3
+    error_message = "One coprocessor-config configmap must be created per target namespace."
+  }
+
+  assert {
+    condition     = kubernetes_config_map.coprocessor_config["coproc"].data["S3_BUCKET_NAME"] == "acme-testnet-coprocessor-abc123"
+    error_message = "S3_BUCKET_NAME must equal the supplied bucket name for the configured s3_bucket_key."
+  }
+
+  assert {
+    condition     = kubernetes_config_map.coprocessor_config["coproc"].data["DATABASE_ENDPOINT"] == "coprocessor-database.coproc.svc.cluster.local"
+    error_message = "DATABASE_ENDPOINT must be the in-cluster DNS name of the coprocessor-database ExternalName service."
   }
 }
 

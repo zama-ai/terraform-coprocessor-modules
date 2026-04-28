@@ -25,6 +25,7 @@ No modules.
 | [aws_iam_policy.service_account](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/iam_policy) | resource |
 | [aws_iam_role.service_account](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/iam_role) | resource |
 | [aws_iam_role_policy_attachment.service_account](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/iam_role_policy_attachment) | resource |
+| [kubernetes_config_map.coprocessor_config](https://registry.terraform.io/providers/hashicorp/kubernetes/latest/docs/resources/config_map) | resource |
 | [kubernetes_config_map.db_admin_secret_id](https://registry.terraform.io/providers/hashicorp/kubernetes/latest/docs/resources/config_map) | resource |
 | [kubernetes_namespace.this](https://registry.terraform.io/providers/hashicorp/kubernetes/latest/docs/resources/namespace) | resource |
 | [kubernetes_service.external_name](https://registry.terraform.io/providers/hashicorp/kubernetes/latest/docs/resources/service) | resource |
@@ -43,6 +44,7 @@ No modules.
 | <a name="input_partner_name"></a> [partner\_name](#input\_partner\_name) | Partner identifier, used for IAM resource naming. | `string` | n/a | yes |
 | <a name="input_rds_master_secret_arn"></a> [rds\_master\_secret\_arn](#input\_rds\_master\_secret\_arn) | ARN of the Secrets Manager secret containing the RDS master user password. Required when any service account sets rds\_master\_secret\_access = true. | `string` | `null` | no |
 | <a name="input_s3_bucket_arns"></a> [s3\_bucket\_arns](#input\_s3\_bucket\_arns) | Map of logical bucket key to ARN from the s3 module. Referenced by service\_accounts[*].s3\_bucket\_access to generate S3 IAM statements automatically. | `map(string)` | `{}` | no |
+| <a name="input_s3_bucket_names"></a> [s3\_bucket\_names](#input\_s3\_bucket\_names) | Map of logical bucket key to bucket name from the s3 module. Used to populate the coprocessor ConfigMap. | `map(string)` | `{}` | no |
 
 ## Outputs
 

@@ -60,6 +60,13 @@ locals {
     var.k8s.storage_classes.gp3.enabled ? { gp3 = local.builtin_gp3 } : {},
     var.k8s.storage_classes.extra,
   )
+
+  # ── Common labels applied to every Kubernetes resource ────────────────────
+  common_labels = {
+    "app.kubernetes.io/name"       = "coprocessor"
+    "app.kubernetes.io/part-of"    = "zama-protocol"
+    "app.kubernetes.io/managed-by" = "terraform"
+  }
 }
 
 # ***************************************
@@ -90,12 +97,11 @@ resource "kubernetes_namespace" "this" {
   metadata {
     name = each.key
 
-    labels = merge({
-      "app.kubernetes.io/name"       = "coprocessor"
-      "app.kubernetes.io/component"  = "namespace"
-      "app.kubernetes.io/part-of"    = "zama-protocol"
-      "app.kubernetes.io/managed-by" = "terraform"
-    }, each.value.labels)
+    labels = merge(
+      local.common_labels,
+      { "app.kubernetes.io/component" = "namespace" },
+      each.value.labels,
+    )
 
     annotations = merge({
       "terraform.io/module" = "k8s"
@@ -221,16 +227,38 @@ resource "kubernetes_config_map" "db_admin_secret_id" {
     name      = "rds-admin-secret-id"
     namespace = "coproc-admin"
 
-    labels = {
-      "app.kubernetes.io/name"       = "coprocessor"
-      "app.kubernetes.io/component"  = "rds-admin-secret-id"
-      "app.kubernetes.io/part-of"    = "zama-protocol"
-      "app.kubernetes.io/managed-by" = "terraform"
-    }
+    labels = merge(
+      local.common_labels,
+      { "app.kubernetes.io/component" = "rds-admin-secret-id" },
+    )
   }
 
   data = {
     RDS_ADMIN_SECRET_ID = var.rds_master_secret_arn
+  }
+
+  depends_on = [kubernetes_namespace.this]
+}
+
+resource "kubernetes_config_map" "coprocessor_config" {
+  for_each = var.k8s.enabled ? toset(["coproc", "eth-blockchain", "gw-blockchain"]) : toset([])
+
+  metadata {
+    name      = "coprocessor-config"
+    namespace = each.key
+
+    labels = merge(
+      local.common_labels,
+      { "app.kubernetes.io/component" = "coprocessor-config" },
+    )
+  }
+
+  data = {
+    DATABASE_ENDPOINT = try(
+      "${kubernetes_service.external_name["coprocessor-database"].metadata[0].name}.${kubernetes_service.external_name["coprocessor-database"].metadata[0].namespace}.svc.cluster.local",
+      null,
+    )
+    S3_BUCKET_NAME = lookup(var.s3_bucket_names, var.k8s.service_accounts.coprocessor.s3_bucket_key, null)
   }
 
   depends_on = [kubernetes_namespace.this]
@@ -246,12 +274,11 @@ resource "kubernetes_service_account" "this" {
     name      = each.value.name
     namespace = coalesce(each.value.namespace, local.namespace)
 
-    labels = merge({
-      "app.kubernetes.io/name"       = "coprocessor"
-      "app.kubernetes.io/component"  = "service-account"
-      "app.kubernetes.io/part-of"    = "zama-protocol"
-      "app.kubernetes.io/managed-by" = "terraform"
-    }, each.value.labels)
+    labels = merge(
+      local.common_labels,
+      { "app.kubernetes.io/component" = "service-account" },
+      each.value.labels,
+    )
 
     annotations = merge(
       { "terraform.io/module" = "k8s" },

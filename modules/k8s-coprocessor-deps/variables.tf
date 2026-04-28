@@ -28,6 +28,12 @@ variable "s3_bucket_arns" {
   default     = {}
 }
 
+variable "s3_bucket_names" {
+  description = "Map of logical bucket key to bucket name from the s3 module. Used to populate the coprocessor ConfigMap."
+  type        = map(string)
+  default     = {}
+}
+
 # ******************************************************
 #  Module configuration
 # ******************************************************
