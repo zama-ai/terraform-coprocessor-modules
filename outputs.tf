@@ -72,9 +72,14 @@ output "rds_db_instance_arn" {
   value       = module.rds.db_instance_arn
 }
 
-output "rds_security_group_id" {
-  description = "The ID of the RDS security group."
-  value       = module.rds.security_group_id
+output "rds_client_security_group_id" {
+  description = "ID of the rds-client SG attached to pods (via SecurityGroupPolicy) that need DB access."
+  value       = module.rds.rds_client_security_group_id
+}
+
+output "rds_server_security_group_id" {
+  description = "ID of the rds-server SG attached to the RDS instance."
+  value       = module.rds.rds_server_security_group_id
 }
 
 output "rds_db_instance_identifier" {

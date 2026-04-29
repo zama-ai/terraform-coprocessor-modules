@@ -212,6 +212,13 @@
           <mxGeometry x="100" y="905" width="135" height="50" as="geometry"/>
         </mxCell>
 
+        <!-- SecurityGroupPolicy (one per namespace, attaches rds-client SG to labeled pods) -->
+        <mxCell id="sgp_rds_client" value="&lt;b&gt;SecurityGroupPolicy&lt;/b&gt; (×5)&lt;br/&gt;rds-client · podSelector:&lt;br/&gt;network/rds-client=true"
+          style="rounded=1;fillColor=#FFEBEE;strokeColor=#C62828;fontSize=9;align=center;html=1;"
+          vertex="1" parent="1">
+          <mxGeometry x="240" y="905" width="120" height="50" as="geometry"/>
+        </mxCell>
+
         <!-- ══════════════════════════════════════════════
              RDS
              ══════════════════════════════════════════════ -->
@@ -219,6 +226,20 @@
           style="rounded=1;fillColor=#BBDEFB;strokeColor=#1565C0;fontSize=11;align=center;verticalAlign=middle;html=1;"
           vertex="1" parent="1">
           <mxGeometry x="60" y="990" width="350" height="80" as="geometry"/>
+        </mxCell>
+
+        <!-- rds-server SG (attached to RDS instance) -->
+        <mxCell id="sg_rds_server" value="&lt;b&gt;rds-server SG&lt;/b&gt;&lt;br/&gt;attached to DB&lt;br/&gt;ingress: tcp/5432 ← rds-client"
+          style="rounded=1;fillColor=#FFEBEE;strokeColor=#C62828;fontSize=10;align=center;html=1;"
+          vertex="1" parent="1">
+          <mxGeometry x="430" y="990" width="180" height="80" as="geometry"/>
+        </mxCell>
+
+        <!-- rds-client SG (attached to pods via SecurityGroupPolicy) -->
+        <mxCell id="sg_rds_client" value="&lt;b&gt;rds-client SG&lt;/b&gt;&lt;br/&gt;attached to pods&lt;br/&gt;via SecurityGroupPolicy"
+          style="rounded=1;fillColor=#FFEBEE;strokeColor=#C62828;fontSize=10;align=center;html=1;"
+          vertex="1" parent="1">
+          <mxGeometry x="640" y="990" width="180" height="80" as="geometry"/>
         </mxCell>
 
         <!-- ══════════════════════════════════════════════
@@ -434,6 +455,27 @@
         <mxCell id="e_txsender_kms" value="Sign / Verify"
           style="edgeStyle=orthogonalEdgeStyle;dashed=1;fontSize=9;html=1;"
           edge="1" source="irsa_txsender_role" target="kms" parent="1">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+
+        <!-- SecurityGroupPolicy → rds-client SG (groupIds reference) -->
+        <mxCell id="e_sgp_sgrdsclient" value="groupIds"
+          style="edgeStyle=orthogonalEdgeStyle;dashed=1;fontSize=9;html=1;"
+          edge="1" source="sgp_rds_client" target="sg_rds_client" parent="1">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+
+        <!-- rds-client SG → rds-server SG (allowed source for tcp/5432) -->
+        <mxCell id="e_sgrdsclient_sgrdsserver" value="tcp/5432 ingress"
+          style="edgeStyle=orthogonalEdgeStyle;fontSize=9;html=1;"
+          edge="1" source="sg_rds_client" target="sg_rds_server" parent="1">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+
+        <!-- rds-server SG → RDS (attached to instance) -->
+        <mxCell id="e_sgrdsserver_rds" value="attached to"
+          style="edgeStyle=orthogonalEdgeStyle;dashed=1;fontSize=9;html=1;"
+          edge="1" source="sg_rds_server" target="rds" parent="1">
           <mxGeometry relative="1" as="geometry"/>
         </mxCell>
 

@@ -82,6 +82,41 @@ locals {
     "app.kubernetes.io/part-of"    = "zama-protocol"
     "app.kubernetes.io/managed-by" = "terraform"
   }
+
+  # ── SecurityGroupPolicy expansion ─────────────────────────────────────────
+  # Built-in rds_client policy: one SecurityGroupPolicy per listed namespace,
+  # attaching the rds-client SG to any pod whose template carries the
+  # configured opt-in label. The for_each map keys depend only on statically
+  # known inputs (the namespaces list) so plan can determine instance keys
+  # without waiting for the SG ID to be known. The SG ID null check is
+  # enforced via a resource-level precondition below.
+  rds_client_policies = (
+    var.k8s.enabled
+    && var.k8s.security_group_policies.rds_client.enabled
+    ) ? {
+    for ns in var.k8s.security_group_policies.rds_client.namespaces :
+    "rds-client-${ns}" => {
+      name      = "rds-client"
+      namespace = ns
+      pod_selector = {
+        (var.k8s.security_group_policies.rds_client.pod_label_key) = var.k8s.security_group_policies.rds_client.pod_label_value
+      }
+      security_group_ids = [var.rds_client_security_group_id]
+    }
+  } : {}
+
+  security_group_policies = merge(
+    local.rds_client_policies,
+    {
+      for key, cfg in var.k8s.security_group_policies.extra :
+      key => {
+        name               = key
+        namespace          = cfg.namespace
+        pod_selector       = cfg.pod_selector
+        security_group_ids = cfg.security_group_ids
+      }
+    },
+  )
 }
 
 # ***************************************
@@ -333,6 +368,48 @@ resource "kubernetes_service" "external_name" {
   spec {
     type          = "ExternalName"
     external_name = split(":", each.value.endpoint)[0]
+  }
+
+  depends_on = [kubernetes_namespace.this]
+}
+
+# ***************************************
+#  SecurityGroupPolicy (EKS Security Groups for Pods)
+#
+#  Selects pods by label (or SA label) and attaches AWS security groups to the
+#  pod's branch ENI. The CRD vpcresources.k8s.aws/v1beta1.SecurityGroupPolicy
+#  is installed automatically by EKS via the VPC Resource Controller; pods
+#  must schedule on trunk-ENI-capable instance types to receive the SG.
+# ***************************************
+resource "kubernetes_manifest" "security_group_policy" {
+  for_each = local.security_group_policies
+
+  manifest = {
+    apiVersion = "vpcresources.k8s.aws/v1beta1"
+    kind       = "SecurityGroupPolicy"
+    metadata = {
+      name      = each.value.name
+      namespace = each.value.namespace
+      labels = merge(
+        local.common_labels,
+        { "app.kubernetes.io/component" = "security-group-policy" },
+      )
+    }
+    spec = {
+      podSelector = {
+        matchLabels = each.value.pod_selector
+      }
+      securityGroups = {
+        groupIds = each.value.security_group_ids
+      }
+    }
+  }
+
+  lifecycle {
+    precondition {
+      condition     = alltrue([for sg in each.value.security_group_ids : sg != null])
+      error_message = "All security_group_ids in a SecurityGroupPolicy must be non-null. For the built-in rds_client policy, this means var.rds_client_security_group_id must be supplied (typically wired from module.rds.rds_client_security_group_id) when k8s.security_group_policies.rds_client.enabled = true."
+    }
   }
 
   depends_on = [kubernetes_namespace.this]

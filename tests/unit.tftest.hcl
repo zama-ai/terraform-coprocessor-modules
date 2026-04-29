@@ -22,6 +22,8 @@ mock_provider "aws" {
   }
 }
 
+mock_provider "kubernetes" {}
+
 # Shared defaults across all runs.
 # - networking.enabled = false with existing_vpc set — keeps the baseline simple
 #   (no networking module, all VPC values come directly from variables).

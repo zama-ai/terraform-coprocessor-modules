@@ -114,9 +114,8 @@ networking = {
   # Required when enabled = false. Used by RDS and EKS in place of module outputs.
   # Can technically coexist with the vpc block above but only one path is active.
   existing_vpc = {
-    vpc_id                     = "vpc-0123456789abcdef0"
-    private_subnet_ids         = ["subnet-aaa", "subnet-bbb", "subnet-ccc"]
-    private_subnet_cidr_blocks = ["10.0.1.0/24", "10.0.2.0/24", "10.0.3.0/24"]
+    vpc_id             = "vpc-0123456789abcdef0"
+    private_subnet_ids = ["subnet-aaa", "subnet-bbb", "subnet-ccc"]
   }
 }
 
@@ -871,6 +870,47 @@ k8s_coprocessor_deps = {
         # Default: {}
         labels = {}
       }
+    }
+  }
+
+  # ── SecurityGroupPolicy (EKS Security Groups for Pods) ────────────────────────
+  # Attaches AWS security groups to selected pods via the
+  # vpcresources.k8s.aws/v1beta1.SecurityGroupPolicy CRD. Pods opt in by
+  # carrying the configured label on their pod template.
+  #
+  # Trade-offs:
+  #   - Each labeled pod consumes a branch ENI on its node (limit varies by
+  #     instance type; m5.large = 9, m5.xlarge = 18).
+  #   - Pods must schedule on trunk-ENI-capable nodes; t3.small/medium do not
+  #     qualify and labeled pods landing there will fail to obtain an ENI.
+  # Default: {}
+  security_group_policies = {
+    # Built-in: attaches the rds-client SG (created by the rds module) to any
+    # pod that carries the configured label. One SecurityGroupPolicy is created
+    # per listed namespace.
+    # Default: { enabled = true, namespaces = ["coproc-admin", "coproc", "gw-blockchain", "eth-blockchain", "monitoring"], pod_label_key = "network/rds-client", pod_label_value = "true" }
+    rds_client = {
+      enabled = true
+      namespaces = [
+        "coproc-admin",
+        "coproc",
+        "gw-blockchain",
+        "eth-blockchain",
+        "monitoring",
+      ]
+      pod_label_key   = "network/rds-client"
+      pod_label_value = "true"
+    }
+
+    # Custom SecurityGroupPolicy resources beyond the built-in. Map key becomes
+    # the SecurityGroupPolicy resource name.
+    # Default: {}
+    extra = {
+      # redis-client = {
+      #   namespace          = "coproc"
+      #   pod_selector       = { "network/redis-client" = "true" }
+      #   security_group_ids = ["sg-0123456789abcdef0"]
+      # }
     }
   }
 

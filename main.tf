@@ -12,9 +12,8 @@ locals {
   eks_cluster_name = "${var.partner_name}-${var.environment}"
 
   # Shared networking resolution — prefer existing_vpc values when provided, fall back to networking module outputs
-  vpc_id                     = coalesce(try(var.networking.existing_vpc.vpc_id, null), one(module.networking[*].vpc_id))
-  private_subnet_ids         = coalesce(try(var.networking.existing_vpc.private_subnet_ids, null), one(module.networking[*].private_subnet_ids))
-  private_subnet_cidr_blocks = coalesce(try(var.networking.existing_vpc.private_subnet_cidr_blocks, null), one(module.networking[*].private_subnet_cidr_blocks))
+  vpc_id             = coalesce(try(var.networking.existing_vpc.vpc_id, null), one(module.networking[*].vpc_id))
+  private_subnet_ids = coalesce(try(var.networking.existing_vpc.private_subnet_ids, null), one(module.networking[*].private_subnet_ids))
 
   # tx-sender IRSA role ARN — computed as a string from the partner/env naming pattern
   # used by k8s-coprocessor-deps. Computing it here (not via module output) breaks the
@@ -86,9 +85,8 @@ module "rds" {
   partner_name = var.partner_name
   environment  = var.environment
 
-  vpc_id                     = local.vpc_id
-  private_subnet_ids         = local.private_subnet_ids
-  private_subnet_cidr_blocks = local.private_subnet_cidr_blocks
+  vpc_id             = local.vpc_id
+  private_subnet_ids = local.private_subnet_ids
 
   rds = var.rds
 }
@@ -141,10 +139,11 @@ module "k8s_coprocessor_deps" {
     : ""
   )
 
-  rds_master_secret_arn = module.rds.rds_master_secret_arn
-  s3_bucket_arns        = module.s3.bucket_arns
-  s3_bucket_names       = module.s3.bucket_names
-  kms_key_arn           = module.kms.key_arn
+  rds_master_secret_arn        = module.rds.rds_master_secret_arn
+  rds_client_security_group_id = module.rds.rds_client_security_group_id
+  s3_bucket_arns               = module.s3.bucket_arns
+  s3_bucket_names              = module.s3.bucket_names
+  kms_key_arn                  = module.kms.key_arn
 
   k8s = local.k8s_config
 

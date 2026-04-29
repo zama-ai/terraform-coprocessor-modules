@@ -40,6 +40,12 @@ variable "kms_key_arn" {
   default     = null
 }
 
+variable "rds_client_security_group_id" {
+  description = "ID of the rds-client security group from the rds module. Required when k8s.security_group_policies.rds_client.enabled = true; used as the groupIds value in the SecurityGroupPolicy resources that label pods for RDS access."
+  type        = string
+  default     = null
+}
+
 # ******************************************************
 #  Module configuration
 # ******************************************************
@@ -137,6 +143,29 @@ variable "k8s" {
       namespace   = optional(string, null) # defaults to k8s.default_namespace
       annotations = optional(map(string), {})
     })), {})
+
+    # SecurityGroupPolicy resources for EKS Security Groups for Pods (SGP).
+    # The CRD is installed automatically by EKS via the VPC Resource Controller.
+    # Pods opt in by carrying the matching label on their pod template.
+    security_group_policies = optional(object({
+      # rds_client: built-in policy that attaches the rds-client SG to any pod
+      # carrying the configured label. Created once per listed namespace.
+      rds_client = optional(object({
+        enabled = optional(bool, true)
+        namespaces = optional(list(string), [
+          "coproc-admin", "coproc", "gw-blockchain", "eth-blockchain", "monitoring"
+        ])
+        pod_label_key   = optional(string, "network/rds-client")
+        pod_label_value = optional(string, "true")
+      }), {})
+
+      # Custom SecurityGroupPolicy resources beyond the built-ins.
+      extra = optional(map(object({
+        namespace          = string
+        pod_selector       = map(string)
+        security_group_ids = list(string)
+      })), {})
+    }), {})
   })
 
   default = { enabled = false }

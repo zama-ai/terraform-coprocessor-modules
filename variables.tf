@@ -72,9 +72,8 @@ variable "networking" {
 
     # For usage of an existing VPC (bypasses networking module for RDS)
     existing_vpc = optional(object({
-      vpc_id                     = string
-      private_subnet_ids         = list(string)
-      private_subnet_cidr_blocks = list(string)
+      vpc_id             = string
+      private_subnet_ids = list(string)
     }))
   })
 
@@ -91,10 +90,9 @@ variable "networking" {
   validation {
     condition = var.networking.enabled || (
       var.networking.existing_vpc != null &&
-      length(var.networking.existing_vpc.private_subnet_ids) > 0 &&
-      length(var.networking.existing_vpc.private_subnet_cidr_blocks) > 0
+      length(var.networking.existing_vpc.private_subnet_ids) > 0
     )
-    error_message = "networking.existing_vpc with non-empty private_subnet_ids and private_subnet_cidr_blocks is required when networking.enabled = false."
+    error_message = "networking.existing_vpc with non-empty private_subnet_ids is required when networking.enabled = false."
   }
 }
 

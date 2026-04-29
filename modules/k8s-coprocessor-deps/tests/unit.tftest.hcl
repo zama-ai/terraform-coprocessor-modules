@@ -9,12 +9,21 @@ mock_provider "aws" {
   }
 }
 
+# kubernetes_manifest requires a live cluster client at plan time to validate
+# the manifest against the cluster's OpenAPI. mock_provider intercepts that
+# call so SecurityGroupPolicy resources can be planned without a real cluster.
+mock_provider "kubernetes" {}
+
 
 # Shared defaults across all runs.
+# rds_client_security_group_id is supplied by default so the rds_client SGP
+# precondition (security_group_ids must be non-null) doesn't fire in tests
+# that don't explicitly exercise it.
 variables {
-  partner_name      = "acme"
-  environment       = "testnet"
-  oidc_provider_arn = "arn:aws:iam::123456789012:oidc-provider/oidc.eks.eu-west-1.amazonaws.com/id/EXAMPLE1234567890"
+  partner_name                 = "acme"
+  environment                  = "testnet"
+  oidc_provider_arn            = "arn:aws:iam::123456789012:oidc-provider/oidc.eks.eu-west-1.amazonaws.com/id/EXAMPLE1234567890"
+  rds_client_security_group_id = "sg-0123456789abcdef0"
 }
 
 # =============================================================================
@@ -66,6 +75,11 @@ run "disabled_creates_no_resources" {
   assert {
     condition     = length(kubernetes_config_map.coprocessor_config) == 0
     error_message = "No coprocessor configmap must be created when k8s.enabled = false."
+  }
+
+  assert {
+    condition     = length(kubernetes_manifest.security_group_policy) == 0
+    error_message = "No SecurityGroupPolicy resources must be created when k8s.enabled = false."
   }
 }
 
@@ -839,5 +853,153 @@ run "extra_service_account_overrides_builtin_with_same_key" {
   assert {
     condition     = contains(keys(kubernetes_service_account.this), "sns-worker")
     error_message = "The sns-worker service account must still exist after the override."
+  }
+}
+
+# =============================================================================
+#  SecurityGroupPolicy (EKS Security Groups for Pods)
+# =============================================================================
+
+run "rds_client_policy_precondition_fires_when_sg_id_is_null" {
+  command = plan
+
+  variables {
+    rds_client_security_group_id = null
+
+    k8s = {
+      enabled = true
+      security_group_policies = {
+        rds_client = { enabled = true }
+      }
+    }
+  }
+
+  expect_failures = [
+    resource.kubernetes_manifest.security_group_policy,
+  ]
+}
+
+run "rds_client_policy_skipped_when_disabled" {
+  command = plan
+
+  variables {
+    rds_client_security_group_id = "sg-0123456789abcdef0"
+
+    k8s = {
+      enabled = true
+      security_group_policies = {
+        rds_client = { enabled = false }
+      }
+    }
+  }
+
+  assert {
+    condition     = length(kubernetes_manifest.security_group_policy) == 0
+    error_message = "No SecurityGroupPolicy must be created when rds_client.enabled = false."
+  }
+}
+
+run "rds_client_policy_creates_one_per_namespace" {
+  command = plan
+
+  variables {
+    rds_client_security_group_id = "sg-0123456789abcdef0"
+
+    k8s = {
+      enabled = true
+      security_group_policies = {
+        rds_client = {
+          enabled    = true
+          namespaces = ["coproc-admin", "coproc", "gw-blockchain", "eth-blockchain", "monitoring"]
+        }
+      }
+    }
+  }
+
+  assert {
+    condition     = length(kubernetes_manifest.security_group_policy) == 5
+    error_message = "One SecurityGroupPolicy must be created per namespace in the rds_client.namespaces list."
+  }
+
+  assert {
+    condition     = kubernetes_manifest.security_group_policy["rds-client-monitoring"].manifest.metadata.name == "rds-client"
+    error_message = "SecurityGroupPolicy name must be 'rds-client'."
+  }
+
+  assert {
+    condition     = kubernetes_manifest.security_group_policy["rds-client-monitoring"].manifest.metadata.namespace == "monitoring"
+    error_message = "SecurityGroupPolicy namespace must match the namespace in the rds_client.namespaces list."
+  }
+
+  assert {
+    condition     = kubernetes_manifest.security_group_policy["rds-client-monitoring"].manifest.spec.podSelector.matchLabels["network/rds-client"] == "true"
+    error_message = "SecurityGroupPolicy default podSelector must match label 'network/rds-client = true'."
+  }
+
+  assert {
+    condition     = kubernetes_manifest.security_group_policy["rds-client-monitoring"].manifest.spec.securityGroups.groupIds[0] == "sg-0123456789abcdef0"
+    error_message = "SecurityGroupPolicy securityGroups.groupIds must contain the rds_client_security_group_id."
+  }
+}
+
+run "rds_client_policy_label_overrides_are_respected" {
+  command = plan
+
+  variables {
+    rds_client_security_group_id = "sg-0123456789abcdef0"
+
+    k8s = {
+      enabled = true
+      security_group_policies = {
+        rds_client = {
+          enabled         = true
+          namespaces      = ["coproc"]
+          pod_label_key   = "custom.io/rds-client"
+          pod_label_value = "yes"
+        }
+      }
+    }
+  }
+
+  assert {
+    condition     = kubernetes_manifest.security_group_policy["rds-client-coproc"].manifest.spec.podSelector.matchLabels["custom.io/rds-client"] == "yes"
+    error_message = "SecurityGroupPolicy podSelector must reflect the configured pod_label_key and pod_label_value."
+  }
+}
+
+run "extra_security_group_policies_are_created" {
+  command = plan
+
+  variables {
+    rds_client_security_group_id = "sg-0123456789abcdef0"
+
+    k8s = {
+      enabled = true
+      security_group_policies = {
+        rds_client = { enabled = false }
+        extra = {
+          redis-client = {
+            namespace          = "coproc"
+            pod_selector       = { "network/redis-client" = "true" }
+            security_group_ids = ["sg-aaaa1111", "sg-bbbb2222"]
+          }
+        }
+      }
+    }
+  }
+
+  assert {
+    condition     = length(kubernetes_manifest.security_group_policy) == 1
+    error_message = "Extra SecurityGroupPolicy must be created."
+  }
+
+  assert {
+    condition     = kubernetes_manifest.security_group_policy["redis-client"].manifest.metadata.name == "redis-client"
+    error_message = "Extra SecurityGroupPolicy name must match the map key."
+  }
+
+  assert {
+    condition     = length(kubernetes_manifest.security_group_policy["redis-client"].manifest.spec.securityGroups.groupIds) == 2
+    error_message = "Extra SecurityGroupPolicy securityGroups.groupIds must contain all configured SG IDs."
   }
 }

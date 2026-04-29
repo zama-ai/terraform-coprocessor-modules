@@ -121,6 +121,10 @@ k8s_coprocessor_deps = {
     gp3 = { enabled = true }
   }
 
+  security_group_policies = {
+    rds_client = { enabled = true }
+  }
+
   external_name_services = {
     coprocessor-database = { enabled = true }
   }

@@ -36,9 +36,8 @@ networking = {
   enabled = false
 
   existing_vpc = {
-    vpc_id                     = "vpc-0123456789abcdef0"        # CHANGE ME
-    private_subnet_ids         = ["subnet-aaa", "subnet-bbb"]   # CHANGE ME
-    private_subnet_cidr_blocks = ["10.0.1.0/24", "10.0.2.0/24"] # CHANGE ME
+    vpc_id             = "vpc-0123456789abcdef0"      # CHANGE ME
+    private_subnet_ids = ["subnet-aaa", "subnet-bbb"] # CHANGE ME
   }
 }
 
@@ -95,15 +94,21 @@ k8s_coprocessor_deps = {
     coproc-admin   = { enabled = true }
     gw-blockchain  = { enabled = true }
     eth-blockchain = { enabled = true }
+    monitoring     = { enabled = true }
   }
 
   service_accounts = {
-    coprocessor = { enabled = true }
-    db_admin    = { enabled = true }
+    sns_worker = { enabled = true }
+    db_admin   = { enabled = true }
+    tx_sender  = { enabled = true }
   }
 
   storage_classes = {
     gp3 = { enabled = true }
+  }
+
+  security_group_policies = {
+    rds_client = { enabled = true }
   }
 
   external_name_services = {
