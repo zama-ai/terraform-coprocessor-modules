@@ -90,6 +90,13 @@ s3 = {
 }
 
 # =============================================================================
+#  KMS
+# =============================================================================
+kms = {
+  enabled = true
+}
+
+# =============================================================================
 #  k8s Coprocessor Dependencies
 # =============================================================================
 k8s_coprocessor_deps = {
@@ -105,12 +112,17 @@ k8s_coprocessor_deps = {
   }
 
   service_accounts = {
-    coprocessor = { enabled = true }
-    db_admin    = { enabled = true }
+    sns_worker = { enabled = true }
+    db_admin   = { enabled = true }
+    tx_sender  = { enabled = true }
   }
 
   storage_classes = {
     gp3 = { enabled = true }
+  }
+
+  security_group_policies = {
+    rds_client = { enabled = true }
   }
 
   external_name_services = {

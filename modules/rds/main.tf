@@ -21,26 +21,51 @@ locals {
 }
 
 # ***************************************
-#  Security Group
+#  Security Groups
+#
+#  Split into two SGs to enable per-pod source attribution via EKS Security
+#  Groups for Pods (SGP):
+#    - rds_client: empty SG attached to pods (via SecurityGroupPolicy in
+#      k8s-coprocessor-deps). Acts purely as a source identifier for ingress.
+#    - rds_server: attached to the RDS instance. Allows DB-port traffic from
+#      rds_client and from any extra CIDRs in additional_allowed_cidr_blocks.
 # ***************************************
-module "rds_security_group" {
+resource "aws_security_group" "rds_client" {
   count = var.rds.enabled ? 1 : 0
 
-  source  = "terraform-aws-modules/security-group/aws"
-  version = "~> 5.3.0"
-
-  name        = coalesce(var.rds.db_name, "rds-sg")
-  description = "Security group for ${coalesce(var.rds.db_name, "rds-sg")} RDS ${var.rds.engine} on port ${var.rds.port}"
+  name        = "${coalesce(var.rds.db_name, "rds")}-client"
+  description = "Pod-side SG for ${coalesce(var.rds.db_name, "rds")} RDS clients (attached to pods via SecurityGroupPolicy)"
   vpc_id      = var.vpc_id
+}
 
-  ingress_with_cidr_blocks = [
-    {
-      from_port   = var.rds.port
-      to_port     = var.rds.port
-      protocol    = "tcp"
-      cidr_blocks = join(",", concat(var.rds.additional_allowed_cidr_blocks, var.private_subnet_cidr_blocks))
-    }
-  ]
+resource "aws_security_group" "rds_server" {
+  count = var.rds.enabled ? 1 : 0
+
+  name        = "${coalesce(var.rds.db_name, "rds")}-server"
+  description = "DB-side SG for ${coalesce(var.rds.db_name, "rds")} RDS ${var.rds.engine} on port ${var.rds.port}"
+  vpc_id      = var.vpc_id
+}
+
+resource "aws_vpc_security_group_ingress_rule" "rds_server_from_client" {
+  count = var.rds.enabled ? 1 : 0
+
+  security_group_id            = aws_security_group.rds_server[0].id
+  referenced_security_group_id = aws_security_group.rds_client[0].id
+  ip_protocol                  = "tcp"
+  from_port                    = var.rds.port
+  to_port                      = var.rds.port
+  description                  = "Allow ${var.rds.engine} traffic from pods carrying the rds-client SG"
+}
+
+resource "aws_vpc_security_group_ingress_rule" "rds_server_from_extra_cidrs" {
+  for_each = var.rds.enabled ? toset(var.rds.additional_allowed_cidr_blocks) : toset([])
+
+  security_group_id = aws_security_group.rds_server[0].id
+  cidr_ipv4         = each.value
+  ip_protocol       = "tcp"
+  from_port         = var.rds.port
+  to_port           = var.rds.port
+  description       = "Allow ${var.rds.engine} traffic from break-glass CIDR ${each.value}"
 }
 
 # ***************************************
@@ -86,7 +111,7 @@ module "rds_instance" {
 
   create_db_subnet_group = true
   subnet_ids             = var.private_subnet_ids
-  vpc_security_group_ids = [module.rds_security_group[0].security_group_id]
+  vpc_security_group_ids = [aws_security_group.rds_server[0].id]
 
   deletion_protection = var.rds.deletion_protection
 }

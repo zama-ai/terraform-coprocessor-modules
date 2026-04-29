@@ -19,11 +19,10 @@ mock_provider "aws" {
 # vpc_id and subnets are required by the security group and subnet group
 # resources inside the child modules.
 variables {
-  partner_name               = "acme"
-  environment                = "mainnet"
-  vpc_id                     = "vpc-00000000000000000"
-  private_subnet_ids         = ["subnet-aaaaaaaaaaaaaaaa1", "subnet-aaaaaaaaaaaaaaaa2"]
-  private_subnet_cidr_blocks = ["10.0.0.0/24", "10.0.1.0/24"]
+  partner_name       = "acme"
+  environment        = "mainnet"
+  vpc_id             = "vpc-00000000000000000"
+  private_subnet_ids = ["subnet-aaaaaaaaaaaaaaaa1", "subnet-aaaaaaaaaaaaaaaa2"]
 }
 
 # All enabled runs must include monitoring_interval = 0 and
@@ -43,8 +42,13 @@ run "disabled_creates_no_child_modules" {
   }
 
   assert {
-    condition     = length(module.rds_security_group) == 0
-    error_message = "Security group module must not be created when rds.enabled = false."
+    condition     = length(aws_security_group.rds_client) == 0
+    error_message = "rds_client SG must not be created when rds.enabled = false."
+  }
+
+  assert {
+    condition     = length(aws_security_group.rds_server) == 0
+    error_message = "rds_server SG must not be created when rds.enabled = false."
   }
 
   assert {
@@ -93,8 +97,13 @@ run "disabled_outputs_all_null" {
   }
 
   assert {
-    condition     = output.security_group_id == null
-    error_message = "security_group_id must be null when rds.enabled = false."
+    condition     = output.rds_client_security_group_id == null
+    error_message = "rds_client_security_group_id must be null when rds.enabled = false."
+  }
+
+  assert {
+    condition     = output.rds_server_security_group_id == null
+    error_message = "rds_server_security_group_id must be null when rds.enabled = false."
   }
 }
 
@@ -102,7 +111,7 @@ run "disabled_outputs_all_null" {
 #  enabled = true
 # =============================================================================
 
-run "enabled_creates_both_child_modules" {
+run "enabled_creates_both_sgs_and_rds_instance" {
   command = plan
 
   variables {
@@ -115,13 +124,42 @@ run "enabled_creates_both_child_modules" {
   }
 
   assert {
-    condition     = length(module.rds_security_group) == 1
-    error_message = "Security group module must be created when rds.enabled = true."
+    condition     = length(aws_security_group.rds_client) == 1
+    error_message = "rds_client SG must be created when rds.enabled = true."
+  }
+
+  assert {
+    condition     = length(aws_security_group.rds_server) == 1
+    error_message = "rds_server SG must be created when rds.enabled = true."
+  }
+
+  assert {
+    condition     = length(aws_vpc_security_group_ingress_rule.rds_server_from_client) == 1
+    error_message = "Ingress rule from rds_client to rds_server must be created when rds.enabled = true."
   }
 
   assert {
     condition     = length(module.rds_instance) == 1
     error_message = "RDS instance module must be created when rds.enabled = true."
+  }
+}
+
+run "additional_allowed_cidr_blocks_creates_extra_ingress_rules" {
+  command = plan
+
+  variables {
+    rds = {
+      enabled                        = true
+      db_name                        = "coprocessor"
+      additional_allowed_cidr_blocks = ["10.99.0.0/24", "10.99.1.0/24"]
+      monitoring_interval            = 0
+      create_monitoring_role         = false
+    }
+  }
+
+  assert {
+    condition     = length(aws_vpc_security_group_ingress_rule.rds_server_from_extra_cidrs) == 2
+    error_message = "Each additional_allowed_cidr_blocks entry must produce its own ingress rule on rds_server."
   }
 }
 

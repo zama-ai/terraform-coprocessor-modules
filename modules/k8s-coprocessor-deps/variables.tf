@@ -28,6 +28,24 @@ variable "s3_bucket_arns" {
   default     = {}
 }
 
+variable "s3_bucket_names" {
+  description = "Map of logical bucket key to bucket name from the s3 module. Used to populate the coprocessor ConfigMap."
+  type        = map(string)
+  default     = {}
+}
+
+variable "kms_key_arn" {
+  description = "ARN of the coprocessor KMS keypair from the kms module. Required when any service account sets kms_key_access = true."
+  type        = string
+  default     = null
+}
+
+variable "rds_client_security_group_id" {
+  description = "ID of the rds-client security group from the rds module. Required when k8s.security_group_policies.rds_client.enabled = true; used as the groupIds value in the SecurityGroupPolicy resources that label pods for RDS access."
+  type        = string
+  default     = null
+}
+
 # ******************************************************
 #  Module configuration
 # ******************************************************
@@ -51,8 +69,8 @@ variable "k8s" {
 
     # Service accounts — built-in toggles + custom extras.
     service_accounts = optional(object({
-      # coprocessor: IRSA role with S3 access (s3:*Object + s3:ListBucket).
-      coprocessor = optional(object({
+      # sns_worker: IRSA role with S3 access (s3:*Object + s3:ListBucket).
+      sns_worker = optional(object({
         enabled = optional(bool, true)
         # Key in var.s3_bucket_arns to grant access to.
         s3_bucket_key = optional(string, "coprocessor")
@@ -61,6 +79,12 @@ variable "k8s" {
       # db_admin: IRSA role with RDS master secret (GetSecretValue + DescribeSecret).
       db_admin = optional(object({
         enabled = optional(bool, true)
+      }), {})
+
+      # tx_sender: IRSA role with KMS Sign/Verify on the coprocessor keypair.
+      tx_sender = optional(object({
+        enabled        = optional(bool, true)
+        kms_key_access = optional(bool, true)
       }), {})
 
       # Custom service accounts beyond the built-ins.
@@ -74,6 +98,7 @@ variable "k8s" {
           actions = list(string)
         })), {})
         rds_master_secret_access = optional(bool, false)
+        kms_key_access           = optional(bool, false)
         iam_policy_statements = optional(list(object({
           sid       = optional(string, "")
           effect    = string
@@ -118,6 +143,29 @@ variable "k8s" {
       namespace   = optional(string, null) # defaults to k8s.default_namespace
       annotations = optional(map(string), {})
     })), {})
+
+    # SecurityGroupPolicy resources for EKS Security Groups for Pods (SGP).
+    # The CRD is installed automatically by EKS via the VPC Resource Controller.
+    # Pods opt in by carrying the matching label on their pod template.
+    security_group_policies = optional(object({
+      # rds_client: built-in policy that attaches the rds-client SG to any pod
+      # carrying the configured label. Created once per listed namespace.
+      rds_client = optional(object({
+        enabled = optional(bool, true)
+        namespaces = optional(list(string), [
+          "coproc-admin", "coproc", "gw-blockchain", "eth-blockchain", "monitoring"
+        ])
+        pod_label_key   = optional(string, "network/rds-client")
+        pod_label_value = optional(string, "true")
+      }), {})
+
+      # Custom SecurityGroupPolicy resources beyond the built-ins.
+      extra = optional(map(object({
+        namespace          = string
+        pod_selector       = map(string)
+        security_group_ids = list(string)
+      })), {})
+    }), {})
   })
 
   default = { enabled = false }

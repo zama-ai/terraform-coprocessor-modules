@@ -20,12 +20,6 @@ variable "private_subnet_ids" {
   default     = []
 }
 
-variable "private_subnet_cidr_blocks" {
-  description = "CIDR blocks of private subnets, merged into RDS security group ingress."
-  type        = list(string)
-  default     = []
-}
-
 variable "rds" {
   description = <<-EOT
     RDS instance configuration. Set enabled = false to skip all RDS resources.
@@ -76,6 +70,9 @@ variable "rds" {
     })), [])
 
     # Security group
+    # Break-glass CIDR ingress on the RDS server SG. Pod-originated traffic
+    # should rely on the rds_client SG attached via SecurityGroupPolicy; only
+    # use this for one-off bastion / migration access.
     additional_allowed_cidr_blocks = optional(list(string), [])
   })
 

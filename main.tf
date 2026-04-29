@@ -1,4 +1,10 @@
 # ******************************************************
+#  Data sources
+# ******************************************************
+data "aws_caller_identity" "current" {}
+data "aws_partition" "current" {}
+
+# ******************************************************
 #  Locals
 # ******************************************************
 locals {
@@ -6,9 +12,14 @@ locals {
   eks_cluster_name = "${var.partner_name}-${var.environment}"
 
   # Shared networking resolution — prefer existing_vpc values when provided, fall back to networking module outputs
-  vpc_id                     = coalesce(try(var.networking.existing_vpc.vpc_id, null), one(module.networking[*].vpc_id))
-  private_subnet_ids         = coalesce(try(var.networking.existing_vpc.private_subnet_ids, null), one(module.networking[*].private_subnet_ids))
-  private_subnet_cidr_blocks = coalesce(try(var.networking.existing_vpc.private_subnet_cidr_blocks, null), one(module.networking[*].private_subnet_cidr_blocks))
+  vpc_id             = coalesce(try(var.networking.existing_vpc.vpc_id, null), one(module.networking[*].vpc_id))
+  private_subnet_ids = coalesce(try(var.networking.existing_vpc.private_subnet_ids, null), one(module.networking[*].private_subnet_ids))
+
+  # tx-sender IRSA role ARN — computed as a string from the partner/env naming pattern
+  # used by k8s-coprocessor-deps. Computing it here (not via module output) breaks the
+  # otherwise-circular dependency between kms (consumer_role_arns) and k8s-coprocessor-deps
+  # (kms_key_arn → tx-sender IAM policy).
+  tx_sender_role_arn = "arn:${data.aws_partition.current.partition}:iam::${data.aws_caller_identity.current.account_id}:role/tx-sender-${var.partner_name}-${var.environment}"
 
   # Additional subnets have no existing_vpc equivalent — only available when networking module ran and additional subnets were enabled
   additional_subnet_ids = var.networking.enabled && var.networking.additional_subnets.enabled ? module.networking[0].additional_subnet_ids : []
@@ -74,9 +85,8 @@ module "rds" {
   partner_name = var.partner_name
   environment  = var.environment
 
-  vpc_id                     = local.vpc_id
-  private_subnet_ids         = local.private_subnet_ids
-  private_subnet_cidr_blocks = local.private_subnet_cidr_blocks
+  vpc_id             = local.vpc_id
+  private_subnet_ids = local.private_subnet_ids
 
   rds = var.rds
 }
@@ -91,6 +101,25 @@ module "s3" {
   environment  = var.environment
 
   buckets = var.s3.buckets
+}
+
+# ******************************************************
+#  KMS
+# ******************************************************
+module "kms" {
+  source = "./modules/kms"
+
+  partner_name = var.partner_name
+  environment  = var.environment
+
+  # Auto-append the tx-sender IRSA role ARN when the corresponding service account is enabled,
+  # so the KMS key policy grants Sign/Verify to the role created by k8s-coprocessor-deps.
+  kms = merge(var.kms, {
+    consumer_role_arns = concat(
+      var.kms.consumer_role_arns,
+      var.k8s_coprocessor_deps.enabled && var.k8s_coprocessor_deps.service_accounts.tx_sender.enabled ? [local.tx_sender_role_arn] : [],
+    )
+  })
 }
 
 # ******************************************************
@@ -110,8 +139,11 @@ module "k8s_coprocessor_deps" {
     : ""
   )
 
-  rds_master_secret_arn = module.rds.rds_master_secret_arn
-  s3_bucket_arns        = module.s3.bucket_arns
+  rds_master_secret_arn        = module.rds.rds_master_secret_arn
+  rds_client_security_group_id = module.rds.rds_client_security_group_id
+  s3_bucket_arns               = module.s3.bucket_arns
+  s3_bucket_names              = module.s3.bucket_names
+  kms_key_arn                  = module.kms.key_arn
 
   k8s = local.k8s_config
 
