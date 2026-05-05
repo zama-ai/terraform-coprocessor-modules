@@ -259,7 +259,7 @@ eks = {
 
         # EC2 instance types. First type is preferred; AWS selects from the list for SPOT.
         # Default: ["t3.medium"]
-        instance_types = ["t3.large"]
+        instance_types = ["m6i.large"]
 
         # EKS-optimised AMI family.
         # Default: "AL2023_x86_64_STANDARD"

@@ -37,9 +37,8 @@ variables {
     vpc     = { cidr = "10.0.0.0/16", availability_zones = ["eu-west-1a", "eu-west-1b"] }
     enabled = false
     existing_vpc = {
-      vpc_id                     = "vpc-00000000000000000"
-      private_subnet_ids         = ["subnet-aaaaaaaaaaaaaaaa1", "subnet-aaaaaaaaaaaaaaaa2"]
-      private_subnet_cidr_blocks = ["10.0.0.0/20", "10.0.16.0/20"]
+      vpc_id             = "vpc-00000000000000000"
+      private_subnet_ids = ["subnet-aaaaaaaaaaaaaaaa1", "subnet-aaaaaaaaaaaaaaaa2"]
     }
   }
 
@@ -175,9 +174,8 @@ run "rejects_invalid_vpc_cidr" {
       vpc     = { cidr = "not-a-cidr", availability_zones = ["eu-west-1a"] }
       enabled = false
       existing_vpc = {
-        vpc_id                     = "vpc-00000000000000000"
-        private_subnet_ids         = ["subnet-aaaaaaaaaaaaaaaa1"]
-        private_subnet_cidr_blocks = ["10.0.0.0/20"]
+        vpc_id             = "vpc-00000000000000000"
+        private_subnet_ids = ["subnet-aaaaaaaaaaaaaaaa1"]
       }
     }
   }

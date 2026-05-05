@@ -12,15 +12,20 @@ variable "kms" {
   description = <<-EOT
     KMS coprocessor keypair configuration.
 
-    Creates an asymmetric AWS KMS key with EXTERNAL origin (key material to be
-    imported out of band — typically an Ethereum secp256k1 private key) plus
-    an alias of the form `alias/<partner_name>-<environment>-coprocessor-keypair`.
+    Creates an asymmetric AWS KMS key (key spec ECC_SECG_P256K1, key usage
+    SIGN_VERIFY) with KMS-generated key material — the private key is
+    generated inside the HSM and never leaves it. The corresponding Ethereum
+    address is derived client-side from the public key returned by
+    `kms:GetPublicKey` (uncompressed sec1 form, keccak256 of the last 64
+    bytes, take last 20). An alias of the form
+    `alias/<partner_name>-<environment>-coprocessor-keypair` is created
+    alongside the key.
 
     Cross-account: the module uses the default `aws` provider. To create the
     key in a different account from the rest of the infrastructure, pass an
     aliased provider via `providers = { aws = aws.kms_account }` when calling
-    the module. consumer_role_arns may live in any account. Alternativley,
-    simply invoke the submodule in its own terraform deployment isloated from
+    the module. consumer_role_arns may live in any account. Alternatively,
+    simply invoke the submodule in its own terraform deployment isolated from
     the other submodules.
   EOT
 

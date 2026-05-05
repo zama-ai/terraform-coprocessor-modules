@@ -91,6 +91,31 @@ module "rds" {
   rds = var.rds
 }
 
+# Pods carrying the rds-client SG (via SecurityGroupPolicy) get a branch ENI
+# that holds only that SG. To reach intra-cluster destinations they need
+# ingress allowed on the SGs of those destinations:
+#   - kube-apiserver (control plane ENIs)     -> cluster primary SG
+#   - CoreDNS / pods running on cluster nodes -> node SG
+#     (one shared node SG covers managed NGs and Karpenter nodes via the
+#      karpenter.sh/discovery tag selector on the EC2NodeClass)
+resource "aws_vpc_security_group_ingress_rule" "cluster_from_rds_client" {
+  count = var.rds.enabled && var.eks.enabled ? 1 : 0
+
+  security_group_id            = one(module.eks[*].cluster_primary_security_group_id)
+  referenced_security_group_id = module.rds.rds_client_security_group_id
+  ip_protocol                  = "-1"
+  description                  = "Allow rds-client pods to reach the EKS kube-apiserver (control plane ENIs)"
+}
+
+resource "aws_vpc_security_group_ingress_rule" "node_from_rds_client" {
+  count = var.rds.enabled && var.eks.enabled ? 1 : 0
+
+  security_group_id            = one(module.eks[*].node_security_group_id)
+  referenced_security_group_id = module.rds.rds_client_security_group_id
+  ip_protocol                  = "-1"
+  description                  = "Allow rds-client pods to reach CoreDNS and other pods running on cluster nodes"
+}
+
 # ******************************************************
 #  S3
 # ******************************************************
@@ -172,6 +197,7 @@ module "k8s_system_charts" {
   extra    = var.k8s_system_charts.extra
 
   manifests_vars = {
+    region       = var.aws_region
     cluster_name = local.eks_cluster_name
     node_role    = "${local.eks_cluster_name}-Karpenter"
   }

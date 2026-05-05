@@ -21,7 +21,7 @@ run "disabled_creates_no_resources" {
   }
 
   assert {
-    condition     = length(aws_kms_external_key.this) == 0
+    condition     = length(aws_kms_key.this) == 0
     error_message = "No KMS key must be created when kms.enabled = false."
   }
 
@@ -42,12 +42,12 @@ run "enabled_creates_key_with_alias_and_consumer_policy" {
   }
 
   assert {
-    condition     = aws_kms_external_key.this[0].key_spec == "ECC_SECG_P256K1"
+    condition     = aws_kms_key.this[0].customer_master_key_spec == "ECC_SECG_P256K1"
     error_message = "Key spec must be ECC_SECG_P256K1 (Ethereum secp256k1)."
   }
 
   assert {
-    condition     = aws_kms_external_key.this[0].key_usage == "SIGN_VERIFY"
+    condition     = aws_kms_key.this[0].key_usage == "SIGN_VERIFY"
     error_message = "Key usage must be SIGN_VERIFY."
   }
 
@@ -57,7 +57,7 @@ run "enabled_creates_key_with_alias_and_consumer_policy" {
   }
 
   assert {
-    condition     = strcontains(aws_kms_external_key.this[0].policy, "arn:aws:iam::555555555555:role/coprocessor-consumer")
+    condition     = strcontains(aws_kms_key.this[0].policy, "arn:aws:iam::555555555555:role/coprocessor-consumer")
     error_message = "Key policy must reference the supplied consumer_role_arns."
   }
 }

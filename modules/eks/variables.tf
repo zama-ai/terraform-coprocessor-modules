@@ -116,7 +116,7 @@ variable "node_groups" {
       desired_size  = optional(number, 1)
 
       # Instance
-      instance_types             = optional(list(string), ["t3.medium"])
+      instance_types             = optional(list(string), ["m6i.large"])
       ami_type                   = optional(string, "AL2023_x86_64_STANDARD")
       use_custom_launch_template = optional(bool, true)
 
@@ -155,7 +155,7 @@ variable "node_groups" {
         min_size       = 1
         max_size       = 3
         desired_size   = 1
-        instance_types = ["t3.medium"]
+        instance_types = ["m6i.large"]
         disk_size      = 30
         update_config  = { max_unavailable = 1 }
       }

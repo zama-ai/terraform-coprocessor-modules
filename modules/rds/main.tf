@@ -68,6 +68,15 @@ resource "aws_vpc_security_group_ingress_rule" "rds_server_from_extra_cidrs" {
   description       = "Allow ${var.rds.engine} traffic from break-glass CIDR ${each.value}"
 }
 
+resource "aws_vpc_security_group_egress_rule" "rds_client_allow_all" {
+  count = var.rds.enabled ? 1 : 0
+
+  security_group_id = aws_security_group.rds_client[0].id
+  cidr_ipv4         = "0.0.0.0/0"
+  ip_protocol       = "-1"
+  description       = "Allow all egress from pods carrying the rds-client SG"
+}
+
 # ***************************************
 #  RDS Instance
 # ***************************************

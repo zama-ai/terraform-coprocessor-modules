@@ -29,11 +29,19 @@ locals {
     namespace                = "coproc-admin"
     s3_bucket_access         = {}
     rds_master_secret_access = true
-    kms_key_access           = false
+    kms_key_access           = true
     iam_role_name_override   = null
-    iam_policy_statements    = []
-    labels                   = {}
-    annotations              = {}
+    iam_policy_statements = [
+      {
+        sid        = "AllowPublicS3Download"
+        effect     = "Allow"
+        actions    = ["s3:GetObject", "s3:ListBucket"]
+        resources  = ["*"]
+        conditions = []
+      }
+    ]
+    labels      = {}
+    annotations = {}
   }
 
   builtin_tx_sender_sa = {
@@ -283,21 +291,22 @@ resource "aws_iam_role_policy_attachment" "service_account" {
 # ***************************************
 #  Kubernetes ConfigMaps
 # ***************************************
-resource "kubernetes_config_map" "db_admin_secret_id" {
+resource "kubernetes_config_map" "db_admin_config" {
   count = var.k8s.enabled ? 1 : 0
 
   metadata {
-    name      = "rds-admin-secret-id"
+    name      = "db-admin-config"
     namespace = "coproc-admin"
 
     labels = merge(
       local.common_labels,
-      { "app.kubernetes.io/component" = "rds-admin-secret-id" },
+      { "app.kubernetes.io/component" = "db-admin-config" },
     )
   }
 
   data = {
     RDS_ADMIN_SECRET_ID = var.rds_master_secret_arn
+    AWS_KMS_KEY_ID      = var.kms_key_arn
   }
 
   depends_on = [kubernetes_namespace.this]
@@ -322,6 +331,26 @@ resource "kubernetes_config_map" "coprocessor_config" {
       null,
     )
     S3_BUCKET_NAME = lookup(var.s3_bucket_names, var.k8s.service_accounts.sns_worker.s3_bucket_key, null)
+  }
+
+  depends_on = [kubernetes_namespace.this]
+}
+
+resource "kubernetes_config_map" "coprocessor_tx_sender" {
+  count = var.k8s.enabled && var.k8s.service_accounts.tx_sender.enabled && var.k8s.service_accounts.tx_sender.kms_key_access ? 1 : 0
+
+  metadata {
+    name      = "coprocessor-tx-sender"
+    namespace = "gw-blockchain"
+
+    labels = merge(
+      local.common_labels,
+      { "app.kubernetes.io/component" = "coprocessor-tx-sender" },
+    )
+  }
+
+  data = {
+    AWS_KEY_ID = var.kms_key_arn
   }
 
   depends_on = [kubernetes_namespace.this]

@@ -1,11 +1,11 @@
 output "key_id" {
   description = "KMS key ID of the coprocessor keypair (null when kms.enabled = false)."
-  value       = one(aws_kms_external_key.this[*].id)
+  value       = one(aws_kms_key.this[*].id)
 }
 
 output "key_arn" {
   description = "KMS key ARN of the coprocessor keypair (null when kms.enabled = false)."
-  value       = one(aws_kms_external_key.this[*].arn)
+  value       = one(aws_kms_key.this[*].arn)
 }
 
 output "alias_name" {

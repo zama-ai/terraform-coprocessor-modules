@@ -1,9 +1,4 @@
 # ***************************************
-#  Data
-# ***************************************
-data "aws_region" "current" {}
-
-# ***************************************
 #  Locals
 # ***************************************
 locals {
@@ -363,7 +358,7 @@ locals {
               values: ["amd64"]
             - key: node.kubernetes.io/instance-type
               operator: In
-              values: ["t3.large", "t3.xlarge", "m5.large", "m5.xlarge"]
+              values: ["m5.large", "m5.xlarge", "m6i.large", "m6i.xlarge"]
       limits:
         cpu: "50"
         memory: 200Gi
@@ -782,7 +777,7 @@ resource "kubernetes_manifest" "additional" {
       "${app_key}/${name}" => yamldecode(
         replace(
           replace(
-            replace(yaml, "__region__", data.aws_region.current.id),
+            replace(yaml, "__region__", var.manifests_vars.region),
             "__cluster_name__", var.manifests_vars.cluster_name
           ),
           "__node_role__", var.manifests_vars.node_role

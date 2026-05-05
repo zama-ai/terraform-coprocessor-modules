@@ -7,16 +7,16 @@
 data "aws_caller_identity" "current" {}
 
 # ***************************************
-#  Coprocessor Ethereum keypair (imported key material)
+#  Coprocessor Ethereum keypair (KMS-generated)
 # ***************************************
-resource "aws_kms_external_key" "this" {
+resource "aws_kms_key" "this" {
   count = var.kms.enabled ? 1 : 0
 
-  description             = "Coprocessor Ethereum keypair (imported secp256k1 private key)"
-  key_usage               = "SIGN_VERIFY"
-  key_spec                = "ECC_SECG_P256K1"
-  deletion_window_in_days = var.kms.deletion_window_in_days
-  tags                    = var.kms.tags
+  description              = "Coprocessor Ethereum keypair (KMS-generated secp256k1)"
+  key_usage                = "SIGN_VERIFY"
+  customer_master_key_spec = "ECC_SECG_P256K1"
+  deletion_window_in_days  = var.kms.deletion_window_in_days
+  tags                     = var.kms.tags
 
   policy = jsonencode({
     Version = "2012-10-17"
@@ -50,8 +50,6 @@ resource "aws_kms_external_key" "this" {
             "kms:UntagResource",
             "kms:ScheduleKeyDeletion",
             "kms:CancelKeyDeletion",
-            "kms:ImportKeyMaterial",
-            "kms:DeleteImportedKeyMaterial"
           ]
           Resource = "*"
         }
@@ -67,5 +65,5 @@ resource "aws_kms_alias" "this" {
   count = var.kms.enabled ? 1 : 0
 
   name          = "alias/${var.partner_name}-${var.environment}-coprocessor-keypair"
-  target_key_id = aws_kms_external_key.this[0].id
+  target_key_id = aws_kms_key.this[0].id
 }

@@ -171,7 +171,7 @@ variable "eks" {
         desired_size  = optional(number, 1)
 
         # Instance
-        instance_types             = optional(list(string), ["t3.medium"])
+        instance_types             = optional(list(string), ["m6i.large"])
         ami_type                   = optional(string, "AL2023_x86_64_STANDARD")
         use_custom_launch_template = optional(bool, true)
 
@@ -297,10 +297,12 @@ variable "rds" {
     existing_monitoring_role_arn = optional(string, null)
 
     # Parameters
+    # NOTE: rds.force_ssl = 0 is a temporary workaround for binary issues with
+    # SSL connections; remove once resolved.
     parameters = optional(list(object({
       name  = string
       value = string
-    })), [])
+    })), [{ name = "rds.force_ssl", value = "0" }])
 
     # Security group
     additional_allowed_cidr_blocks = optional(list(string), [])

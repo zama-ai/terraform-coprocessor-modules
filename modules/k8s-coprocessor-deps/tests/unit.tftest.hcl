@@ -68,7 +68,7 @@ run "disabled_creates_no_resources" {
   }
 
   assert {
-    condition     = length(kubernetes_config_map.db_admin_secret_id) == 0
+    condition     = length(kubernetes_config_map.db_admin_config) == 0
     error_message = "No db-admin configmap must be created when k8s.enabled = false."
   }
 
@@ -734,7 +734,7 @@ run "defaults_tx_sender_sa_is_created_with_kms_access" {
   }
 }
 
-run "db_admin_secret_id_configmap_is_created" {
+run "db_admin_config_configmap_is_created" {
   command = plan
 
   variables {
@@ -754,22 +754,22 @@ run "db_admin_secret_id_configmap_is_created" {
   }
 
   assert {
-    condition     = length(kubernetes_config_map.db_admin_secret_id) == 1
+    condition     = length(kubernetes_config_map.db_admin_config) == 1
     error_message = "db-admin configmap must be created when k8s.enabled = true."
   }
 
   assert {
-    condition     = kubernetes_config_map.db_admin_secret_id[0].metadata[0].name == "rds-admin-secret-id"
-    error_message = "Configmap name must be 'rds-admin-secret-id'."
+    condition     = kubernetes_config_map.db_admin_config[0].metadata[0].name == "db-admin-config"
+    error_message = "Configmap name must be 'db-admin-config'."
   }
 
   assert {
-    condition     = kubernetes_config_map.db_admin_secret_id[0].metadata[0].namespace == "coproc-admin"
+    condition     = kubernetes_config_map.db_admin_config[0].metadata[0].namespace == "coproc-admin"
     error_message = "Configmap must be created in the coproc-admin namespace."
   }
 
   assert {
-    condition     = kubernetes_config_map.db_admin_secret_id[0].data["RDS_ADMIN_SECRET_ID"] == "arn:aws:secretsmanager:eu-west-1:123456789012:secret:rds!db-test"
+    condition     = kubernetes_config_map.db_admin_config[0].data["RDS_ADMIN_SECRET_ID"] == "arn:aws:secretsmanager:eu-west-1:123456789012:secret:rds!db-test"
     error_message = "Configmap data.RDS_ADMIN_SECRET_ID must equal the supplied rds_master_secret_arn."
   }
 }
