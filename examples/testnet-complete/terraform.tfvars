@@ -82,8 +82,8 @@ s3 = {
 
       cloudfront = {
         enabled             = true
-        acm_certificate_arn = "arn:aws:acm:us-east-1:187242616723:certificate/6596c0a6-e8e6-4796-b9a2-a8e8a507ce0d" # CHANGE ME: ACM cert ARN (must be in us-east-1)
-        aliases             = ["foo.hrvldz.com"]
+        acm_certificate_arn = ""   # CHANGE ME: ACM cert ARN (must be in us-east-1)
+        aliases             = [""] # CHANGE ME: your CloudFront custom hostname(s)
       }
     }
   }
