@@ -105,9 +105,10 @@ k8s_coprocessor_deps = {
   }
 
   service_accounts = {
-    sns_worker = { enabled = true }
-    db_admin   = { enabled = true }
-    tx_sender  = { enabled = true }
+    coprocessor = { enabled = true }
+    sns_worker  = { enabled = true }
+    db_admin    = { enabled = true }
+    tx_sender   = { enabled = true }
   }
 
   storage_classes = {

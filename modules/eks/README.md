@@ -55,7 +55,7 @@
 | <a name="output_cluster_certificate_authority_data"></a> [cluster\_certificate\_authority\_data](#output\_cluster\_certificate\_authority\_data) | Base64-encoded certificate authority data for the cluster. |
 | <a name="output_cluster_endpoint"></a> [cluster\_endpoint](#output\_cluster\_endpoint) | EKS cluster API server endpoint. |
 | <a name="output_cluster_name"></a> [cluster\_name](#output\_cluster\_name) | EKS cluster name. |
-| <a name="output_cluster_primary_security_group_id"></a> [cluster\_primary\_security\_group\_id](#output\_cluster\_primary\_security\_group\_id) | EKS-managed primary cluster security group ID. Attached to control plane ENIs. Not attached to node ENIs in v20+ of terraform-aws-modules/eks unless attach\_cluster\_primary\_security\_group = true is set on the node group (default: false). |
+| <a name="output_cluster_primary_security_group_id"></a> [cluster\_primary\_security\_group\_id](#output\_cluster\_primary\_security\_group\_id) | EKS-managed primary cluster security group ID. Attached to control plane ENIs. Not attached to node ENIs attach\_cluster\_primary\_security\_group = true is set on the node group (default: false). |
 | <a name="output_karpenter_iam_role_arn"></a> [karpenter\_iam\_role\_arn](#output\_karpenter\_iam\_role\_arn) | Karpenter controller IAM role ARN. Null when Karpenter is disabled. |
 | <a name="output_karpenter_node_iam_role_arn"></a> [karpenter\_node\_iam\_role\_arn](#output\_karpenter\_node\_iam\_role\_arn) | IAM role ARN attached to Karpenter-launched nodes. Null when Karpenter is disabled. |
 | <a name="output_karpenter_queue_name"></a> [karpenter\_queue\_name](#output\_karpenter\_queue\_name) | SQS queue name for Karpenter interruption handling. Null when Karpenter is disabled. |

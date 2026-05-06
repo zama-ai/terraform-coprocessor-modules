@@ -14,7 +14,7 @@ output "cluster_certificate_authority_data" {
 }
 
 output "cluster_primary_security_group_id" {
-  description = "EKS-managed primary cluster security group ID. Attached to control plane ENIs. Not attached to node ENIs in v20+ of terraform-aws-modules/eks unless attach_cluster_primary_security_group = true is set on the node group (default: false)."
+  description = "EKS-managed primary cluster security group ID. Attached to control plane ENIs. Not attached to node ENIs attach_cluster_primary_security_group = true is set on the node group (default: false)."
   value       = module.eks.cluster_primary_security_group_id
 }
 
