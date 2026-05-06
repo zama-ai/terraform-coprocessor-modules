@@ -164,6 +164,44 @@ run "additional_allowed_cidr_blocks_creates_extra_ingress_rules" {
 }
 
 # =============================================================================
+#  private_subnet_cidr_blocks → rds_server ingress (subnet-level fallback for
+#  instance types that don't support EKS Security Groups for Pods, e.g. hpc7a)
+# =============================================================================
+
+run "private_subnet_cidr_blocks_creates_one_ingress_rule_per_cidr" {
+  command = plan
+
+  variables {
+    private_subnet_cidr_blocks = ["10.0.0.0/20", "10.0.16.0/20", "10.0.32.0/20"]
+    rds = {
+      enabled                = true
+      db_name                = "coprocessor"
+      monitoring_interval    = 0
+      create_monitoring_role = false
+    }
+  }
+
+  assert {
+    condition     = length(aws_vpc_security_group_ingress_rule.rds_server_from_private_subnets) == 3
+    error_message = "Each private_subnet_cidr_blocks entry must produce its own ingress rule on rds_server."
+  }
+}
+
+run "private_subnet_cidr_blocks_skipped_when_disabled" {
+  command = plan
+
+  variables {
+    private_subnet_cidr_blocks = ["10.0.0.0/20", "10.0.16.0/20"]
+    rds                        = { enabled = false }
+  }
+
+  assert {
+    condition     = length(aws_vpc_security_group_ingress_rule.rds_server_from_private_subnets) == 0
+    error_message = "Private-subnet ingress rules must not be created when rds.enabled = false, even if CIDRs are supplied."
+  }
+}
+
+# =============================================================================
 #  identifier logic
 #
 # local.identifier = coalesce(

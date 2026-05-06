@@ -36,8 +36,13 @@ networking = {
   enabled = false
 
   existing_vpc = {
-    vpc_id             = "vpc-0123456789abcdef0"      # CHANGE ME
+    vpc_id = "vpc-0123456789abcdef0" # CHANGE ME
+
     private_subnet_ids = ["subnet-aaa", "subnet-bbb"] # CHANGE ME
+
+    # CIDRs of the subnets above. Added as rds_server SG ingress for instance
+    # types that don't support EKS Security Groups for Pods (e.g. hpc7a).
+    private_subnet_cidr_blocks = ["10.0.0.0/20", "10.0.16.0/20"] # CHANGE ME
   }
 }
 

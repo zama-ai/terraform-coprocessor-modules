@@ -23,12 +23,13 @@ locals {
 # ***************************************
 #  Security Groups
 #
-#  Split into two SGs to enable per-pod source attribution via EKS Security
-#  Groups for Pods (SGP):
-#    - rds_client: empty SG attached to pods (via SecurityGroupPolicy in
-#      k8s-coprocessor-deps). Acts purely as a source identifier for ingress.
-#    - rds_server: attached to the RDS instance. Allows DB-port traffic from
-#      rds_client and from any extra CIDRs in additional_allowed_cidr_blocks.
+#  - rds_client: empty SG attached to pods via SecurityGroupPolicy in
+#    k8s-coprocessor-deps. Pod-level source for the ingress below; inert on
+#    instance types that don't support EKS Security Groups for Pods (e.g.
+#    hpc7a).
+#  - rds_server: attached to the RDS instance. Ingress on the DB port from
+#    (1) rds_client, (2) private_subnet_cidr_blocks (subnet-level fallback),
+#    (3) rds.additional_allowed_cidr_blocks (break-glass).
 # ***************************************
 resource "aws_security_group" "rds_client" {
   count = var.rds.enabled ? 1 : 0
@@ -55,6 +56,17 @@ resource "aws_vpc_security_group_ingress_rule" "rds_server_from_client" {
   from_port                    = var.rds.port
   to_port                      = var.rds.port
   description                  = "Allow ${var.rds.engine} traffic from pods carrying the rds-client SG"
+}
+
+resource "aws_vpc_security_group_ingress_rule" "rds_server_from_private_subnets" {
+  for_each = var.rds.enabled ? toset(var.private_subnet_cidr_blocks) : toset([])
+
+  security_group_id = aws_security_group.rds_server[0].id
+  cidr_ipv4         = each.value
+  ip_protocol       = "tcp"
+  from_port         = var.rds.port
+  to_port           = var.rds.port
+  description       = "Allow ${var.rds.engine} traffic from private subnet ${each.value}"
 }
 
 resource "aws_vpc_security_group_ingress_rule" "rds_server_from_extra_cidrs" {

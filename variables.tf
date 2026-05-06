@@ -72,8 +72,9 @@ variable "networking" {
 
     # For usage of an existing VPC (bypasses networking module for RDS)
     existing_vpc = optional(object({
-      vpc_id             = string
-      private_subnet_ids = list(string)
+      vpc_id                     = string
+      private_subnet_ids         = list(string)
+      private_subnet_cidr_blocks = optional(list(string), [])
     }))
   })
 

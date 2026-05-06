@@ -295,6 +295,14 @@ locals {
       securityGroupSelectorTerms:
         - tags:
             karpenter.sh/discovery: __cluster_name__
+      blockDeviceMappings:
+        - deviceName: /dev/xvda
+          ebs:
+            volumeType: gp3
+            volumeSize: 100Gi
+            iops: 3000
+            throughput: 125
+            deleteOnTermination: true
       tags:
         karpenter.sh/discovery: __cluster_name__
   YAML
@@ -324,13 +332,18 @@ locals {
               values: ["amd64"]
             - key: node.kubernetes.io/instance-type
               operator: In
-              values: ["c5.xlarge", "c5.2xlarge", "c5a.xlarge", "c5a.2xlarge"]
+              values: ["hpc7a.96xlarge"]
+            - key: karpenter.k8s.aws/instance-memory
+              operator: Gt
+              values: ["4096"]
       limits:
-        cpu: "100"
-        memory: 400Gi
+        cpu: "2500"
+        memory: 8000Gi
       disruption:
         consolidationPolicy: WhenEmpty
         consolidateAfter: 30s
+        budgets:
+          - nodes: "1"
   YAML
 
   karpenter_nodepool_services = <<-YAML
@@ -358,13 +371,18 @@ locals {
               values: ["amd64"]
             - key: node.kubernetes.io/instance-type
               operator: In
-              values: ["m5.large", "m5.xlarge", "m6i.large", "m6i.xlarge"]
+              values: ["m6i.large", "m6i.xlarge"]
+            - key: karpenter.k8s.aws/instance-memory
+              operator: Gt
+              values: ["4096"]
       limits:
-        cpu: "50"
-        memory: 200Gi
+        cpu: "800"
+        memory: 1200Gi
       disruption:
         consolidationPolicy: WhenEmptyOrUnderutilized
         consolidateAfter: 1m
+        budgets:
+          - nodes: "1"
   YAML
 
   # ── Built-in application objects ─────────────────────────────────────────────

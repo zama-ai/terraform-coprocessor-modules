@@ -20,6 +20,12 @@ variable "private_subnet_ids" {
   default     = []
 }
 
+variable "private_subnet_cidr_blocks" {
+  description = "CIDR blocks of private subnets, added as rds_server SG ingress. Subnet-level fallback for instance types that don't support EKS Security Groups for Pods (e.g. hpc7a)."
+  type        = list(string)
+  default     = []
+}
+
 variable "rds" {
   description = <<-EOT
     RDS instance configuration. Set enabled = false to skip all RDS resources.

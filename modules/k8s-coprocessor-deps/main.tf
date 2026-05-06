@@ -10,6 +10,20 @@ locals {
   oidc_provider_id = replace(var.oidc_provider_arn, "/^.*oidc-provider\\//", "")
 
   # ── Built-in service accounts ──────────────────────────────────────────────
+  builtin_coprocessor_sa = {
+    name      = "coprocessor"
+    namespace = local.namespace
+    s3_bucket_access = {
+      (var.k8s.service_accounts.coprocessor.s3_bucket_key) = { actions = ["s3:*Object", "s3:ListBucket"] }
+    }
+    rds_master_secret_access = false
+    kms_key_access           = false
+    iam_role_name_override   = null
+    iam_policy_statements    = []
+    labels                   = {}
+    annotations              = {}
+  }
+
   builtin_sns_worker_sa = {
     name      = "sns-worker"
     namespace = local.namespace
@@ -73,6 +87,7 @@ locals {
 
   # ── Merged maps — extra entries with the same key override the built-in ────
   service_accounts = merge(
+    var.k8s.service_accounts.coprocessor.enabled ? { coprocessor = local.builtin_coprocessor_sa } : {},
     var.k8s.service_accounts.sns_worker.enabled ? { sns-worker = local.builtin_sns_worker_sa } : {},
     var.k8s.service_accounts.db_admin.enabled ? { db-admin = local.builtin_db_admin_sa } : {},
     var.k8s.service_accounts.tx_sender.enabled ? { tx-sender = local.builtin_tx_sender_sa } : {},

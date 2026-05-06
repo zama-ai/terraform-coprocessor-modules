@@ -229,10 +229,18 @@
         </mxCell>
 
         <!-- rds-server SG (attached to RDS instance) -->
-        <mxCell id="sg_rds_server" value="&lt;b&gt;rds-server SG&lt;/b&gt;&lt;br/&gt;attached to DB&lt;br/&gt;ingress: tcp/5432 ← rds-client"
+        <mxCell id="sg_rds_server" value="&lt;b&gt;rds-server SG&lt;/b&gt;&lt;br/&gt;attached to DB&lt;br/&gt;ingress: tcp/5432 ← rds-client&lt;br/&gt;ingress: tcp/5432 ← private subnet CIDRs"
           style="rounded=1;fillColor=#FFEBEE;strokeColor=#C62828;fontSize=10;align=center;html=1;"
           vertex="1" parent="1">
           <mxGeometry x="430" y="990" width="180" height="80" as="geometry"/>
+        </mxCell>
+
+        <!-- Private subnet CIDRs (subnet-level fallback for instance types
+             that don't support EKS Security Groups for Pods, e.g. hpc7a) -->
+        <mxCell id="rds_cidr_fallback" value="&lt;b&gt;Private subnet CIDRs&lt;/b&gt;&lt;br/&gt;subnet-level fallback&lt;br/&gt;(hpc7a etc.)"
+          style="rounded=1;fillColor=#FFEBEE;strokeColor=#C62828;dashed=1;fontSize=9;align=center;html=1;"
+          vertex="1" parent="1">
+          <mxGeometry x="640" y="1080" width="180" height="50" as="geometry"/>
         </mxCell>
 
         <!-- rds-client SG (attached to pods via SecurityGroupPolicy) -->
@@ -469,6 +477,13 @@
         <mxCell id="e_sgrdsclient_sgrdsserver" value="tcp/5432 ingress"
           style="edgeStyle=orthogonalEdgeStyle;fontSize=9;html=1;"
           edge="1" source="sg_rds_client" target="sg_rds_server" parent="1">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+
+        <!-- Private subnet CIDRs → rds-server SG (subnet-level fallback) -->
+        <mxCell id="e_cidr_sgrdsserver" value="tcp/5432 ingress"
+          style="edgeStyle=orthogonalEdgeStyle;dashed=1;fontSize=9;html=1;"
+          edge="1" source="rds_cidr_fallback" target="sg_rds_server" parent="1">
           <mxGeometry relative="1" as="geometry"/>
         </mxCell>
 

@@ -12,8 +12,9 @@ locals {
   eks_cluster_name = "${var.partner_name}-${var.environment}"
 
   # Shared networking resolution — prefer existing_vpc values when provided, fall back to networking module outputs
-  vpc_id             = coalesce(try(var.networking.existing_vpc.vpc_id, null), one(module.networking[*].vpc_id))
-  private_subnet_ids = coalesce(try(var.networking.existing_vpc.private_subnet_ids, null), one(module.networking[*].private_subnet_ids))
+  vpc_id                     = coalesce(try(var.networking.existing_vpc.vpc_id, null), one(module.networking[*].vpc_id))
+  private_subnet_ids         = coalesce(try(var.networking.existing_vpc.private_subnet_ids, null), one(module.networking[*].private_subnet_ids))
+  private_subnet_cidr_blocks = coalesce(try(var.networking.existing_vpc.private_subnet_cidr_blocks, null), one(module.networking[*].private_subnet_cidr_blocks), [])
 
   # tx-sender IRSA role ARN — computed as a string from the partner/env naming pattern
   # used by k8s-coprocessor-deps. Computing it here (not via module output) breaks the
@@ -85,8 +86,9 @@ module "rds" {
   partner_name = var.partner_name
   environment  = var.environment
 
-  vpc_id             = local.vpc_id
-  private_subnet_ids = local.private_subnet_ids
+  vpc_id                     = local.vpc_id
+  private_subnet_ids         = local.private_subnet_ids
+  private_subnet_cidr_blocks = local.private_subnet_cidr_blocks
 
   rds = var.rds
 }
@@ -131,6 +133,21 @@ module "s3" {
 # ******************************************************
 #  KMS
 # ******************************************************
+# Wait for tx-sender IAM role to propagate before KMS validates its key policy.
+resource "time_sleep" "wait_for_tx_sender_iam_propagation" {
+  count = (
+    var.kms.enabled
+    && var.k8s_coprocessor_deps.enabled
+    && var.k8s_coprocessor_deps.service_accounts.tx_sender.enabled
+  ) ? 1 : 0
+
+  create_duration = "30s"
+
+  triggers = {
+    role_arn = try(module.k8s_coprocessor_deps.iam_role_arns["tx-sender"], "")
+  }
+}
+
 module "kms" {
   source = "./modules/kms"
 
@@ -145,6 +162,8 @@ module "kms" {
       var.k8s_coprocessor_deps.enabled && var.k8s_coprocessor_deps.service_accounts.tx_sender.enabled ? [local.tx_sender_role_arn] : [],
     )
   })
+
+  depends_on = [time_sleep.wait_for_tx_sender_iam_propagation]
 }
 
 # ******************************************************
