@@ -140,9 +140,9 @@ k8s_system_charts = {
     k8s_monitoring = {
       enabled = true
 
-      prometheus_url = "https://prometheus-prod-13-prod-us-east-0.grafana.net/api/prom/push" # CHANGE ME
-      loki_url       = "https://logs-prod-006.grafana.net/loki/api/v1/push"                  # CHANGE ME
-      otlp_url       = "https://otlp-gateway-prod-us-east-0.grafana.net/otlp"                # CHANGE ME
+      prometheus_url = "" # CHANGE ME
+      loki_url       = "" # CHANGE ME
+      otlp_url       = "" # CHANGE ME
     }
   }
 }
