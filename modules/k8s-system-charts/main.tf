@@ -333,9 +333,6 @@ locals {
             - key: node.kubernetes.io/instance-type
               operator: In
               values: ["hpc7a.96xlarge"]
-            - key: karpenter.k8s.aws/instance-memory
-              operator: Gt
-              values: ["4096"]
       limits:
         cpu: "2500"
         memory: 8000Gi
@@ -372,9 +369,6 @@ locals {
             - key: node.kubernetes.io/instance-type
               operator: In
               values: ["m6i.large", "m6i.xlarge"]
-            - key: karpenter.k8s.aws/instance-memory
-              operator: Gt
-              values: ["4096"]
       limits:
         cpu: "800"
         memory: 1200Gi
