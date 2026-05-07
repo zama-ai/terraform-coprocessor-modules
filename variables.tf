@@ -462,6 +462,12 @@ variable "k8s_coprocessor_deps" {
 
     # Service accounts — built-in toggles + custom extras.
     service_accounts = optional(object({
+      # coprocessor: legacy IRSA role with S3 access (s3:*Object + s3:ListBucket).
+      coprocessor = optional(object({
+        enabled       = optional(bool, false)
+        s3_bucket_key = optional(string, "coprocessor")
+      }), {})
+
       # sns_worker: IRSA role with S3 access (s3:*Object + s3:ListBucket).
       sns_worker = optional(object({
         enabled       = optional(bool, true)
