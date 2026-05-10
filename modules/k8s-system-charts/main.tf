@@ -76,8 +76,17 @@ locals {
         pullSecrets:
           - name: registry-credentials
 
+    # Tolerate the karpenter.sh/nodepool taint so the Alloy DaemonSets schedule
+    # on Karpenter-provisioned nodes (where application pods run) and capture
+    # node-local logs/metrics. Without this, only untainted controller nodes
+    # are covered and application logs never reach Loki.
     collectors:
       alloy-metrics:
+        controller:
+          tolerations:
+            - key: karpenter.sh/nodepool
+              operator: Exists
+              effect: NoSchedule
         image:
           registry: hub.zama.org
           repository: zama-protocol/zama.ai/grafana-alloy
@@ -85,6 +94,11 @@ locals {
           pullSecrets:
             - name: registry-credentials
       alloy-logs:
+        controller:
+          tolerations:
+            - key: karpenter.sh/nodepool
+              operator: Exists
+              effect: NoSchedule
         presets:
           - filesystem-log-reader
         image:
@@ -94,6 +108,11 @@ locals {
           pullSecrets:
             - name: registry-credentials
       alloy-receiver:
+        controller:
+          tolerations:
+            - key: karpenter.sh/nodepool
+              operator: Exists
+              effect: NoSchedule
         image:
           registry: hub.zama.org
           repository: zama-protocol/zama.ai/grafana-alloy
