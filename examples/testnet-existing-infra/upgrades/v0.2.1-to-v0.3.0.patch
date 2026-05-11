@@ -1,0 +1,114 @@
+diff --git a/main.tf b/main.tf
+index ac2a251..cb56f61 100644
+--- a/main.tf
++++ b/main.tf
+@@ -10,6 +10,7 @@ module "coprocessor" {
+   eks                  = var.eks
+   rds                  = var.rds
+   s3                   = var.s3
++  kms                  = var.kms
+   k8s_coprocessor_deps = var.k8s_coprocessor_deps
+   kubernetes_provider  = var.kubernetes_provider
+ }
+diff --git a/outputs.tf b/outputs.tf
+index b579e39..6e921b3 100644
+--- a/outputs.tf
++++ b/outputs.tf
+@@ -74,3 +74,26 @@ output "s3_bucket_arns" {
+   description = "Map of logical bucket key to bucket ARN."
+   value       = module.coprocessor.s3_bucket_arns
+ }
++
++# ******************************************************
++#  KMS
++# ******************************************************
++output "kms_key_id" {
++  description = "KMS key ID of the coprocessor keypair."
++  value       = module.coprocessor.kms_key_id
++}
++
++output "kms_key_arn" {
++  description = "KMS key ARN of the coprocessor keypair."
++  value       = module.coprocessor.kms_key_arn
++}
++
++output "kms_alias_name" {
++  description = "KMS alias name for the coprocessor keypair."
++  value       = module.coprocessor.kms_alias_name
++}
++
++output "kms_alias_arn" {
++  description = "KMS alias ARN for the coprocessor keypair."
++  value       = module.coprocessor.kms_alias_arn
++}
+diff --git a/terraform.tfvars b/terraform.tfvars
+index 7c0ee06..7e97861 100644
+--- a/terraform.tfvars
++++ b/terraform.tfvars
+@@ -36,9 +36,13 @@ networking = {
+   enabled = false
+
+   existing_vpc = {
+-    vpc_id                     = "vpc-0123456789abcdef0"        # CHANGE ME
+-    private_subnet_ids         = ["subnet-aaa", "subnet-bbb"]   # CHANGE ME
+-    private_subnet_cidr_blocks = ["10.0.1.0/24", "10.0.2.0/24"] # CHANGE ME
++    vpc_id = "vpc-0123456789abcdef0" # CHANGE ME
++
++    private_subnet_ids = ["subnet-aaa", "subnet-bbb"] # CHANGE ME
++
++    # CIDRs of the subnets above. Added as rds_server SG ingress for instance
++    # types that don't support EKS Security Groups for Pods (e.g. hpc7a).
++    private_subnet_cidr_blocks = ["10.0.0.0/20", "10.0.16.0/20"] # CHANGE ME
+   }
+ }
+
+@@ -95,17 +99,24 @@ k8s_coprocessor_deps = {
+     coproc-admin   = { enabled = true }
+     gw-blockchain  = { enabled = true }
+     eth-blockchain = { enabled = true }
++    monitoring     = { enabled = true }
+   }
+
+   service_accounts = {
+     coprocessor = { enabled = true }
++    sns_worker  = { enabled = true }
+     db_admin    = { enabled = true }
++    tx_sender   = { enabled = true }
+   }
+
+   storage_classes = {
+     gp3 = { enabled = true }
+   }
+
++  security_group_policies = {
++    rds_client = { enabled = true }
++  }
++
+   external_name_services = {
+     coprocessor-database = {
+       # endpoint omitted — injected automatically from the rds submodule
+@@ -126,6 +137,7 @@ k8s_coprocessor_deps = {
+ #    - k8s-monitoring                  (requires grafana-cloud-credentials secret in monitoring namespace)
+ #    - prometheus-rds-exporter         (IRSA role created above via db-admin service account)
+ #    - prometheus-postgres-exporter    (requires postgres-exporter-config secret in monitoring namespace)
++#    - coprocessor-sql-exporter        (requires sql-exporter-config secret in monitoring namespace)
+ #
+ #  To adopt these releases into Terraform management, set k8s_charts.enabled = true
+ #  and add the relevant application entries (see testnet-complete for reference).
+diff --git a/variables.tf b/variables.tf
+index 6259aef..56617e6 100644
+--- a/variables.tf
++++ b/variables.tf
+@@ -46,6 +46,12 @@ variable "s3" {
+   default     = { buckets = {} }
+ }
+
++variable "kms" {
++  description = "KMS coprocessor keypair configuration. See root module variables.tf for full schema."
++  type        = any
++  default     = { enabled = false }
++}
++
+ variable "k8s_coprocessor_deps" {
+   description = "Kubernetes coprocessor resource configuration. See root module variables.tf for full schema."
+   type        = any
