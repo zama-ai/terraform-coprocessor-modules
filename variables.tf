@@ -606,6 +606,14 @@ variable "k8s_system_charts" {
         image_tag  = optional(string, "v0.19.1")
         values     = optional(string, "")
       }), {})
+      coprocessor_sql_exporter = optional(object({
+        enabled    = optional(bool, false)
+        repository = optional(string, "oci://hub.zama.org/zama-protocol/zama.ai")
+        chart      = optional(string, "fhevm-sql-exporter")
+        version    = optional(string, "2.0.0")
+        image_tag  = optional(string, "0.23.0")
+        values     = optional(string, "")
+      }), {})
     }), {})
 
     # Additional custom applications. An entry with the same key as a built-in overrides it.

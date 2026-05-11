@@ -44,6 +44,7 @@ variable "defaults" {
       - k8s_monitoring:               Grafana k8s-monitoring (requires values with destination URLs)
       - prometheus_rds_exporter:      Prometheus RDS exporter (IRSA + Helm chart)
       - prometheus_postgres_exporter: Prometheus Postgres exporter
+      - coprocessor_sql_exporter:     Coprocessor SQL exporter (fhevm-sql-exporter wrapper around burningalchemist/sql_exporter)
   EOT
   type = object({
     karpenter_nodepools = optional(object({
@@ -99,6 +100,14 @@ variable "defaults" {
       chart      = optional(string, "prometheus-postgres-exporter")
       version    = optional(string, "7.3.0")
       image_tag  = optional(string, "v0.19.1")
+      values     = optional(string, "")
+    }), {})
+    coprocessor_sql_exporter = optional(object({
+      enabled    = optional(bool, false)
+      repository = optional(string, "oci://hub.zama.org/zama-protocol/zama.ai")
+      chart      = optional(string, "fhevm-sql-exporter")
+      version    = optional(string, "2.0.0")
+      image_tag  = optional(string, "0.23.0")
       values     = optional(string, "")
     }), {})
   })

@@ -137,6 +137,7 @@ k8s_coprocessor_deps = {
 #    - k8s-monitoring                  (requires grafana-cloud-credentials secret in monitoring namespace)
 #    - prometheus-rds-exporter         (IRSA role created above via db-admin service account)
 #    - prometheus-postgres-exporter    (requires postgres-exporter-config secret in monitoring namespace)
+#    - coprocessor-sql-exporter        (requires sql-exporter-config secret in monitoring namespace)
 #
 #  To adopt these releases into Terraform management, set k8s_charts.enabled = true
 #  and add the relevant application entries (see testnet-complete for reference).

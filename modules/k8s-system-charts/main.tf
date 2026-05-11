@@ -247,6 +247,29 @@ locals {
       collect-usages: true
   YAML
 
+  coprocessor_sql_exporter_base_values = <<-YAML
+    sql-exporter:
+      image:
+        repository: hub.zama.org/zama-protocol/zama.ai/sql_exporter
+        tag: "${var.defaults.coprocessor_sql_exporter.image_tag}"
+      imagePullSecrets:
+        - name: registry-credentials
+
+      # Opts the pod into the SecurityGroupPolicy that attaches the rds-client
+      # AWS security group, allowing it to reach RDS. Created in the monitoring
+      # namespace by k8s-coprocessor-deps.
+      podLabels:
+        network/rds-client: "true"
+
+      serviceMonitor:
+        enabled: true
+        interval: 30s
+        relabelings:
+          - action: replace
+            targetLabel: network
+            replacement: __network__
+  YAML
+
   prometheus_postgres_exporter_base_values = <<-YAML
     replicaCount: 1
 
@@ -529,6 +552,26 @@ locals {
     }
   }
 
+  builtin_coprocessor_sql_exporter = {
+    namespace            = { name = "monitoring", create = false }
+    service_account      = null
+    irsa                 = { enabled = false, role_name = null, policy_statements = [] }
+    additional_manifests = { enabled = false, manifests = {} }
+    helm_chart = {
+      enabled          = true
+      repository       = var.defaults.coprocessor_sql_exporter.repository
+      chart            = var.defaults.coprocessor_sql_exporter.chart
+      version          = var.defaults.coprocessor_sql_exporter.version
+      crd_chart        = false
+      atomic           = true
+      create_namespace = false
+      wait             = true
+      timeout          = 300
+      set              = {}
+      values           = ""
+    }
+  }
+
   builtin_prometheus_postgres_exporter = {
     namespace            = { name = "monitoring", create = false }
     service_account      = null
@@ -559,6 +602,7 @@ locals {
     var.defaults.k8s_monitoring.enabled ? { k8s-monitoring = local.builtin_k8s_monitoring } : {},
     var.defaults.prometheus_rds_exporter.enabled ? { prometheus-rds-exporter = local.builtin_prometheus_rds_exporter } : {},
     var.defaults.prometheus_postgres_exporter.enabled ? { prometheus-postgres-exporter = local.builtin_prometheus_postgres_exporter } : {},
+    var.defaults.coprocessor_sql_exporter.enabled ? { coprocessor-sql-exporter = local.builtin_coprocessor_sql_exporter } : {},
     var.extra,
   )
 
@@ -610,6 +654,10 @@ locals {
     "prometheus-postgres-exporter" = compact([
       local.prometheus_postgres_exporter_base_values,
       var.defaults.prometheus_postgres_exporter.values,
+    ])
+    "coprocessor-sql-exporter" = compact([
+      local.coprocessor_sql_exporter_base_values,
+      var.defaults.coprocessor_sql_exporter.values,
     ])
   }
 

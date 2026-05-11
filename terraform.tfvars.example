@@ -1052,6 +1052,21 @@ k8s_system_charts = {
       image_tag  = "v0.19.1"
       values     = ""
     }
+
+    # Coprocessor SQL exporter (fhevm-sql-exporter — wraps burningalchemist/sql_exporter
+    # with coprocessor-specific Postgres queries).
+    # Prerequisite — create this secret before applying (see secrets-bootstrap.sh):
+    #   sql-exporter-config in the monitoring namespace, key DATA_SOURCE_NAME =
+    #     postgresql://sql_exporter:<password>@<rds-host>:5432/coprocessor?sslmode=require
+    # Default: { enabled = false, repository = "oci://hub.zama.org/zama-protocol/zama.ai", chart = "fhevm-sql-exporter", version = "2.0.0", image_tag = "0.23.0", values = "" }
+    coprocessor_sql_exporter = {
+      enabled    = false
+      repository = "oci://hub.zama.org/zama-protocol/zama.ai"
+      chart      = "fhevm-sql-exporter"
+      version    = "2.0.0"
+      image_tag  = "0.23.0"
+      values     = ""
+    }
   }
 
   # ── Custom applications ───────────────────────────────────────────────────

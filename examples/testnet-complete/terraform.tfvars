@@ -137,6 +137,7 @@ k8s_system_charts = {
     karpenter                    = { enabled = true }
     prometheus_rds_exporter      = { enabled = true }
     prometheus_postgres_exporter = { enabled = true }
+    coprocessor_sql_exporter     = { enabled = false }
 
     k8s_monitoring = {
       enabled = true
