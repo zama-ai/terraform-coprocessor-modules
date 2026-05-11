@@ -36,9 +36,13 @@ networking = {
   enabled = false
 
   existing_vpc = {
-    vpc_id                     = "vpc-0123456789abcdef0"        # CHANGE ME
-    private_subnet_ids         = ["subnet-aaa", "subnet-bbb"]   # CHANGE ME
-    private_subnet_cidr_blocks = ["10.0.1.0/24", "10.0.2.0/24"] # CHANGE ME
+    vpc_id = "vpc-0123456789abcdef0" # CHANGE ME
+
+    private_subnet_ids = ["subnet-aaa", "subnet-bbb"] # CHANGE ME
+
+    # CIDRs of the subnets above. Added as rds_server SG ingress for instance
+    # types that don't support EKS Security Groups for Pods (e.g. hpc7a).
+    private_subnet_cidr_blocks = ["10.0.0.0/20", "10.0.16.0/20"] # CHANGE ME
   }
 }
 
@@ -95,15 +99,22 @@ k8s_coprocessor_deps = {
     coproc-admin   = { enabled = true }
     gw-blockchain  = { enabled = true }
     eth-blockchain = { enabled = true }
+    monitoring     = { enabled = true }
   }
 
   service_accounts = {
     coprocessor = { enabled = true }
+    sns_worker  = { enabled = true }
     db_admin    = { enabled = true }
+    tx_sender   = { enabled = true }
   }
 
   storage_classes = {
     gp3 = { enabled = true }
+  }
+
+  security_group_policies = {
+    rds_client = { enabled = true }
   }
 
   external_name_services = {
@@ -126,6 +137,7 @@ k8s_coprocessor_deps = {
 #    - k8s-monitoring                  (requires grafana-cloud-credentials secret in monitoring namespace)
 #    - prometheus-rds-exporter         (IRSA role created above via db-admin service account)
 #    - prometheus-postgres-exporter    (requires postgres-exporter-config secret in monitoring namespace)
+#    - coprocessor-sql-exporter        (requires sql-exporter-config secret in monitoring namespace)
 #
 #  To adopt these releases into Terraform management, set k8s_charts.enabled = true
 #  and add the relevant application entries (see testnet-complete for reference).

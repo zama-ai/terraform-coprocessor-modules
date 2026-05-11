@@ -21,7 +21,7 @@ variable "private_subnet_ids" {
 }
 
 variable "private_subnet_cidr_blocks" {
-  description = "CIDR blocks of private subnets, merged into RDS security group ingress."
+  description = "CIDR blocks of private subnets, added as rds_server SG ingress. Subnet-level fallback for instance types that don't support EKS Security Groups for Pods (e.g. hpc7a)."
   type        = list(string)
   default     = []
 }
@@ -70,12 +70,17 @@ variable "rds" {
     existing_monitoring_role_arn = optional(string, null)
 
     # Parameters
+    # NOTE: rds.force_ssl = 0 is a temporary workaround for binary issues with
+    # SSL connections; remove once resolved.
     parameters = optional(list(object({
       name  = string
       value = string
-    })), [])
+    })), [{ name = "rds.force_ssl", value = "0" }])
 
     # Security group
+    # Break-glass CIDR ingress on the RDS server SG. Pod-originated traffic
+    # should rely on the rds_client SG attached via SecurityGroupPolicy; only
+    # use this for one-off bastion / migration access.
     additional_allowed_cidr_blocks = optional(list(string), [])
   })
 

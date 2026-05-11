@@ -21,8 +21,9 @@ variable "set_computed" {
 }
 
 variable "manifests_vars" {
-  description = "Computed values injected into additional_manifests YAML by the root module. Supported placeholders: __region__ (always substituted), __cluster_name__, __node_role__."
+  description = "Computed values injected into additional_manifests YAML by the root module. Supported placeholders: __region__, __cluster_name__, __node_role__."
   type = object({
+    region       = optional(string, "")
     cluster_name = optional(string, "")
     node_role    = optional(string, "")
   })
@@ -43,6 +44,7 @@ variable "defaults" {
       - k8s_monitoring:               Grafana k8s-monitoring (requires values with destination URLs)
       - prometheus_rds_exporter:      Prometheus RDS exporter (IRSA + Helm chart)
       - prometheus_postgres_exporter: Prometheus Postgres exporter
+      - coprocessor_sql_exporter:     Coprocessor SQL exporter (fhevm-sql-exporter wrapper around burningalchemist/sql_exporter)
   EOT
   type = object({
     karpenter_nodepools = optional(object({
@@ -66,7 +68,7 @@ variable "defaults" {
       enabled              = optional(bool, true)
       repository           = optional(string, "oci://public.ecr.aws/karpenter")
       chart                = optional(string, "karpenter")
-      version              = optional(string, "1.8.2")
+      version              = optional(string, "1.11.0")
       controller_image_tag = optional(string, "v1.11.0")
       # Appended on top of baked-in defaults — use to override specific fields.
       values = optional(string, "")
@@ -98,6 +100,14 @@ variable "defaults" {
       chart      = optional(string, "prometheus-postgres-exporter")
       version    = optional(string, "7.3.0")
       image_tag  = optional(string, "v0.19.1")
+      values     = optional(string, "")
+    }), {})
+    coprocessor_sql_exporter = optional(object({
+      enabled    = optional(bool, false)
+      repository = optional(string, "oci://hub.zama.org/zama-protocol/zama.ai")
+      chart      = optional(string, "fhevm-sql-exporter")
+      version    = optional(string, "2.0.0")
+      image_tag  = optional(string, "0.23.0")
       values     = optional(string, "")
     }), {})
   })

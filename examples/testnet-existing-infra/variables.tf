@@ -46,6 +46,12 @@ variable "s3" {
   default     = { buckets = {} }
 }
 
+variable "kms" {
+  description = "KMS coprocessor keypair configuration. See root module variables.tf for full schema."
+  type        = any
+  default     = { enabled = false }
+}
+
 variable "k8s_coprocessor_deps" {
   description = "Kubernetes coprocessor resource configuration. See root module variables.tf for full schema."
   type        = any

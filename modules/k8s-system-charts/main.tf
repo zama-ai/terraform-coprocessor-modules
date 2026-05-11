@@ -1,9 +1,4 @@
 # ***************************************
-#  Data
-# ***************************************
-data "aws_region" "current" {}
-
-# ***************************************
 #  Locals
 # ***************************************
 locals {
@@ -81,8 +76,17 @@ locals {
         pullSecrets:
           - name: registry-credentials
 
+    # Tolerate the karpenter.sh/nodepool taint so the Alloy DaemonSets schedule
+    # on Karpenter-provisioned nodes (where application pods run) and capture
+    # node-local logs/metrics. Without this, only untainted controller nodes
+    # are covered and application logs never reach Loki.
     collectors:
       alloy-metrics:
+        controller:
+          tolerations:
+            - key: karpenter.sh/nodepool
+              operator: Exists
+              effect: NoSchedule
         image:
           registry: hub.zama.org
           repository: zama-protocol/zama.ai/grafana-alloy
@@ -90,6 +94,11 @@ locals {
           pullSecrets:
             - name: registry-credentials
       alloy-logs:
+        controller:
+          tolerations:
+            - key: karpenter.sh/nodepool
+              operator: Exists
+              effect: NoSchedule
         presets:
           - filesystem-log-reader
         image:
@@ -99,6 +108,11 @@ locals {
           pullSecrets:
             - name: registry-credentials
       alloy-receiver:
+        controller:
+          tolerations:
+            - key: karpenter.sh/nodepool
+              operator: Exists
+              effect: NoSchedule
         image:
           registry: hub.zama.org
           repository: zama-protocol/zama.ai/grafana-alloy
@@ -233,6 +247,29 @@ locals {
       collect-usages: true
   YAML
 
+  coprocessor_sql_exporter_base_values = <<-YAML
+    sql-exporter:
+      image:
+        repository: hub.zama.org/zama-protocol/zama.ai/sql_exporter
+        tag: "${var.defaults.coprocessor_sql_exporter.image_tag}"
+      imagePullSecrets:
+        - name: registry-credentials
+
+      # Opts the pod into the SecurityGroupPolicy that attaches the rds-client
+      # AWS security group, allowing it to reach RDS. Created in the monitoring
+      # namespace by k8s-coprocessor-deps.
+      podLabels:
+        network/rds-client: "true"
+
+      serviceMonitor:
+        enabled: true
+        interval: 30s
+        relabelings:
+          - action: replace
+            targetLabel: network
+            replacement: __network__
+  YAML
+
   prometheus_postgres_exporter_base_values = <<-YAML
     replicaCount: 1
 
@@ -244,6 +281,12 @@ locals {
       tag: ${var.defaults.prometheus_postgres_exporter.image_tag}
       pullSecrets:
         - registry-credentials
+
+    # Opts the pod into the SecurityGroupPolicy that attaches the rds-client
+    # AWS security group, allowing it to reach RDS. Created in the monitoring
+    # namespace by k8s-coprocessor-deps.
+    podLabels:
+      network/rds-client: "true"
 
     serviceAccount:
       create: true
@@ -294,6 +337,14 @@ locals {
       securityGroupSelectorTerms:
         - tags:
             karpenter.sh/discovery: __cluster_name__
+      blockDeviceMappings:
+        - deviceName: /dev/xvda
+          ebs:
+            volumeType: gp3
+            volumeSize: 100Gi
+            iops: 3000
+            throughput: 125
+            deleteOnTermination: true
       tags:
         karpenter.sh/discovery: __cluster_name__
   YAML
@@ -323,13 +374,15 @@ locals {
               values: ["amd64"]
             - key: node.kubernetes.io/instance-type
               operator: In
-              values: ["c5.xlarge", "c5.2xlarge", "c5a.xlarge", "c5a.2xlarge"]
+              values: ["hpc7a.96xlarge"]
       limits:
-        cpu: "100"
-        memory: 400Gi
+        cpu: "2500"
+        memory: 8000Gi
       disruption:
         consolidationPolicy: WhenEmpty
         consolidateAfter: 30s
+        budgets:
+          - nodes: "1"
   YAML
 
   karpenter_nodepool_services = <<-YAML
@@ -357,13 +410,15 @@ locals {
               values: ["amd64"]
             - key: node.kubernetes.io/instance-type
               operator: In
-              values: ["t3.large", "t3.xlarge", "m5.large", "m5.xlarge"]
+              values: ["m6i.large", "m6i.xlarge"]
       limits:
-        cpu: "50"
-        memory: 200Gi
+        cpu: "800"
+        memory: 1200Gi
       disruption:
         consolidationPolicy: WhenEmptyOrUnderutilized
         consolidateAfter: 1m
+        budgets:
+          - nodes: "1"
   YAML
 
   # ── Built-in application objects ─────────────────────────────────────────────
@@ -497,6 +552,26 @@ locals {
     }
   }
 
+  builtin_coprocessor_sql_exporter = {
+    namespace            = { name = "monitoring", create = false }
+    service_account      = null
+    irsa                 = { enabled = false, role_name = null, policy_statements = [] }
+    additional_manifests = { enabled = false, manifests = {} }
+    helm_chart = {
+      enabled          = true
+      repository       = var.defaults.coprocessor_sql_exporter.repository
+      chart            = var.defaults.coprocessor_sql_exporter.chart
+      version          = var.defaults.coprocessor_sql_exporter.version
+      crd_chart        = false
+      atomic           = true
+      create_namespace = false
+      wait             = true
+      timeout          = 300
+      set              = {}
+      values           = ""
+    }
+  }
+
   builtin_prometheus_postgres_exporter = {
     namespace            = { name = "monitoring", create = false }
     service_account      = null
@@ -527,6 +602,7 @@ locals {
     var.defaults.k8s_monitoring.enabled ? { k8s-monitoring = local.builtin_k8s_monitoring } : {},
     var.defaults.prometheus_rds_exporter.enabled ? { prometheus-rds-exporter = local.builtin_prometheus_rds_exporter } : {},
     var.defaults.prometheus_postgres_exporter.enabled ? { prometheus-postgres-exporter = local.builtin_prometheus_postgres_exporter } : {},
+    var.defaults.coprocessor_sql_exporter.enabled ? { coprocessor-sql-exporter = local.builtin_coprocessor_sql_exporter } : {},
     var.extra,
   )
 
@@ -578,6 +654,10 @@ locals {
     "prometheus-postgres-exporter" = compact([
       local.prometheus_postgres_exporter_base_values,
       var.defaults.prometheus_postgres_exporter.values,
+    ])
+    "coprocessor-sql-exporter" = compact([
+      local.coprocessor_sql_exporter_base_values,
+      var.defaults.coprocessor_sql_exporter.values,
     ])
   }
 
@@ -776,7 +856,7 @@ resource "kubernetes_manifest" "additional" {
       "${app_key}/${name}" => yamldecode(
         replace(
           replace(
-            replace(yaml, "__region__", data.aws_region.current.id),
+            replace(yaml, "__region__", var.manifests_vars.region),
             "__cluster_name__", var.manifests_vars.cluster_name
           ),
           "__node_role__", var.manifests_vars.node_role

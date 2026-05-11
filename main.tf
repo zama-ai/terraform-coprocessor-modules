@@ -1,4 +1,10 @@
 # ******************************************************
+#  Data sources
+# ******************************************************
+data "aws_caller_identity" "current" {}
+data "aws_partition" "current" {}
+
+# ******************************************************
 #  Locals
 # ******************************************************
 locals {
@@ -8,7 +14,13 @@ locals {
   # Shared networking resolution — prefer existing_vpc values when provided, fall back to networking module outputs
   vpc_id                     = coalesce(try(var.networking.existing_vpc.vpc_id, null), one(module.networking[*].vpc_id))
   private_subnet_ids         = coalesce(try(var.networking.existing_vpc.private_subnet_ids, null), one(module.networking[*].private_subnet_ids))
-  private_subnet_cidr_blocks = coalesce(try(var.networking.existing_vpc.private_subnet_cidr_blocks, null), one(module.networking[*].private_subnet_cidr_blocks))
+  private_subnet_cidr_blocks = coalesce(try(var.networking.existing_vpc.private_subnet_cidr_blocks, null), one(module.networking[*].private_subnet_cidr_blocks), [])
+
+  # tx-sender IRSA role ARN — computed as a string from the partner/env naming pattern
+  # used by k8s-coprocessor-deps. Computing it here (not via module output) breaks the
+  # otherwise-circular dependency between kms (consumer_role_arns) and k8s-coprocessor-deps
+  # (kms_key_arn → tx-sender IAM policy).
+  tx_sender_role_arn = "arn:${data.aws_partition.current.partition}:iam::${data.aws_caller_identity.current.account_id}:role/tx-sender-${var.partner_name}-${var.environment}"
 
   # Additional subnets have no existing_vpc equivalent — only available when networking module ran and additional subnets were enabled
   additional_subnet_ids = var.networking.enabled && var.networking.additional_subnets.enabled ? module.networking[0].additional_subnet_ids : []
@@ -81,6 +93,31 @@ module "rds" {
   rds = var.rds
 }
 
+# Pods carrying the rds-client SG (via SecurityGroupPolicy) get a branch ENI
+# that holds only that SG. To reach intra-cluster destinations they need
+# ingress allowed on the SGs of those destinations:
+#   - kube-apiserver (control plane ENIs)     -> cluster primary SG
+#   - CoreDNS / pods running on cluster nodes -> node SG
+#     (one shared node SG covers managed NGs and Karpenter nodes via the
+#      karpenter.sh/discovery tag selector on the EC2NodeClass)
+resource "aws_vpc_security_group_ingress_rule" "cluster_from_rds_client" {
+  count = var.rds.enabled && var.eks.enabled ? 1 : 0
+
+  security_group_id            = one(module.eks[*].cluster_primary_security_group_id)
+  referenced_security_group_id = module.rds.rds_client_security_group_id
+  ip_protocol                  = "-1"
+  description                  = "Allow rds-client pods to reach the EKS kube-apiserver (control plane ENIs)"
+}
+
+resource "aws_vpc_security_group_ingress_rule" "node_from_rds_client" {
+  count = var.rds.enabled && var.eks.enabled ? 1 : 0
+
+  security_group_id            = one(module.eks[*].node_security_group_id)
+  referenced_security_group_id = module.rds.rds_client_security_group_id
+  ip_protocol                  = "-1"
+  description                  = "Allow rds-client pods to reach CoreDNS and other pods running on cluster nodes"
+}
+
 # ******************************************************
 #  S3
 # ******************************************************
@@ -91,6 +128,42 @@ module "s3" {
   environment  = var.environment
 
   buckets = var.s3.buckets
+}
+
+# ******************************************************
+#  KMS
+# ******************************************************
+# Wait for tx-sender IAM role to propagate before KMS validates its key policy.
+resource "time_sleep" "wait_for_tx_sender_iam_propagation" {
+  count = (
+    var.kms.enabled
+    && var.k8s_coprocessor_deps.enabled
+    && var.k8s_coprocessor_deps.service_accounts.tx_sender.enabled
+  ) ? 1 : 0
+
+  create_duration = "30s"
+
+  triggers = {
+    role_arn = try(module.k8s_coprocessor_deps.iam_role_arns["tx-sender"], "")
+  }
+}
+
+module "kms" {
+  source = "./modules/kms"
+
+  partner_name = var.partner_name
+  environment  = var.environment
+
+  # Auto-append the tx-sender IRSA role ARN when the corresponding service account is enabled,
+  # so the KMS key policy grants Sign/Verify to the role created by k8s-coprocessor-deps.
+  kms = merge(var.kms, {
+    consumer_role_arns = concat(
+      var.kms.consumer_role_arns,
+      var.k8s_coprocessor_deps.enabled && var.k8s_coprocessor_deps.service_accounts.tx_sender.enabled ? [local.tx_sender_role_arn] : [],
+    )
+  })
+
+  depends_on = [time_sleep.wait_for_tx_sender_iam_propagation]
 }
 
 # ******************************************************
@@ -110,8 +183,11 @@ module "k8s_coprocessor_deps" {
     : ""
   )
 
-  rds_master_secret_arn = module.rds.rds_master_secret_arn
-  s3_bucket_arns        = module.s3.bucket_arns
+  rds_master_secret_arn        = module.rds.rds_master_secret_arn
+  rds_client_security_group_id = module.rds.rds_client_security_group_id
+  s3_bucket_arns               = module.s3.bucket_arns
+  s3_bucket_names              = module.s3.bucket_names
+  kms_key_arn                  = module.kms.key_arn
 
   k8s = local.k8s_config
 
@@ -140,6 +216,7 @@ module "k8s_system_charts" {
   extra    = var.k8s_system_charts.extra
 
   manifests_vars = {
+    region       = var.aws_region
     cluster_name = local.eks_cluster_name
     node_role    = "${local.eks_cluster_name}-Karpenter"
   }

@@ -47,7 +47,7 @@ eks = {
   node_groups = {
     groups = {
       default = {
-        instance_types = ["t3.large"]
+        instance_types = ["m6i.large"]
       }
     }
   }
@@ -106,11 +106,17 @@ k8s_coprocessor_deps = {
 
   service_accounts = {
     coprocessor = { enabled = true }
+    sns_worker  = { enabled = true }
     db_admin    = { enabled = true }
+    tx_sender   = { enabled = true }
   }
 
   storage_classes = {
     gp3 = { enabled = true }
+  }
+
+  security_group_policies = {
+    rds_client = { enabled = true }
   }
 
   external_name_services = {
@@ -122,15 +128,16 @@ k8s_coprocessor_deps = {
 #  k8s System Charts
 # =============================================================================
 k8s_system_charts = {
-  enabled = false # CHANGE ME: refer to operator documentation regarding order of deployments
+  enabled = true # CHANGE ME: refer to operator documentation regarding order of deployments
 
   defaults = {
-    karpenter_nodepools          = { enabled = false } # CHANGE ME: refer to operator documentation regarding order of deployments
+    karpenter_nodepools          = { enabled = true } # CHANGE ME: refer to operator documentation regarding order of deployments
     prometheus_operator_crds     = { enabled = true }
     metrics_server               = { enabled = true }
     karpenter                    = { enabled = true }
     prometheus_rds_exporter      = { enabled = true }
     prometheus_postgres_exporter = { enabled = true }
+    coprocessor_sql_exporter     = { enabled = false }
 
     k8s_monitoring = {
       enabled = true
@@ -140,4 +147,11 @@ k8s_system_charts = {
       otlp_url       = "" # CHANGE ME
     }
   }
+}
+
+# =============================================================================
+#  KMS
+# =============================================================================
+kms = {
+  enabled = true
 }

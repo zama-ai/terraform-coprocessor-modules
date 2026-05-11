@@ -74,7 +74,7 @@ variable "networking" {
     existing_vpc = optional(object({
       vpc_id                     = string
       private_subnet_ids         = list(string)
-      private_subnet_cidr_blocks = list(string)
+      private_subnet_cidr_blocks = optional(list(string), [])
     }))
   })
 
@@ -91,10 +91,9 @@ variable "networking" {
   validation {
     condition = var.networking.enabled || (
       var.networking.existing_vpc != null &&
-      length(var.networking.existing_vpc.private_subnet_ids) > 0 &&
-      length(var.networking.existing_vpc.private_subnet_cidr_blocks) > 0
+      length(var.networking.existing_vpc.private_subnet_ids) > 0
     )
-    error_message = "networking.existing_vpc with non-empty private_subnet_ids and private_subnet_cidr_blocks is required when networking.enabled = false."
+    error_message = "networking.existing_vpc with non-empty private_subnet_ids is required when networking.enabled = false."
   }
 }
 
@@ -173,7 +172,7 @@ variable "eks" {
         desired_size  = optional(number, 1)
 
         # Instance
-        instance_types             = optional(list(string), ["t3.medium"])
+        instance_types             = optional(list(string), ["m6i.large"])
         ami_type                   = optional(string, "AL2023_x86_64_STANDARD")
         use_custom_launch_template = optional(bool, true)
 
@@ -299,10 +298,12 @@ variable "rds" {
     existing_monitoring_role_arn = optional(string, null)
 
     # Parameters
+    # NOTE: rds.force_ssl = 0 is a temporary workaround for binary issues with
+    # SSL connections; remove once resolved.
     parameters = optional(list(object({
       name  = string
       value = string
-    })), [])
+    })), [{ name = "rds.force_ssl", value = "0" }])
 
     # Security group
     additional_allowed_cidr_blocks = optional(list(string), [])
@@ -416,6 +417,33 @@ variable "s3" {
 }
 
 # ******************************************************
+#  KMS
+# ******************************************************
+variable "kms" {
+  description = <<-EOT
+    Coprocessor KMS keypair configuration.
+
+    Creates an asymmetric AWS KMS key (ECC_SECG_P256K1, SIGN_VERIFY) with
+    EXTERNAL origin so an Ethereum secp256k1 private key can be imported,
+    plus an alias `alias/<partner_name>-<environment>-coprocessor-keypair`.
+
+    Cross-account deployments are handled out-of-band: invoke the kms
+    submodule directly with an AWS provider configured for the target
+    account. The root module always creates the key in the same account
+    as the rest of the infrastructure.
+  EOT
+
+  type = object({
+    enabled                 = optional(bool, false)
+    consumer_role_arns      = optional(list(string), [])
+    deletion_window_in_days = optional(number, 30)
+    tags                    = optional(map(string), {})
+  })
+
+  default = { enabled = false }
+}
+
+# ******************************************************
 #  k8s Coprocessor Dependencies
 # ******************************************************
 variable "k8s_coprocessor_deps" {
@@ -434,8 +462,14 @@ variable "k8s_coprocessor_deps" {
 
     # Service accounts — built-in toggles + custom extras.
     service_accounts = optional(object({
-      # coprocessor: IRSA role with S3 access (s3:*Object + s3:ListBucket).
+      # coprocessor: legacy IRSA role with S3 access (s3:*Object + s3:ListBucket).
       coprocessor = optional(object({
+        enabled       = optional(bool, false)
+        s3_bucket_key = optional(string, "coprocessor")
+      }), {})
+
+      # sns_worker: IRSA role with S3 access (s3:*Object + s3:ListBucket).
+      sns_worker = optional(object({
         enabled       = optional(bool, true)
         s3_bucket_key = optional(string, "coprocessor")
       }), {})
@@ -443,6 +477,13 @@ variable "k8s_coprocessor_deps" {
       # db_admin: IRSA role with RDS master secret (GetSecretValue + DescribeSecret).
       db_admin = optional(object({
         enabled = optional(bool, true)
+      }), {})
+
+      # tx_sender: IRSA role with KMS Sign/Verify on the coprocessor keypair.
+      # Set kms_key_access = false to omit the KMS policy (e.g. when the key lives in another account).
+      tx_sender = optional(object({
+        enabled        = optional(bool, true)
+        kms_key_access = optional(bool, true)
       }), {})
 
       # Additional service accounts. An entry with the same key as a built-in overrides it.
@@ -454,6 +495,7 @@ variable "k8s_coprocessor_deps" {
           actions = list(string)
         })), {})
         rds_master_secret_access = optional(bool, false)
+        kms_key_access           = optional(bool, false)
         iam_policy_statements = optional(list(object({
           sid       = optional(string, "")
           effect    = string
@@ -562,6 +604,14 @@ variable "k8s_system_charts" {
         chart      = optional(string, "prometheus-postgres-exporter")
         version    = optional(string, "7.3.0")
         image_tag  = optional(string, "v0.19.1")
+        values     = optional(string, "")
+      }), {})
+      coprocessor_sql_exporter = optional(object({
+        enabled    = optional(bool, false)
+        repository = optional(string, "oci://hub.zama.org/zama-protocol/zama.ai")
+        chart      = optional(string, "fhevm-sql-exporter")
+        version    = optional(string, "2.0.0")
+        image_tag  = optional(string, "0.23.0")
         values     = optional(string, "")
       }), {})
     }), {})

@@ -114,9 +114,13 @@ networking = {
   # Required when enabled = false. Used by RDS and EKS in place of module outputs.
   # Can technically coexist with the vpc block above but only one path is active.
   existing_vpc = {
-    vpc_id                     = "vpc-0123456789abcdef0"
-    private_subnet_ids         = ["subnet-aaa", "subnet-bbb", "subnet-ccc"]
-    private_subnet_cidr_blocks = ["10.0.1.0/24", "10.0.2.0/24", "10.0.3.0/24"]
+    vpc_id             = "vpc-0123456789abcdef0"
+    private_subnet_ids = ["subnet-aaa", "subnet-bbb", "subnet-ccc"]
+
+    # CIDRs of the subnets above. Added as rds_server SG ingress for instance
+    # types that don't support EKS Security Groups for Pods (e.g. hpc7a).
+    # Default: []
+    private_subnet_cidr_blocks = ["10.0.0.0/20", "10.0.16.0/20", "10.0.32.0/20"]
   }
 }
 
@@ -260,7 +264,7 @@ eks = {
 
         # EC2 instance types. First type is preferred; AWS selects from the list for SPOT.
         # Default: ["t3.medium"]
-        instance_types = ["t3.large"]
+        instance_types = ["m6i.large"]
 
         # EKS-optimised AMI family.
         # Default: "AL2023_x86_64_STANDARD"
@@ -685,6 +689,45 @@ s3 = {
 
 
 # ==============================================================================
+#  KMS
+#
+#  Asymmetric KMS keypair (ECC_SECG_P256K1, SIGN_VERIFY) with EXTERNAL origin
+#  so an Ethereum secp256k1 private key can be imported. Plus an alias of the
+#  form alias/<partner>-<environment>-coprocessor-keypair.
+#
+#  Cross-account deployments are handled out-of-band by invoking the kms
+#  submodule directly with an AWS provider configured for the target account.
+#  The root module always creates the key in the same account as the rest of
+#  the infrastructure.
+#
+#  Default: { enabled = false }
+# ==============================================================================
+kms = {
+  # Default: false
+  enabled = true
+
+  # IAM principal ARNs allowed to Sign/Verify/DescribeKey/GetPublicKey on the key.
+  # May reference roles in any account. The root module automatically appends the
+  # tx-sender IRSA role ARN when k8s_coprocessor_deps.service_accounts.tx_sender.enabled
+  # is true, so this list only needs additional out-of-band consumers.
+  # Default: []
+  consumer_role_arns = [
+    "arn:aws:iam::123456789012:role/external-signer",
+  ]
+
+  # KMS deletion window in days (7-30).
+  # Default: 30
+  deletion_window_in_days = 30
+
+  # Tags applied to the key.
+  # Default: {}
+  tags = {
+    Purpose = "coprocessor-keypair"
+  }
+}
+
+
+# ==============================================================================
 #  k8s Coprocessor Dependencies
 #
 #  Kubernetes-native resources: namespaces, service accounts (with IRSA),
@@ -730,18 +773,30 @@ k8s_coprocessor_deps = {
   # ── Service Accounts ─────────────────────────────────────────────────────────
   service_accounts = {
     # Toggle built-in service accounts on/off.
-    # coprocessor: IRSA role with S3 access (GetObject, PutObject, DeleteObject, ListBucket).
+    # coprocessor: IRSA role with S3 access (s3:*Object + s3:ListBucket).
+    # sns_worker:  IRSA role with S3 access (GetObject, PutObject, DeleteObject, ListBucket).
     # db_admin:    IRSA role with RDS master secret (GetSecretValue + DescribeSecret).
+    # tx_sender:   IRSA role with KMS Sign/Verify on the coprocessor keypair.
     coprocessor = { enabled = true }
+    sns_worker  = { enabled = true }
     db_admin    = { enabled = true }
+
+    # tx_sender — set kms_key_access = false when the KMS key lives in a different
+    # account (deployed via the standalone kms submodule out-of-band). When false,
+    # no KMS IAM statement is generated; the role still exists and trust policies
+    # against the local OIDC provider remain intact.
+    tx_sender = {
+      enabled        = true
+      kms_key_access = true  # Default: true
+    }
 
     # Additional service accounts beyond the built-ins. An entry with the same
     # key as a built-in overrides it entirely.
     # Default: {}
     extra = {
-      sns-worker = {
+      custom-worker = {
         # Required. Kubernetes service account name.
-        name = "sns-worker"
+        name = "custom-worker"
 
         # Namespace override. Defaults to k8s_coprocessor_deps.default_namespace when null.
         # Default: null
@@ -758,6 +813,11 @@ k8s_coprocessor_deps = {
         # Grant GetSecretValue + DescribeSecret on the RDS master Secrets Manager secret.
         # Default: false
         rds_master_secret_access = false
+
+        # Grant Sign/Verify/DescribeKey/GetPublicKey on the coprocessor KMS keypair.
+        # Requires kms.enabled = true (or otherwise non-null module.kms.key_arn).
+        # Default: false
+        kms_key_access = false
 
         # Arbitrary additional IAM policy statements appended to the generated role.
         # Default: []
@@ -817,6 +877,47 @@ k8s_coprocessor_deps = {
         # Default: {}
         labels = {}
       }
+    }
+  }
+
+  # ── SecurityGroupPolicy (EKS Security Groups for Pods) ────────────────────────
+  # Attaches AWS security groups to selected pods via the
+  # vpcresources.k8s.aws/v1beta1.SecurityGroupPolicy CRD. Pods opt in by
+  # carrying the configured label on their pod template.
+  #
+  # Trade-offs:
+  #   - Each labeled pod consumes a branch ENI on its node (limit varies by
+  #     instance type; m5.large = 9, m5.xlarge = 18).
+  #   - Pods must schedule on trunk-ENI-capable nodes; t3.small/medium do not
+  #     qualify and labeled pods landing there will fail to obtain an ENI.
+  # Default: {}
+  security_group_policies = {
+    # Built-in: attaches the rds-client SG (created by the rds module) to any
+    # pod that carries the configured label. One SecurityGroupPolicy is created
+    # per listed namespace.
+    # Default: { enabled = true, namespaces = ["coproc-admin", "coproc", "gw-blockchain", "eth-blockchain", "monitoring"], pod_label_key = "network/rds-client", pod_label_value = "true" }
+    rds_client = {
+      enabled = true
+      namespaces = [
+        "coproc-admin",
+        "coproc",
+        "gw-blockchain",
+        "eth-blockchain",
+        "monitoring",
+      ]
+      pod_label_key   = "network/rds-client"
+      pod_label_value = "true"
+    }
+
+    # Custom SecurityGroupPolicy resources beyond the built-in. Map key becomes
+    # the SecurityGroupPolicy resource name.
+    # Default: {}
+    extra = {
+      # redis-client = {
+      #   namespace          = "coproc"
+      #   pod_selector       = { "network/redis-client" = "true" }
+      #   security_group_ids = ["sg-0123456789abcdef0"]
+      # }
     }
   }
 
@@ -949,6 +1050,21 @@ k8s_system_charts = {
       chart      = "prometheus-postgres-exporter"
       version    = "7.3.0"
       image_tag  = "v0.19.1"
+      values     = ""
+    }
+
+    # Coprocessor SQL exporter (fhevm-sql-exporter — wraps burningalchemist/sql_exporter
+    # with coprocessor-specific Postgres queries).
+    # Prerequisite — create this secret before applying (see secrets-bootstrap.sh):
+    #   sql-exporter-config in the monitoring namespace, key DATA_SOURCE_NAME =
+    #     postgresql://sql_exporter:<password>@<rds-host>:5432/coprocessor?sslmode=require
+    # Default: { enabled = false, repository = "oci://hub.zama.org/zama-protocol/zama.ai", chart = "fhevm-sql-exporter", version = "2.0.0", image_tag = "0.23.0", values = "" }
+    coprocessor_sql_exporter = {
+      enabled    = false
+      repository = "oci://hub.zama.org/zama-protocol/zama.ai"
+      chart      = "fhevm-sql-exporter"
+      version    = "2.0.0"
+      image_tag  = "0.23.0"
       values     = ""
     }
   }

@@ -74,3 +74,26 @@ output "s3_bucket_arns" {
   description = "Map of logical bucket key to bucket ARN."
   value       = module.coprocessor.s3_bucket_arns
 }
+
+# ******************************************************
+#  KMS
+# ******************************************************
+output "kms_key_id" {
+  description = "KMS key ID of the coprocessor keypair."
+  value       = module.coprocessor.kms_key_id
+}
+
+output "kms_key_arn" {
+  description = "KMS key ARN of the coprocessor keypair."
+  value       = module.coprocessor.kms_key_arn
+}
+
+output "kms_alias_name" {
+  description = "KMS alias name for the coprocessor keypair."
+  value       = module.coprocessor.kms_alias_name
+}
+
+output "kms_alias_arn" {
+  description = "KMS alias ARN for the coprocessor keypair."
+  value       = module.coprocessor.kms_alias_arn
+}

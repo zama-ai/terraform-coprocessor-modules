@@ -101,6 +101,10 @@ module "eks" {
 
   addons = local.merged_addons
 
+  iam_role_additional_policies = {
+    AmazonEKSVPCResourceController = "arn:aws:iam::aws:policy/AmazonEKSVPCResourceController"
+  }
+
   eks_managed_node_groups = {
     for key, config in local.all_node_groups : key => merge(
       var.node_groups.defaults,

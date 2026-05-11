@@ -28,9 +28,14 @@ output "db_instance_name" {
   value       = var.rds.enabled ? module.rds_instance[0].db_instance_name : null
 }
 
-output "security_group_id" {
-  description = "The ID of the RDS security group."
-  value       = var.rds.enabled ? module.rds_security_group[0].security_group_id : null
+output "rds_client_security_group_id" {
+  description = "ID of the rds-client SG attached to pods (via SecurityGroupPolicy) that need DB access."
+  value       = var.rds.enabled ? aws_security_group.rds_client[0].id : null
+}
+
+output "rds_server_security_group_id" {
+  description = "ID of the rds-server SG attached to the RDS instance."
+  value       = var.rds.enabled ? aws_security_group.rds_server[0].id : null
 }
 
 output "rds_master_secret_arn" {

@@ -13,6 +13,16 @@ output "cluster_certificate_authority_data" {
   value       = module.eks.cluster_certificate_authority_data
 }
 
+output "cluster_primary_security_group_id" {
+  description = "EKS-managed primary cluster security group ID. Attached to control plane ENIs. Not attached to node ENIs attach_cluster_primary_security_group = true is set on the node group (default: false)."
+  value       = module.eks.cluster_primary_security_group_id
+}
+
+output "node_security_group_id" {
+  description = "Dedicated security group attached to managed node group ENIs and inherited by Karpenter-launched nodes via the karpenter.sh/discovery tag selector on the EC2NodeClass."
+  value       = module.eks.node_security_group_id
+}
+
 output "oidc_provider_arn" {
   description = "ARN of the OIDC provider for IRSA."
   value       = module.eks.oidc_provider_arn
