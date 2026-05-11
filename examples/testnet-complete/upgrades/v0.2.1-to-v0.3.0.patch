@@ -1,0 +1,123 @@
+diff --git a/main.tf b/main.tf
+index 14f3704..7999764 100644
+--- a/main.tf
++++ b/main.tf
+@@ -10,6 +10,7 @@ module "coprocessor" {
+   eks                  = var.eks
+   rds                  = var.rds
+   s3                   = var.s3
++  kms                  = var.kms
+   k8s_coprocessor_deps = var.k8s_coprocessor_deps
+   k8s_system_charts    = var.k8s_system_charts
+ }
+diff --git a/outputs.tf b/outputs.tf
+index f7ace6b..ee78318 100644
+--- a/outputs.tf
++++ b/outputs.tf
+@@ -79,3 +79,26 @@ output "s3_cloudfront_domain_names" {
+   description = "Map of logical bucket key to CloudFront distribution hostname (e.g. d1234abcd.cloudfront.net)."
+   value       = module.coprocessor.s3_cloudfront_domain_names
+ }
++
++# ******************************************************
++#  KMS
++# ******************************************************
++output "kms_key_id" {
++  description = "KMS key ID of the coprocessor keypair."
++  value       = module.coprocessor.kms_key_id
++}
++
++output "kms_key_arn" {
++  description = "KMS key ARN of the coprocessor keypair."
++  value       = module.coprocessor.kms_key_arn
++}
++
++output "kms_alias_name" {
++  description = "KMS alias name for the coprocessor keypair."
++  value       = module.coprocessor.kms_alias_name
++}
++
++output "kms_alias_arn" {
++  description = "KMS alias ARN for the coprocessor keypair."
++  value       = module.coprocessor.kms_alias_arn
++}
+diff --git a/terraform.tfvars b/terraform.tfvars
+index bdc048f..f87fc4e 100644
+--- a/terraform.tfvars
++++ b/terraform.tfvars
+@@ -47,7 +47,7 @@ eks = {
+   node_groups = {
+     groups = {
+       default = {
+-        instance_types = ["t3.large"]
++        instance_types = ["m6i.large"]
+       }
+     }
+   }
+@@ -106,13 +106,19 @@ k8s_coprocessor_deps = {
+
+   service_accounts = {
+     coprocessor = { enabled = true }
++    sns_worker  = { enabled = true }
+     db_admin    = { enabled = true }
++    tx_sender   = { enabled = true }
+   }
+
+   storage_classes = {
+     gp3 = { enabled = true }
+   }
+
++  security_group_policies = {
++    rds_client = { enabled = true }
++  }
++
+   external_name_services = {
+     coprocessor-database = { enabled = true }
+   }
+@@ -122,15 +128,16 @@ k8s_coprocessor_deps = {
+ #  k8s System Charts
+ # =============================================================================
+ k8s_system_charts = {
+-  enabled = false # CHANGE ME: refer to operator documentation regarding order of deployments
++  enabled = true # CHANGE ME: refer to operator documentation regarding order of deployments
+
+   defaults = {
+-    karpenter_nodepools          = { enabled = false } # CHANGE ME: refer to operator documentation regarding order of deployments
++    karpenter_nodepools          = { enabled = true } # CHANGE ME: refer to operator documentation regarding order of deployments
+     prometheus_operator_crds     = { enabled = true }
+     metrics_server               = { enabled = true }
+     karpenter                    = { enabled = true }
+     prometheus_rds_exporter      = { enabled = true }
+     prometheus_postgres_exporter = { enabled = true }
++    coprocessor_sql_exporter     = { enabled = true }
+
+     k8s_monitoring = {
+       enabled = true
+@@ -141,3 +148,10 @@ k8s_system_charts = {
+     }
+   }
+ }
++
++# =============================================================================
++#  KMS
++# =============================================================================
++kms = {
++  enabled = true
++}
+diff --git a/variables.tf b/variables.tf
+index 4a6e698..d882173 100644
+--- a/variables.tf
++++ b/variables.tf
+@@ -46,6 +46,12 @@ variable "s3" {
+   default     = { buckets = {} }
+ }
+
++variable "kms" {
++  description = "KMS coprocessor keypair configuration. See root module variables.tf for full schema."
++  type        = any
++  default     = { enabled = false }
++}
++
+ variable "k8s_coprocessor_deps" {
+   description = "Kubernetes coprocessor resource configuration. See root module variables.tf for full schema."
+   type        = any
