@@ -164,10 +164,14 @@ module "karpenter" {
   iam_policy_name               = "${module.eks.cluster_name}-KarpenterController"
   iam_role_name                 = "${module.eks.cluster_name}-KarpenterController"
   node_iam_role_name            = "${module.eks.cluster_name}-Karpenter"
-  namespace                     = var.karpenter.namespace
-  service_account               = var.karpenter.service_account
-  queue_name                    = local.karpenter_queue_name
-  rule_name_prefix              = local.karpenter_rule_name_prefix
+  # Workaround for upstream IAM policy size limit (6144 chars). See
+  # terraform-aws-modules/terraform-aws-eks#3692. Inline policies allow 10,240
+  # chars. Can be removed once upstream issue #3637 splits the controller policy.
+  enable_inline_policy = true
+  namespace            = var.karpenter.namespace
+  service_account      = var.karpenter.service_account
+  queue_name           = local.karpenter_queue_name
+  rule_name_prefix     = local.karpenter_rule_name_prefix
 
   node_iam_role_additional_policies = merge(
     var.node_groups.default_iam_policies,
