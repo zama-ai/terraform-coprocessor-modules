@@ -23,6 +23,7 @@
 | Name | Source | Version |
 |------|--------|---------|
 | <a name="module_iam_assumable_role_coprocessor"></a> [iam\_assumable\_role\_coprocessor](#module\_iam\_assumable\_role\_coprocessor) | terraform-aws-modules/iam/aws//modules/iam-assumable-role-with-oidc | 5.48.0 |
+| <a name="module_iam_assumable_role_tx_sender"></a> [iam\_assumable\_role\_tx\_sender](#module\_iam\_assumable\_role\_tx\_sender) | terraform-aws-modules/iam/aws//modules/iam-assumable-role-with-oidc | 5.48.0 |
 | <a name="module_rds_instance"></a> [rds\_instance](#module\_rds\_instance) | terraform-aws-modules/rds/aws | ~> 6.10 |
 | <a name="module_rds_security_group"></a> [rds\_security\_group](#module\_rds\_security\_group) | terraform-aws-modules/security-group/aws | ~> 5.3.0 |
 
@@ -31,6 +32,7 @@
 | Name | Type |
 |------|------|
 | [aws_iam_policy.coprocessor_aws](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/iam_policy) | resource |
+| [aws_iam_policy.tx_sender](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/iam_policy) | resource |
 | [aws_s3_bucket.coprocessor_bucket](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/s3_bucket) | resource |
 | [aws_s3_bucket_cors_configuration.coprocessor_bucket_cors](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/s3_bucket_cors_configuration) | resource |
 | [aws_s3_bucket_ownership_controls.coprocessor_bucket](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/s3_bucket_ownership_controls) | resource |
@@ -40,6 +42,7 @@
 | [kubernetes_namespace.coprocessor_namespace](https://registry.terraform.io/providers/hashicorp/kubernetes/latest/docs/resources/namespace) | resource |
 | [kubernetes_service.externalname](https://registry.terraform.io/providers/hashicorp/kubernetes/latest/docs/resources/service) | resource |
 | [kubernetes_service_account.coprocessor_service_account](https://registry.terraform.io/providers/hashicorp/kubernetes/latest/docs/resources/service_account) | resource |
+| [kubernetes_service_account.tx_sender](https://registry.terraform.io/providers/hashicorp/kubernetes/latest/docs/resources/service_account) | resource |
 | [random_id.coprocessor_suffix](https://registry.terraform.io/providers/hashicorp/random/latest/docs/resources/id) | resource |
 | [aws_eks_cluster.cluster](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/eks_cluster) | data source |
 | [aws_subnet.cluster_subnets](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/subnet) | data source |
@@ -54,6 +57,7 @@
 | <a name="input_create_coprocessor_namespace"></a> [create\_coprocessor\_namespace](#input\_create\_coprocessor\_namespace) | Whether to create the Kubernetes namespace | `bool` | `true` | no |
 | <a name="input_create_service_account"></a> [create\_service\_account](#input\_create\_service\_account) | Whether to create the Kubernetes service account (should be false when using IRSA as IRSA creates it) | `bool` | `true` | no |
 | <a name="input_enable_rds"></a> [enable\_rds](#input\_enable\_rds) | Whether to create the RDS instance | `bool` | `true` | no |
+| <a name="input_enable_tx_sender_irsa"></a> [enable\_tx\_sender\_irsa](#input\_enable\_tx\_sender\_irsa) | Whether to create the tx-sender IRSA role + ServiceAccount that signs with a cross-account KMS key | `bool` | `false` | no |
 | <a name="input_k8s_coprocessor_namespace"></a> [k8s\_coprocessor\_namespace](#input\_k8s\_coprocessor\_namespace) | The Kubernetes namespace for coprocessor resources | `string` | `"coprocessor"` | no |
 | <a name="input_k8s_coprocessor_service_account_name"></a> [k8s\_coprocessor\_service\_account\_name](#input\_k8s\_coprocessor\_service\_account\_name) | The name of the Kubernetes service account for Coprocessor party | `string` | n/a | yes |
 | <a name="input_namespace_annotations"></a> [namespace\_annotations](#input\_namespace\_annotations) | Additional annotations to apply to the namespace | `map(string)` | `{}` | no |
@@ -90,6 +94,11 @@
 | <a name="input_service_account_annotations"></a> [service\_account\_annotations](#input\_service\_account\_annotations) | Additional annotations to apply to the service account (excluding IRSA annotations which are handled automatically) | `map(string)` | `{}` | no |
 | <a name="input_service_account_labels"></a> [service\_account\_labels](#input\_service\_account\_labels) | Additional labels to apply to the service account | `map(string)` | `{}` | no |
 | <a name="input_tags"></a> [tags](#input\_tags) | A map of tags to assign to the resource | `map(string)` | <pre>{<br/>  "module": "coprocessor-infra",<br/>  "terraform": "true"<br/>}</pre> | no |
+| <a name="input_tx_sender_create_service_account"></a> [tx\_sender\_create\_service\_account](#input\_tx\_sender\_create\_service\_account) | Whether this module should create the tx-sender ServiceAccount (false if it is managed elsewhere) | `bool` | `true` | no |
+| <a name="input_tx_sender_kms_key_arn"></a> [tx\_sender\_kms\_key\_arn](#input\_tx\_sender\_kms\_key\_arn) | ARN of the cross-account KMS key the tx-sender role is granted Sign/Verify on. Required when enable\_tx\_sender\_irsa is true. | `string` | `null` | no |
+| <a name="input_tx_sender_namespace"></a> [tx\_sender\_namespace](#input\_tx\_sender\_namespace) | Kubernetes namespace of the tx-sender ServiceAccount | `string` | `"gw-blockchain"` | no |
+| <a name="input_tx_sender_role_name"></a> [tx\_sender\_role\_name](#input\_tx\_sender\_role\_name) | Name of the IAM role for tx-sender. Must match the principal authorized in the cross-account KMS key policy. | `string` | `"tx-sender-coprocessor"` | no |
+| <a name="input_tx_sender_service_account_name"></a> [tx\_sender\_service\_account\_name](#input\_tx\_sender\_service\_account\_name) | Name of the tx-sender Kubernetes ServiceAccount | `string` | `"tx-sender"` | no |
 
 ## Outputs
 
@@ -98,4 +107,5 @@
 | <a name="output_coprocessor_bucket_storage_summary"></a> [coprocessor\_bucket\_storage\_summary](#output\_coprocessor\_bucket\_storage\_summary) | Summary of the coprocessor bucket storage |
 | <a name="output_k8s_coprocessor_service_account_summary"></a> [k8s\_coprocessor\_service\_account\_summary](#output\_k8s\_coprocessor\_service\_account\_summary) | Summary of the Kubernetes service account for Coprocessor party |
 | <a name="output_rds_summary"></a> [rds\_summary](#output\_rds\_summary) | Aggregated RDS database information |
+| <a name="output_tx_sender_irsa_summary"></a> [tx\_sender\_irsa\_summary](#output\_tx\_sender\_irsa\_summary) | Summary of the tx-sender IRSA role and ServiceAccount |
 <!-- END_TF_DOCS -->

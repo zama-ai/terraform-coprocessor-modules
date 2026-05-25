@@ -83,6 +83,45 @@ variable "coprocessor_role_name" {
 }
 
 # ******************************************************
+# tx-sender cross-account IRSA
+# ******************************************************
+variable "enable_tx_sender_irsa" {
+  type        = bool
+  description = "Whether to create the tx-sender IRSA role + ServiceAccount that signs with a cross-account KMS key"
+  default     = false
+}
+
+variable "tx_sender_kms_key_arn" {
+  type        = string
+  description = "ARN of the cross-account KMS key the tx-sender role is granted Sign/Verify on. Required when enable_tx_sender_irsa is true."
+  default     = null
+}
+
+variable "tx_sender_role_name" {
+  type        = string
+  description = "Name of the IAM role for tx-sender. Must match the principal authorized in the cross-account KMS key policy."
+  default     = "tx-sender-coprocessor"
+}
+
+variable "tx_sender_namespace" {
+  type        = string
+  description = "Kubernetes namespace of the tx-sender ServiceAccount"
+  default     = "gw-blockchain"
+}
+
+variable "tx_sender_service_account_name" {
+  type        = string
+  description = "Name of the tx-sender Kubernetes ServiceAccount"
+  default     = "tx-sender"
+}
+
+variable "tx_sender_create_service_account" {
+  type        = bool
+  description = "Whether this module should create the tx-sender ServiceAccount (false if it is managed elsewhere)"
+  default     = true
+}
+
+# ******************************************************
 # S3 bucket
 # ******************************************************
 variable "bucket_prefix" {
