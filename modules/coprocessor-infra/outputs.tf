@@ -20,6 +20,18 @@ output "k8s_coprocessor_service_account_summary" {
   }
 }
 
+# tx-sender IRSA Information
+output "tx_sender_irsa_summary" {
+  description = "Summary of the tx-sender IRSA role and ServiceAccount"
+  value = var.enable_tx_sender_irsa ? {
+    role_name                 = module.iam_assumable_role_tx_sender[0].iam_role_name
+    role_arn                  = module.iam_assumable_role_tx_sender[0].iam_role_arn
+    service_account_name      = var.tx_sender_service_account_name
+    service_account_namespace = var.tx_sender_namespace
+    service_account_created   = var.tx_sender_create_service_account
+  } : null
+}
+
 # RDS Information
 output "rds_summary" {
   description = "Aggregated RDS database information"
