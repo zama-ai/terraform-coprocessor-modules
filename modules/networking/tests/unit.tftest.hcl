@@ -288,3 +288,30 @@ run "az_auto_detection_capped_at_three" {
     error_message = "AZ auto-detection must be capped at 3 even when more AZs are available."
   }
 }
+
+# =============================================================================
+#  Additional-subnet AZ override — decouple new AZs from the VPC's main AZ set
+# =============================================================================
+
+run "additional_subnets_az_override_creates_one_subnet_in_listed_az" {
+  command = plan
+
+  variables {
+    additional_subnets = {
+      enabled                                   = true
+      cidr_mask                                 = 22
+      availability_zones_for_additional_subnets = ["eu-west-1c"]
+      expose_for_eks                            = true
+    }
+  }
+
+  assert {
+    condition     = length(aws_subnet.additional) == 1
+    error_message = "AZ override must produce exactly one additional subnet for a single-AZ override list."
+  }
+
+  assert {
+    condition     = aws_subnet.additional[0].availability_zone == "eu-west-1c"
+    error_message = "Additional subnet must be placed in the override-listed AZ, not the VPC's main AZs."
+  }
+}

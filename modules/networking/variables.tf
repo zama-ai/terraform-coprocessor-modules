@@ -33,6 +33,12 @@ variable "additional_subnets" {
     enabled   = optional(bool, false)
     cidr_mask = optional(number, 22)
 
+    # AZs to place additional subnets in. Defaults to vpc.availability_zones.
+    # Set to a subset (e.g. ["eu-west-1c"]) to add VPC presence in new AZs
+    # without touching the EKS cluster's vpc_config (AWS does not allow
+    # changing the AZ set of an existing cluster).
+    availability_zones_for_additional_subnets = optional(list(string), null)
+
     # EKS integration
     expose_for_eks = optional(bool, false)  # add karpenter.sh/discovery tag
     elb_role       = optional(string, null) # "internal" | "public" | null
