@@ -32,8 +32,13 @@ locals {
     cidrsubnet(var.vpc.cidr, local.public_newbits, local.public_start_index + key)
   ]
 
+  # AZs for additional subnets — defaults to local.availability_zones, but can
+  # be narrowed (e.g. ["eu-west-1c"]) when adding VPC presence in new AZs that
+  # the EKS cluster cannot accept into its vpc_config.
+  additional_azs = var.additional_subnets.availability_zones_for_additional_subnets != null ? var.additional_subnets.availability_zones_for_additional_subnets : local.availability_zones
+
   additional_subnet_cidrs = var.additional_subnets.enabled ? [
-    for key, value in local.availability_zones :
+    for key, value in local.additional_azs :
     cidrsubnet(var.vpc.cidr, local.additional_newbits, local.additional_start_index + key)
   ] : []
 
@@ -91,14 +96,14 @@ module "vpc" {
 #  Additional Subnets
 # ***************************************
 resource "aws_subnet" "additional" {
-  count = var.additional_subnets.enabled ? length(local.availability_zones) : 0
+  count = var.additional_subnets.enabled ? length(local.additional_azs) : 0
 
   vpc_id            = module.vpc.vpc_id
-  availability_zone = local.availability_zones[count.index]
+  availability_zone = local.additional_azs[count.index]
   cidr_block        = local.additional_subnet_cidrs[count.index]
 
   tags = merge(
-    { Name = "${var.partner_name}-${var.environment}-additional-${local.availability_zones[count.index]}" },
+    { Name = "${var.partner_name}-${var.environment}-additional-${local.additional_azs[count.index]}" },
     var.additional_subnets.tags,
     local.additional_eks_tags,
     local.additional_elb_tags
