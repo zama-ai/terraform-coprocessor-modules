@@ -23,7 +23,13 @@ locals {
   tx_sender_role_arn = "arn:${data.aws_partition.current.partition}:iam::${data.aws_caller_identity.current.account_id}:role/tx-sender-${var.partner_name}-${var.environment}"
 
   # Additional subnets have no existing_vpc equivalent — only available when networking module ran and additional subnets were enabled
-  additional_subnet_ids = var.networking.enabled && var.networking.additional_subnets.enabled ? module.networking[0].additional_subnet_ids : []
+  additional_subnet_ids         = var.networking.enabled && var.networking.additional_subnets.enabled ? module.networking[0].additional_subnet_ids : []
+  additional_subnet_cidr_blocks = var.networking.enabled && var.networking.additional_subnets.enabled ? module.networking[0].additional_subnet_cidr_blocks : []
+
+  # Additional subnets are the permanent RDS path for instance types that can't use EKS
+  # Security Groups for Pods (e.g. hpc7a coprocessor-pool), so their CIDRs must reach the
+  # rds_server SG ingress alongside the standard private subnet CIDRs.
+  rds_private_subnet_cidr_blocks = concat(local.private_subnet_cidr_blocks, local.additional_subnet_cidr_blocks)
 
   # ExternalName service endpoints — explicit tfvars value takes precedence, otherwise resolved from module outputs
   module_endpoints = {
@@ -88,7 +94,7 @@ module "rds" {
 
   vpc_id                     = local.vpc_id
   private_subnet_ids         = local.private_subnet_ids
-  private_subnet_cidr_blocks = local.private_subnet_cidr_blocks
+  private_subnet_cidr_blocks = local.rds_private_subnet_cidr_blocks
 
   rds = var.rds
 }
