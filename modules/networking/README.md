@@ -41,6 +41,7 @@
 
 | Name | Description |
 |------|-------------|
+| <a name="output_additional_subnet_cidr_blocks"></a> [additional\_subnet\_cidr\_blocks](#output\_additional\_subnet\_cidr\_blocks) | CIDR blocks of additional subnets (empty list when not enabled). |
 | <a name="output_additional_subnet_ids"></a> [additional\_subnet\_ids](#output\_additional\_subnet\_ids) | List of additional subnet IDs (empty list when not enabled). |
 | <a name="output_private_subnet_cidr_blocks"></a> [private\_subnet\_cidr\_blocks](#output\_private\_subnet\_cidr\_blocks) | CIDR blocks of private subnets. |
 | <a name="output_private_subnet_ids"></a> [private\_subnet\_ids](#output\_private\_subnet\_ids) | List of private subnet IDs. |

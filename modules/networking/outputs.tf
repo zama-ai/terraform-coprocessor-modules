@@ -17,3 +17,8 @@ output "additional_subnet_ids" {
   description = "List of additional subnet IDs (empty list when not enabled)."
   value       = aws_subnet.additional[*].id
 }
+
+output "additional_subnet_cidr_blocks" {
+  description = "CIDR blocks of additional subnets (empty list when not enabled)."
+  value       = aws_subnet.additional[*].cidr_block
+}
