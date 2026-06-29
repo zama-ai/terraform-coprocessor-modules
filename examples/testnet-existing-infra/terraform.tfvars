@@ -95,11 +95,12 @@ k8s_coprocessor_deps = {
   default_namespace = "coproc"
 
   namespaces = {
-    coproc         = { enabled = true }
-    coproc-admin   = { enabled = true }
-    gw-blockchain  = { enabled = true }
-    eth-blockchain = { enabled = true }
-    monitoring     = { enabled = true }
+    coproc             = { enabled = true }
+    coproc-admin       = { enabled = true }
+    gw-blockchain      = { enabled = true }
+    eth-blockchain     = { enabled = true }
+    polygon-blockchain = { enabled = true }
+    monitoring         = { enabled = true }
   }
 
   service_accounts = {

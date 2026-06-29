@@ -96,12 +96,13 @@ k8s_coprocessor_deps = {
   enabled = true
 
   namespaces = {
-    coproc         = { enabled = true }
-    coproc-admin   = { enabled = true }
-    monitoring     = { enabled = true }
-    gw-blockchain  = { enabled = true }
-    eth-blockchain = { enabled = true }
-    karpenter      = { enabled = true }
+    coproc             = { enabled = true }
+    coproc-admin       = { enabled = true }
+    monitoring         = { enabled = true }
+    gw-blockchain      = { enabled = true }
+    eth-blockchain     = { enabled = true }
+    polygon-blockchain = { enabled = true }
+    karpenter          = { enabled = true }
   }
 
   service_accounts = {

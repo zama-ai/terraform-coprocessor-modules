@@ -160,7 +160,7 @@ variable "k8s" {
       rds_client = optional(object({
         enabled = optional(bool, true)
         namespaces = optional(list(string), [
-          "coproc-admin", "coproc", "gw-blockchain", "eth-blockchain", "monitoring"
+          "coproc-admin", "coproc", "gw-blockchain", "eth-blockchain", "polygon-blockchain", "monitoring"
         ])
         pod_label_key   = optional(string, "network/rds-client")
         pod_label_value = optional(string, "true")
