@@ -328,7 +328,7 @@ resource "kubernetes_config_map" "db_admin_config" {
 }
 
 resource "kubernetes_config_map" "coprocessor_config" {
-  for_each = var.k8s.enabled ? toset(["coproc", "eth-blockchain", "gw-blockchain"]) : toset([])
+  for_each = var.k8s.enabled ? toset(["coproc", "eth-blockchain", "gw-blockchain", "polygon-blockchain"]) : toset([])
 
   metadata {
     name      = "coprocessor-config"
