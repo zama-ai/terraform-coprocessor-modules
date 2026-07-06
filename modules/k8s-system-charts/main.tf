@@ -146,6 +146,7 @@ locals {
           - coproc
           - gw-blockchain
           - eth-blockchain
+          - polygon-blockchain
           - kube-system
 
     podLogsViaLoki:
@@ -155,6 +156,7 @@ locals {
         - coproc
         - gw-blockchain
         - eth-blockchain
+        - polygon-blockchain
 
     applicationObservability:
       enabled: true
