@@ -8,20 +8,32 @@ variable "environment" {
   type        = string
 }
 
+variable "cluster_name" {
+  description = <<-EOT
+    Optional EKS cluster name. When set, the VPC ID and private subnets
+    (subnets with map_public_ip_on_launch = false) are auto-discovered from
+    the cluster, so the module can be deployed as a standalone stack without
+    wiring VPC outputs. Explicitly provided vpc_id / private_subnet_ids /
+    private_subnet_cidr_blocks always take precedence over discovered values.
+  EOT
+  type        = string
+  default     = null
+}
+
 variable "vpc_id" {
-  description = "VPC ID to deploy ElastiCache into."
+  description = "VPC ID to deploy ElastiCache into. Overrides the value discovered from cluster_name when set."
   type        = string
   default     = null
 }
 
 variable "private_subnet_ids" {
-  description = "List of private subnet IDs for the ElastiCache subnet group."
+  description = "List of private subnet IDs for the ElastiCache subnet group. Overrides subnets discovered from cluster_name when non-empty."
   type        = list(string)
   default     = []
 }
 
 variable "private_subnet_cidr_blocks" {
-  description = "CIDR blocks of private subnets, merged into ElastiCache security group ingress."
+  description = "CIDR blocks of private subnets, merged into ElastiCache security group ingress. Overrides CIDRs discovered from cluster_name when non-empty."
   type        = list(string)
   default     = []
 }
@@ -92,4 +104,25 @@ variable "elasticache" {
     condition     = !var.elasticache.automatic_failover_enabled || var.elasticache.num_cache_clusters >= 2
     error_message = "automatic_failover_enabled requires at least 2 cache clusters (1 primary + 1 replica)."
   }
+
+  validation {
+    condition     = var.elasticache.auth_token == null || var.elasticache.transit_encryption_enabled
+    error_message = "auth_token can only be set when transit_encryption_enabled = true."
+  }
+}
+
+variable "externalname_service" {
+  description = <<-EOT
+    Optional Kubernetes ExternalName service that aliases the ElastiCache
+    primary endpoint into the cluster (e.g. to expose it over Tailscale via
+    annotations). Requires the kubernetes provider to be configured. Only
+    created when both enabled = true and elasticache.enabled = true.
+  EOT
+  type = object({
+    enabled     = optional(bool, false)
+    name        = optional(string, "elasticache")
+    namespace   = optional(string, "default")
+    annotations = optional(map(string), {})
+  })
+  default = { enabled = false }
 }

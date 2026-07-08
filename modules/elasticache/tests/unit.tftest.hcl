@@ -1,4 +1,5 @@
 mock_provider "aws" {}
+mock_provider "kubernetes" {}
 
 # Shared defaults across all runs.
 variables {
@@ -246,5 +247,210 @@ run "custom_engine_version_plans_without_error" {
   assert {
     condition     = length(module.elasticache) == 1
     error_message = "ElastiCache module must be planned with custom engine version."
+  }
+}
+
+# =============================================================================
+#  ExternalName service (optional)
+# =============================================================================
+
+run "externalname_service_created_when_enabled" {
+  command = plan
+
+  variables {
+    elasticache = { enabled = true }
+    externalname_service = {
+      enabled   = true
+      name      = "coprocessor-redis"
+      namespace = "coproc"
+      annotations = {
+        "tailscale.com/expose" = "true"
+      }
+    }
+  }
+
+  assert {
+    condition     = length(kubernetes_service.externalname) == 1
+    error_message = "ExternalName service must be created when externalname_service.enabled = true."
+  }
+}
+
+run "externalname_service_absent_by_default" {
+  command = plan
+
+  variables {
+    elasticache = { enabled = true }
+  }
+
+  assert {
+    condition     = length(kubernetes_service.externalname) == 0
+    error_message = "ExternalName service must not be created by default."
+  }
+}
+
+run "externalname_service_absent_when_elasticache_disabled" {
+  command = plan
+
+  variables {
+    elasticache          = { enabled = false }
+    externalname_service = { enabled = true, name = "x", namespace = "y" }
+  }
+
+  assert {
+    condition     = length(kubernetes_service.externalname) == 0
+    error_message = "ExternalName service must not be created when elasticache.enabled = false."
+  }
+}
+
+# =============================================================================
+#  EKS discovery (cluster_name set, explicit networking omitted)
+# =============================================================================
+
+run "cluster_name_discovers_networking" {
+  command = plan
+
+  variables {
+    cluster_name               = "disc-cluster"
+    vpc_id                     = null
+    private_subnet_ids         = []
+    private_subnet_cidr_blocks = []
+    elasticache                = { enabled = true }
+  }
+
+  override_data {
+    target = data.aws_eks_cluster.cluster[0]
+    values = {
+      vpc_config = [{
+        vpc_id     = "vpc-discovered000001"
+        subnet_ids = ["subnet-disc-a", "subnet-disc-b"]
+      }]
+    }
+  }
+
+  override_data {
+    target = data.aws_subnet.cluster_subnets["subnet-disc-a"]
+    values = {
+      map_public_ip_on_launch = false
+      cidr_block              = "10.9.0.0/24"
+    }
+  }
+
+  override_data {
+    target = data.aws_subnet.cluster_subnets["subnet-disc-b"]
+    values = {
+      map_public_ip_on_launch = false
+      cidr_block              = "10.9.1.0/24"
+    }
+  }
+
+  assert {
+    condition     = output.vpc_id == "vpc-discovered000001"
+    error_message = "vpc_id must be discovered from the EKS cluster when cluster_name is set."
+  }
+
+  assert {
+    condition     = length(module.elasticache) == 1
+    error_message = "ElastiCache module must be created when networking is discovered from cluster_name."
+  }
+}
+
+run "discovery_excludes_public_subnets" {
+  command = plan
+
+  variables {
+    cluster_name               = "disc-cluster"
+    vpc_id                     = null
+    private_subnet_ids         = []
+    private_subnet_cidr_blocks = []
+    elasticache                = { enabled = true }
+  }
+
+  override_data {
+    target = data.aws_eks_cluster.cluster[0]
+    values = {
+      vpc_config = [{
+        vpc_id     = "vpc-mixed0000000001"
+        subnet_ids = ["subnet-priv-1", "subnet-priv-2", "subnet-pub-1"]
+      }]
+    }
+  }
+
+  override_data {
+    target = data.aws_subnet.cluster_subnets["subnet-priv-1"]
+    values = { map_public_ip_on_launch = false, cidr_block = "10.1.0.0/24" }
+  }
+  override_data {
+    target = data.aws_subnet.cluster_subnets["subnet-priv-2"]
+    values = { map_public_ip_on_launch = false, cidr_block = "10.1.1.0/24" }
+  }
+  override_data {
+    target = data.aws_subnet.cluster_subnets["subnet-pub-1"]
+    values = { map_public_ip_on_launch = true, cidr_block = "10.1.2.0/24" }
+  }
+
+  assert {
+    condition     = length(output.private_subnet_ids) == 2
+    error_message = "Public subnets (map_public_ip_on_launch = true) must be excluded from discovered private subnets."
+  }
+
+  assert {
+    condition     = !contains(output.private_subnet_ids, "subnet-pub-1")
+    error_message = "The public subnet must not appear in the discovered private subnet list."
+  }
+}
+
+run "auth_token_without_transit_encryption_fails_validation" {
+  command = plan
+
+  variables {
+    elasticache = {
+      enabled                    = true
+      transit_encryption_enabled = false
+      auth_token                 = "some-secret-token-value"
+    }
+  }
+
+  expect_failures = [var.elasticache]
+}
+
+run "disabled_without_networking_does_not_error" {
+  command = plan
+
+  variables {
+    cluster_name               = null
+    vpc_id                     = null
+    private_subnet_ids         = []
+    private_subnet_cidr_blocks = []
+    elasticache                = { enabled = false }
+  }
+
+  assert {
+    condition     = output.vpc_id == null
+    error_message = "vpc_id must resolve to null (not error) when disabled with no networking inputs."
+  }
+}
+
+run "explicit_vpc_overrides_discovery" {
+  command = plan
+
+  variables {
+    cluster_name = "disc-cluster"
+    # vpc_id / subnets inherited from shared defaults (explicit) — must win
+    elasticache = { enabled = true }
+  }
+
+  override_data {
+    target = data.aws_eks_cluster.cluster[0]
+    values = {
+      vpc_config = [{
+        vpc_id     = "vpc-discovered000001"
+        subnet_ids = []
+      }]
+    }
+  }
+
+  assert {
+    condition     = output.vpc_id == "vpc-00000000000000000"
+    error_message = "Explicit vpc_id must take precedence over the value discovered from cluster_name."
   }
 }

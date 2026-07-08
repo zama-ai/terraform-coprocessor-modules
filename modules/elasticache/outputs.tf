@@ -27,3 +27,18 @@ output "security_group_id" {
   description = "The ID of the ElastiCache security group."
   value       = var.elasticache.enabled ? module.elasticache[0].security_group_id : null
 }
+
+output "vpc_id" {
+  description = "The VPC ID the ElastiCache replication group was deployed into (explicit input or discovered from cluster_name)."
+  value       = local.vpc_id
+}
+
+output "private_subnet_ids" {
+  description = "The private subnet IDs used for the ElastiCache subnet group (explicit input or discovered from cluster_name)."
+  value       = local.private_subnet_ids
+}
+
+output "externalname_service_name" {
+  description = "Name of the Kubernetes ExternalName service aliasing the primary endpoint, if created."
+  value       = var.elasticache.enabled && var.externalname_service.enabled ? kubernetes_service.externalname[0].metadata[0].name : null
+}
