@@ -168,6 +168,16 @@ locals {
             port: 4317
           http:
             enabled: false
+      # Stamp cluster/partner/network resource attributes onto traces so Tempo
+      # data can be scoped per coprocessor instance, mirroring the extraLabels
+      # on the metrics and logs destinations below. cluster matches the
+      # cluster.name injected via set_computed ("<partner>-<environment>").
+      traces:
+        transforms:
+          resource:
+            - set(attributes["cluster"], "__partner__-__network__")
+            - set(attributes["partner"], "__partner__")
+            - set(attributes["network"], "__network__")
 
     destinations:
       grafana-cloud-metrics:
