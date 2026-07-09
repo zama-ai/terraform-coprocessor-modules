@@ -505,6 +505,16 @@ run "defaults_k8s_monitoring_urls_injected_into_destinations" {
     condition     = strcontains(helm_release.apps["k8s-monitoring"].values[0], "tag: v9.9.3")
     error_message = "node_exporter_image_tag must be injected into the node-exporter image block."
   }
+
+  assert {
+    condition     = strcontains(helm_release.apps["k8s-monitoring"].values[0], "serviceMonitor/monitoring/(prometheus-rds-exporter|prometheus-postgres-exporter|coprocessor-sql-exporter)")
+    error_message = "ServiceMonitor discovery must allowlist only this module's exporters in the monitoring namespace."
+  }
+
+  assert {
+    condition     = strcontains(helm_release.apps["k8s-monitoring"].values[0], "podMonitors:") && strcontains(helm_release.apps["k8s-monitoring"].values[0], "probes:")
+    error_message = "PodMonitor and Probe discovery must be namespace-constrained (chart defaults to all namespaces)."
+  }
 }
 
 # =============================================================================

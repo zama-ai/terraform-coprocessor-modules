@@ -148,6 +148,24 @@ locals {
           - eth-blockchain
           - polygon-blockchain
           - kube-system
+        extraDiscoveryRules: |
+          rule {
+            source_labels = ["job"]
+            regex = "serviceMonitor/(coproc|kube-system|[^/]+-blockchain)/.+|serviceMonitor/monitoring/(prometheus-rds-exporter|prometheus-postgres-exporter|coprocessor-sql-exporter)[^/]*/.+"
+            action = "keep"
+          }
+      podMonitors:
+        namespaces:
+          - coproc
+          - gw-blockchain
+          - eth-blockchain
+          - polygon-blockchain
+      probes:
+        namespaces:
+          - coproc
+          - gw-blockchain
+          - eth-blockchain
+          - polygon-blockchain
 
     podLogsViaLoki:
       enabled: true
