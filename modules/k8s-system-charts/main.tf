@@ -148,6 +148,24 @@ locals {
           - eth-blockchain
           - polygon-blockchain
           - kube-system
+        extraDiscoveryRules: |
+          rule {
+            source_labels = ["job"]
+            regex = "serviceMonitor/(coproc|kube-system|[^/]+-blockchain)/.+|serviceMonitor/monitoring/(prometheus-rds-exporter|prometheus-postgres-exporter|coprocessor-sql-exporter)[^/]*/.+"
+            action = "keep"
+          }
+      podMonitors:
+        namespaces:
+          - coproc
+          - gw-blockchain
+          - eth-blockchain
+          - polygon-blockchain
+      probes:
+        namespaces:
+          - coproc
+          - gw-blockchain
+          - eth-blockchain
+          - polygon-blockchain
 
     podLogsViaLoki:
       enabled: true
@@ -168,6 +186,16 @@ locals {
             port: 4317
           http:
             enabled: false
+      # Stamp cluster/partner/network resource attributes onto traces so Tempo
+      # data can be scoped per coprocessor instance, mirroring the extraLabels
+      # on the metrics and logs destinations below. cluster matches the
+      # cluster.name injected via set_computed ("<partner>-<environment>").
+      traces:
+        transforms:
+          resource:
+            - set(attributes["cluster"], "__partner__-__network__")
+            - set(attributes["partner"], "__partner__")
+            - set(attributes["network"], "__network__")
 
     destinations:
       grafana-cloud-metrics:
