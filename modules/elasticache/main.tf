@@ -123,23 +123,3 @@ module "elasticache" {
   # Disable CloudWatch log delivery to avoid mock provider issues in tests
   log_delivery_configuration = {}
 }
-
-# ***************************************
-#  ExternalName service (optional)
-#
-#  Aliases the primary endpoint into the cluster; annotations can expose it
-#  over Tailscale. Requires a configured kubernetes provider.
-# ***************************************
-resource "kubernetes_service" "externalname" {
-  count = var.elasticache.enabled && var.externalname_service.enabled ? 1 : 0
-
-  metadata {
-    name        = var.externalname_service.name
-    namespace   = var.externalname_service.namespace
-    annotations = var.externalname_service.annotations
-  }
-  spec {
-    type          = "ExternalName"
-    external_name = module.elasticache[0].replication_group_primary_endpoint_address
-  }
-}

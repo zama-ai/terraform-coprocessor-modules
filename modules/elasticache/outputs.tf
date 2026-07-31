@@ -23,6 +23,11 @@ output "port" {
   value       = var.elasticache.enabled ? module.elasticache[0].replication_group_port : null
 }
 
+output "connection_scheme" {
+  description = "Connection URI scheme: rediss when transit encryption is enabled, otherwise redis."
+  value       = var.elasticache.enabled ? (var.elasticache.transit_encryption_enabled ? "rediss" : "redis") : null
+}
+
 output "security_group_id" {
   description = "The ID of the ElastiCache security group."
   value       = var.elasticache.enabled ? module.elasticache[0].security_group_id : null
@@ -36,9 +41,4 @@ output "vpc_id" {
 output "private_subnet_ids" {
   description = "The private subnet IDs used for the ElastiCache subnet group (explicit input or discovered from cluster_name)."
   value       = local.private_subnet_ids
-}
-
-output "externalname_service_name" {
-  description = "Name of the Kubernetes ExternalName service aliasing the primary endpoint, if created."
-  value       = var.elasticache.enabled && var.externalname_service.enabled ? kubernetes_service.externalname[0].metadata[0].name : null
 }

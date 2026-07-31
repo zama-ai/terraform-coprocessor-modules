@@ -80,6 +80,11 @@ output "elasticache_port" {
   value       = module.coprocessor.elasticache_port
 }
 
+output "elasticache_connection_scheme" {
+  description = "ElastiCache connection URI scheme."
+  value       = module.coprocessor.elasticache_connection_scheme
+}
+
 # ******************************************************
 #  S3
 # ******************************************************

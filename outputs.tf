@@ -125,6 +125,11 @@ output "elasticache_port" {
   value       = module.elasticache.port
 }
 
+output "elasticache_connection_scheme" {
+  description = "ElastiCache connection URI scheme: rediss when transit encryption is enabled, otherwise redis."
+  value       = module.elasticache.connection_scheme
+}
+
 output "elasticache_security_group_id" {
   description = "The ID of the ElastiCache security group."
   value       = module.elasticache.security_group_id

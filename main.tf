@@ -26,8 +26,9 @@ locals {
   additional_subnet_ids         = var.networking.enabled && var.networking.additional_subnets.enabled ? module.networking[0].additional_subnet_ids : []
   additional_subnet_cidr_blocks = var.networking.enabled && var.networking.additional_subnets.enabled ? module.networking[0].additional_subnet_cidr_blocks : []
 
-  # RDS security group is accessible from all private subnets
-  rds_private_subnet_cidr_blocks = concat(local.private_subnet_cidr_blocks, local.additional_subnet_cidr_blocks)
+  # Data services are reachable from both the base private subnets and any
+  # additional private subnets used by EKS node groups or Karpenter.
+  all_private_subnet_cidr_blocks = concat(local.private_subnet_cidr_blocks, local.additional_subnet_cidr_blocks)
 
   # ExternalName service endpoints — explicit tfvars value takes precedence, otherwise resolved from module outputs
   module_endpoints = {
@@ -92,7 +93,7 @@ module "rds" {
 
   vpc_id                     = local.vpc_id
   private_subnet_ids         = local.private_subnet_ids
-  private_subnet_cidr_blocks = local.rds_private_subnet_cidr_blocks
+  private_subnet_cidr_blocks = local.all_private_subnet_cidr_blocks
 
   rds = var.rds
 }
@@ -133,7 +134,7 @@ module "elasticache" {
 
   vpc_id                     = local.vpc_id
   private_subnet_ids         = local.private_subnet_ids
-  private_subnet_cidr_blocks = local.private_subnet_cidr_blocks
+  private_subnet_cidr_blocks = local.all_private_subnet_cidr_blocks
 
   elasticache = var.elasticache
 }

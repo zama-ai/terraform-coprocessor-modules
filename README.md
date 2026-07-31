@@ -186,6 +186,7 @@ To run all hooks manually: `pre-commit run --all-files`
 | <a name="output_eks_karpenter_node_iam_role_arn"></a> [eks\_karpenter\_node\_iam\_role\_arn](#output\_eks\_karpenter\_node\_iam\_role\_arn) | IAM role ARN for Karpenter-managed nodes. |
 | <a name="output_eks_karpenter_queue_name"></a> [eks\_karpenter\_queue\_name](#output\_eks\_karpenter\_queue\_name) | SQS queue name for Karpenter interruption handling. |
 | <a name="output_eks_oidc_provider_arn"></a> [eks\_oidc\_provider\_arn](#output\_eks\_oidc\_provider\_arn) | The ARN of the OIDC provider for IRSA. |
+| <a name="output_elasticache_connection_scheme"></a> [elasticache\_connection\_scheme](#output\_elasticache\_connection\_scheme) | ElastiCache connection URI scheme: rediss when transit encryption is enabled, otherwise redis. |
 | <a name="output_elasticache_port"></a> [elasticache\_port](#output\_elasticache\_port) | The port the ElastiCache replication group is listening on. |
 | <a name="output_elasticache_primary_endpoint_address"></a> [elasticache\_primary\_endpoint\_address](#output\_elasticache\_primary\_endpoint\_address) | The primary endpoint address of the ElastiCache replication group. |
 | <a name="output_elasticache_reader_endpoint_address"></a> [elasticache\_reader\_endpoint\_address](#output\_elasticache\_reader\_endpoint\_address) | The reader endpoint address of the ElastiCache replication group. |

@@ -15,6 +15,11 @@ variable "cluster_name" {
     the cluster, so the module can be deployed as a standalone stack without
     wiring VPC outputs. Explicitly provided vpc_id / private_subnet_ids /
     private_subnet_cidr_blocks always take precedence over discovered values.
+
+    EKS discovery only sees subnets in the cluster VPC configuration. When
+    nodes or pods use additional subnets (for example, Karpenter discovery
+    subnets), pass their CIDRs explicitly through private_subnet_cidr_blocks
+    or additional_allowed_cidr_blocks.
   EOT
   type        = string
   default     = null
@@ -96,33 +101,27 @@ variable "elasticache" {
   default = { enabled = false }
 
   validation {
-    condition     = !var.elasticache.data_tiering_enabled || can(regex("r6gd", var.elasticache.node_type))
+    condition     = !var.elasticache.data_tiering_enabled || startswith(var.elasticache.node_type, "cache.r6gd.")
     error_message = "data_tiering_enabled = true requires an r6gd node type (e.g. cache.r6gd.xlarge). Only the r6gd family supports data tiering."
   }
 
   validation {
-    condition     = !var.elasticache.automatic_failover_enabled || var.elasticache.num_cache_clusters >= 2
-    error_message = "automatic_failover_enabled requires at least 2 cache clusters (1 primary + 1 replica)."
+    condition     = !startswith(var.elasticache.node_type, "cache.r6gd.") || var.elasticache.data_tiering_enabled
+    error_message = "r6gd node types require data_tiering_enabled = true."
+  }
+
+  validation {
+    condition     = !(var.elasticache.multi_az_enabled || var.elasticache.automatic_failover_enabled) || var.elasticache.num_cache_clusters >= 2
+    error_message = "multi_az_enabled or automatic_failover_enabled requires at least 2 cache clusters (1 primary + 1 replica)."
+  }
+
+  validation {
+    condition     = !var.elasticache.multi_az_enabled || var.elasticache.automatic_failover_enabled
+    error_message = "multi_az_enabled requires automatic_failover_enabled = true."
   }
 
   validation {
     condition     = var.elasticache.auth_token == null || var.elasticache.transit_encryption_enabled
     error_message = "auth_token can only be set when transit_encryption_enabled = true."
   }
-}
-
-variable "externalname_service" {
-  description = <<-EOT
-    Optional Kubernetes ExternalName service that aliases the ElastiCache
-    primary endpoint into the cluster (e.g. to expose it over Tailscale via
-    annotations). Requires the kubernetes provider to be configured. Only
-    created when both enabled = true and elasticache.enabled = true.
-  EOT
-  type = object({
-    enabled     = optional(bool, false)
-    name        = optional(string, "elasticache")
-    namespace   = optional(string, "default")
-    annotations = optional(map(string), {})
-  })
-  default = { enabled = false }
 }

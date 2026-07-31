@@ -1,5 +1,4 @@
 mock_provider "aws" {}
-mock_provider "kubernetes" {}
 
 # Shared defaults across all runs.
 variables {
@@ -60,6 +59,11 @@ run "disabled_outputs_all_null" {
   }
 
   assert {
+    condition     = output.connection_scheme == null
+    error_message = "connection_scheme must be null when elasticache.enabled = false."
+  }
+
+  assert {
     condition     = output.security_group_id == null
     error_message = "security_group_id must be null when elasticache.enabled = false."
   }
@@ -107,10 +111,65 @@ run "enabled_outputs_all_non_null" {
     condition     = output.security_group_id != null
     error_message = "security_group_id must be non-null when elasticache.enabled = true."
   }
+
+  assert {
+    condition     = output.connection_scheme == "rediss"
+    error_message = "Secure defaults must expose the rediss connection scheme."
+  }
 }
 
 # =============================================================================
-#  Data tiering with r6gd (mainnet profile)
+#  Security contract and temporary shadow compatibility
+# =============================================================================
+
+run "secure_defaults_require_tls_and_at_rest_encryption" {
+  command = plan
+
+  variables {
+    elasticache = {
+      enabled = true
+    }
+  }
+
+  assert {
+    condition     = var.elasticache.at_rest_encryption_enabled
+    error_message = "At-rest encryption must be enabled by default."
+  }
+
+  assert {
+    condition     = var.elasticache.transit_encryption_enabled
+    error_message = "Transit encryption must be enabled by default."
+  }
+}
+
+run "plaintext_shadow_profile_is_explicit_and_unauthenticated" {
+  command = apply
+
+  variables {
+    elasticache = {
+      enabled                        = true
+      engine                         = "redis"
+      engine_version                 = "7.1"
+      at_rest_encryption_enabled     = true
+      transit_encryption_enabled     = false
+      snapshot_retention_limit       = 7
+      additional_allowed_cidr_blocks = []
+    }
+  }
+
+  assert {
+    condition     = output.connection_scheme == "redis"
+    error_message = "The temporary plaintext shadow profile must expose the redis connection scheme."
+  }
+
+  assert {
+    condition     = var.elasticache.at_rest_encryption_enabled
+    error_message = "The temporary shadow profile must retain at-rest encryption."
+  }
+}
+
+# =============================================================================
+#  Data tiering with r6gd (data-tiered sizing example)
 # =============================================================================
 
 run "data_tiering_with_r6gd_plans_without_error" {
@@ -148,8 +207,22 @@ run "data_tiering_with_non_r6gd_fails_validation" {
   expect_failures = [var.elasticache]
 }
 
+run "r6gd_without_data_tiering_fails_validation" {
+  command = plan
+
+  variables {
+    elasticache = {
+      enabled              = true
+      node_type            = "cache.r6gd.xlarge"
+      data_tiering_enabled = false
+    }
+  }
+
+  expect_failures = [var.elasticache]
+}
+
 # =============================================================================
-#  No data tiering — testnet profile
+#  No data tiering — in-memory sizing example
 # =============================================================================
 
 run "no_data_tiering_with_r7g_plans_without_error" {
@@ -209,6 +282,39 @@ run "failover_with_single_cluster_fails_validation" {
   expect_failures = [var.elasticache]
 }
 
+run "multi_az_without_failover_fails_validation" {
+  command = plan
+
+  variables {
+    elasticache = {
+      enabled                    = true
+      num_cache_clusters         = 3
+      multi_az_enabled           = true
+      automatic_failover_enabled = false
+    }
+  }
+
+  expect_failures = [var.elasticache]
+}
+
+run "single_cluster_without_ha_plans_without_error" {
+  command = plan
+
+  variables {
+    elasticache = {
+      enabled                    = true
+      num_cache_clusters         = 1
+      multi_az_enabled           = false
+      automatic_failover_enabled = false
+    }
+  }
+
+  assert {
+    condition     = length(module.elasticache) == 1
+    error_message = "A single cache cluster must be allowed when Multi-AZ and automatic failover are both disabled."
+  }
+}
+
 # =============================================================================
 #  Identifier override
 # =============================================================================
@@ -247,58 +353,6 @@ run "custom_engine_version_plans_without_error" {
   assert {
     condition     = length(module.elasticache) == 1
     error_message = "ElastiCache module must be planned with custom engine version."
-  }
-}
-
-# =============================================================================
-#  ExternalName service (optional)
-# =============================================================================
-
-run "externalname_service_created_when_enabled" {
-  command = plan
-
-  variables {
-    elasticache = { enabled = true }
-    externalname_service = {
-      enabled   = true
-      name      = "coprocessor-redis"
-      namespace = "coproc"
-      annotations = {
-        "tailscale.com/expose" = "true"
-      }
-    }
-  }
-
-  assert {
-    condition     = length(kubernetes_service.externalname) == 1
-    error_message = "ExternalName service must be created when externalname_service.enabled = true."
-  }
-}
-
-run "externalname_service_absent_by_default" {
-  command = plan
-
-  variables {
-    elasticache = { enabled = true }
-  }
-
-  assert {
-    condition     = length(kubernetes_service.externalname) == 0
-    error_message = "ExternalName service must not be created by default."
-  }
-}
-
-run "externalname_service_absent_when_elasticache_disabled" {
-  command = plan
-
-  variables {
-    elasticache          = { enabled = false }
-    externalname_service = { enabled = true, name = "x", namespace = "y" }
-  }
-
-  assert {
-    condition     = length(kubernetes_service.externalname) == 0
-    error_message = "ExternalName service must not be created when elasticache.enabled = false."
   }
 }
 
@@ -396,6 +450,22 @@ run "discovery_excludes_public_subnets" {
   assert {
     condition     = !contains(output.private_subnet_ids, "subnet-pub-1")
     error_message = "The public subnet must not appear in the discovered private subnet list."
+  }
+}
+
+run "additional_workload_cidrs_are_merged_into_ingress" {
+  command = plan
+
+  variables {
+    elasticache = {
+      enabled                        = true
+      additional_allowed_cidr_blocks = ["10.20.0.0/20"]
+    }
+  }
+
+  assert {
+    condition     = contains(local.all_allowed_cidrs, "10.0.0.0/24") && contains(local.all_allowed_cidrs, "10.20.0.0/20")
+    error_message = "ElastiCache ingress must include both private subnet CIDRs and explicitly supplied workload CIDRs."
   }
 }
 

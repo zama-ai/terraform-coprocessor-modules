@@ -545,6 +545,91 @@ rds = {
 
 
 # ==============================================================================
+#  ElastiCache (Valkey/Redis) — Listener V2 broker
+#
+#  Default: { enabled = false }
+# ==============================================================================
+elasticache = {
+  # Default: false
+  enabled = true
+
+  # Override the computed replication group ID "<partner>-<env>-redis".
+  # Default: null
+  replication_group_id = null
+
+  # ── Engine ──────────────────────────────────────────────────────────────────
+
+  # Secure new deployments default to Valkey 7.2. Redis 7.1 can be selected
+  # temporarily to match an existing Listener V2 test environment.
+  # Defaults: "valkey", "7.2"
+  engine         = "valkey"
+  engine_version = "7.2"
+
+  # ── Capacity ────────────────────────────────────────────────────────────────
+
+  # These values are starting points, not environment profiles. Validate them
+  # against event rate, event size, and maximum slow-consumer backlog.
+  # Defaults: cache.r7g.large, 3 nodes, no data tiering
+  node_type            = "cache.r7g.large"
+  num_cache_clusters   = 3
+  port                 = 6379
+  data_tiering_enabled = false
+
+  # Set data_tiering_enabled = true only with an r6gd node type, for example:
+  # node_type            = "cache.r6gd.xlarge"
+  # data_tiering_enabled = true
+
+  # ── High availability ───────────────────────────────────────────────────────
+
+  # Defaults: true
+  multi_az_enabled           = true
+  automatic_failover_enabled = true
+
+  # ── Encryption ──────────────────────────────────────────────────────────────
+
+  # At-rest encryption is enabled by default and has no Listener V2 client impact.
+  at_rest_encryption_enabled = true
+
+  # New deployments require TLS by default.
+  transit_encryption_enabled = true
+
+  # Temporary shadow-mode compatibility for Listener V2 without TLS support:
+  # engine                     = "redis"
+  # engine_version             = "7.1"
+  # transit_encryption_enabled = false
+  #
+  # Keep at-rest encryption enabled in that temporary posture. Do not use it
+  # after Listener V2 becomes the primary listener.
+
+  # Optional AUTH token. Requires transit encryption and is stored in
+  # Terraform state. Default: null.
+  auth_token = null
+
+  # ── Maintenance & backups ───────────────────────────────────────────────────
+
+  maintenance_window       = "Mon:00:00-Mon:03:00"
+  snapshot_retention_limit = 7
+  snapshot_window          = "03:00-05:00"
+
+  # Default: []
+  parameters = []
+
+  # For stream-broker semantics, consider explicitly using noeviction after
+  # validating capacity. Avoid allkeys-lru if silent stream eviction is unacceptable:
+  # parameters = [
+  #   {
+  #     name  = "maxmemory-policy"
+  #     value = "noeviction"
+  #   },
+  # ]
+
+  # Additional source CIDRs beyond the private subnet CIDRs.
+  # Default: []
+  additional_allowed_cidr_blocks = []
+}
+
+
+# ==============================================================================
 #  S3
 #
 #  Default: { buckets = {} }

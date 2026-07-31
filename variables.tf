@@ -378,13 +378,23 @@ variable "elasticache" {
   default = { enabled = false }
 
   validation {
-    condition     = !var.elasticache.data_tiering_enabled || can(regex("r6gd", var.elasticache.node_type))
+    condition     = !var.elasticache.data_tiering_enabled || startswith(var.elasticache.node_type, "cache.r6gd.")
     error_message = "data_tiering_enabled = true requires an r6gd node type (e.g. cache.r6gd.xlarge). Only the r6gd family supports data tiering."
   }
 
   validation {
-    condition     = !var.elasticache.automatic_failover_enabled || var.elasticache.num_cache_clusters >= 2
-    error_message = "automatic_failover_enabled requires at least 2 cache clusters (1 primary + 1 replica)."
+    condition     = !startswith(var.elasticache.node_type, "cache.r6gd.") || var.elasticache.data_tiering_enabled
+    error_message = "r6gd node types require data_tiering_enabled = true."
+  }
+
+  validation {
+    condition     = !(var.elasticache.multi_az_enabled || var.elasticache.automatic_failover_enabled) || var.elasticache.num_cache_clusters >= 2
+    error_message = "multi_az_enabled or automatic_failover_enabled requires at least 2 cache clusters (1 primary + 1 replica)."
+  }
+
+  validation {
+    condition     = !var.elasticache.multi_az_enabled || var.elasticache.automatic_failover_enabled
+    error_message = "multi_az_enabled requires automatic_failover_enabled = true."
   }
 }
 
