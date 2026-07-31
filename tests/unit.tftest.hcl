@@ -184,6 +184,88 @@ run "rejects_invalid_vpc_cidr" {
 }
 
 # =============================================================================
+#  ElastiCache security contract
+# =============================================================================
+
+run "elasticache_secure_defaults_use_rediss" {
+  command = plan
+
+  variables {
+    elasticache = {
+      enabled = true
+    }
+  }
+
+  assert {
+    condition     = output.elasticache_connection_scheme == "rediss"
+    error_message = "The root module must expose rediss for the secure ElastiCache defaults."
+  }
+}
+
+run "elasticache_shadow_compatibility_uses_redis" {
+  command = plan
+
+  variables {
+    elasticache = {
+      enabled                    = true
+      engine                     = "redis"
+      engine_version             = "7.1"
+      at_rest_encryption_enabled = true
+      transit_encryption_enabled = false
+    }
+  }
+
+  assert {
+    condition     = output.elasticache_connection_scheme == "redis"
+    error_message = "The root module must expose redis for the explicit plaintext shadow profile."
+  }
+}
+
+run "elasticache_r6gd_requires_data_tiering" {
+  command = plan
+
+  variables {
+    elasticache = {
+      enabled              = true
+      node_type            = "cache.r6gd.xlarge"
+      data_tiering_enabled = false
+    }
+  }
+
+  expect_failures = [var.elasticache]
+}
+
+run "elasticache_ha_requires_two_clusters" {
+  command = plan
+
+  variables {
+    elasticache = {
+      enabled                    = true
+      num_cache_clusters         = 1
+      multi_az_enabled           = true
+      automatic_failover_enabled = true
+    }
+  }
+
+  expect_failures = [var.elasticache]
+}
+
+run "elasticache_multi_az_requires_failover" {
+  command = plan
+
+  variables {
+    elasticache = {
+      enabled                    = true
+      num_cache_clusters         = 3
+      multi_az_enabled           = true
+      automatic_failover_enabled = false
+    }
+  }
+
+  expect_failures = [var.elasticache]
+}
+
+# =============================================================================
 #  KMS module
 # =============================================================================
 

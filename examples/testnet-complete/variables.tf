@@ -40,6 +40,12 @@ variable "rds" {
   default     = { enabled = true }
 }
 
+variable "elasticache" {
+  description = "ElastiCache (Valkey/Redis) configuration. See root module variables.tf for full schema."
+  type        = any
+  default     = { enabled = false }
+}
+
 variable "s3" {
   description = "S3 bucket configuration. See root module variables.tf for full schema."
   type        = any
