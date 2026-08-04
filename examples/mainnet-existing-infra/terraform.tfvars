@@ -64,6 +64,7 @@ rds = {
   enabled  = true
   db_name  = "coprocessor"
   username = "coprocessor"
+  multi_az = true
 
   # Password is managed by AWS Secrets Manager by default (recommended).
   # Rotation is enabled automatically every 7 days.

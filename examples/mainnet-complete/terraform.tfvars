@@ -70,6 +70,7 @@ rds = {
   enabled  = true
   db_name  = "coprocessor"
   username = "coprocessor"
+  multi_az = true
 }
 
 # =============================================================================
