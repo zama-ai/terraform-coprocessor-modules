@@ -1,0 +1,159 @@
+# ==============================================================================
+# PLEASE NOTE the variables provided below, in conjunction with module defaults,
+# make for a complete deployment.
+#
+# For additional info on available parameters, see root module variables.tf for
+# full variable schema.
+# ==============================================================================
+
+# =============================================================================
+#  Core
+# =============================================================================
+partner_name = "acme" # CHANGE ME: lowercase, used as a prefix in resource names
+environment  = "mainnet"
+aws_region   = "us-east-2"
+
+default_tags = {
+  Partner     = "acme" # CHANGE ME: match partner_name
+  Environment = "mainnet"
+  ManagedBy   = "terraform"
+}
+
+# =============================================================================
+#  Networking
+# =============================================================================
+networking = {
+  enabled = true
+
+  vpc = {
+    cidr               = "10.2.0.0/16"                              # CHANGE ME: must not overlap with existing VPCs
+    availability_zones = ["us-east-2a", "us-east-2b", "us-east-2c"] # REQUIRED - us-east-2b is the only AZ in us-east-2 offering hpc7a.96xlarge
+    single_nat_gateway = false
+  }
+}
+
+# =============================================================================
+#  EKS
+# =============================================================================
+eks = {
+  enabled = true
+
+  cluster = {
+    # Private-only by default — restrict endpoint_public_access_cidrs to your office / VPN IP range.
+    endpoint_public_access       = true
+    endpoint_public_access_cidrs = ["x.x.x.x/32"] # CHANGE ME: restrict to known IPs
+  }
+
+  node_groups = {
+    groups = {
+      default = {
+        instance_types = ["m6i.large"]
+      }
+    }
+  }
+
+  karpenter = {
+    enabled          = true
+    rule_name_prefix = "coproc"
+
+    controller_nodegroup = {
+      enabled        = true
+      instance_types = ["t3.small"]
+    }
+  }
+}
+
+# =============================================================================
+#  RDS (PostgreSQL)
+# =============================================================================
+rds = {
+  enabled  = true
+  db_name  = "coprocessor"
+  username = "coprocessor"
+  multi_az = true
+}
+
+# =============================================================================
+#  S3
+# =============================================================================
+s3 = {
+  buckets = {
+    coprocessor = {
+      preconfigured_bucket_access_profile = "public"
+
+      cloudfront = {
+        enabled             = true
+        acm_certificate_arn = ""   # CHANGE ME: ACM cert ARN (must be in us-east-1)
+        aliases             = [""] # CHANGE ME: your CloudFront custom hostname(s)
+      }
+    }
+  }
+}
+
+# =============================================================================
+#  k8s Coprocessor Dependencies
+# =============================================================================
+k8s_coprocessor_deps = {
+  enabled = false # CHANGE ME: refer to operator documentation regarding order of deployments
+
+  namespaces = {
+    coproc             = { enabled = true }
+    coproc-admin       = { enabled = true }
+    monitoring         = { enabled = true }
+    gw-blockchain      = { enabled = true }
+    eth-blockchain     = { enabled = true }
+    polygon-blockchain = { enabled = true }
+    karpenter          = { enabled = true }
+  }
+
+  service_accounts = {
+    coprocessor = { enabled = true }
+    sns_worker  = { enabled = true }
+    db_admin    = { enabled = true }
+    tx_sender   = { enabled = true }
+  }
+
+  storage_classes = {
+    gp3 = { enabled = true }
+  }
+
+  security_group_policies = {
+    rds_client = { enabled = true }
+  }
+
+  external_name_services = {
+    coprocessor-database = { enabled = true }
+  }
+}
+
+# =============================================================================
+#  k8s System Charts
+# =============================================================================
+k8s_system_charts = {
+  enabled = false # CHANGE ME: refer to operator documentation regarding order of deployments
+
+  defaults = {
+    karpenter_nodepools          = { enabled = false } # CHANGE ME: refer to operator documentation regarding order of deployments
+    prometheus_operator_crds     = { enabled = true }
+    metrics_server               = { enabled = true }
+    karpenter                    = { enabled = true }
+    prometheus_rds_exporter      = { enabled = true }
+    prometheus_postgres_exporter = { enabled = true }
+    coprocessor_sql_exporter     = { enabled = true }
+
+    k8s_monitoring = {
+      enabled = true
+
+      prometheus_url = "" # CHANGE ME
+      loki_url       = "" # CHANGE ME
+      otlp_url       = "" # CHANGE ME
+    }
+  }
+}
+
+# =============================================================================
+#  KMS
+# =============================================================================
+kms = {
+  enabled = true
+}

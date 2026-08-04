@@ -26,12 +26,16 @@ Infrastructure deployed by the [`examples/testnet-complete`](./examples/testnet-
 
 ## Usage
 
-Two ready-to-deploy examples are provided. Each is a fully-formed, immediately deployable configuration — not a showcase of every available parameter, but a production-ready starting point that covers the standard Coprocessor deployment.
+Ready-to-deploy examples are provided per environment. Each is a fully-formed, immediately deployable configuration — not a showcase of every available parameter, but a production-ready starting point that covers the standard Coprocessor deployment.
 
 | Example | Use case |
 |---------|----------|
-| [`examples/testnet-complete`](./examples/testnet-complete) | Greenfield — creates VPC, EKS, RDS, and S3 from scratch |
-| [`examples/testnet-existing-infra`](./examples/testnet-existing-infra) | Bring-your-own VPC and EKS — only deploys RDS and S3 |
+| [`examples/testnet-complete`](./examples/testnet-complete) | Testnet greenfield — creates VPC, EKS, RDS, and S3 from scratch |
+| [`examples/testnet-existing-infra`](./examples/testnet-existing-infra) | Testnet bring-your-own VPC and EKS — only deploys RDS and S3 |
+| [`examples/mainnet-complete`](./examples/mainnet-complete) | Mainnet greenfield — creates VPC, EKS, RDS, and S3 from scratch |
+| [`examples/mainnet-existing-infra`](./examples/mainnet-existing-infra) | Mainnet bring-your-own VPC and EKS — only deploys RDS and S3 |
+
+The mainnet examples default to `us-east-2` (Ohio). The Karpenter `coprocessor-pool` launches `hpc7a.96xlarge` nodes, which in `us-east-2` are only offered in `us-east-2b` — the deployment must include a private subnet in that AZ.
 
 For the full set of available inputs and their defaults, see the [Inputs](#inputs) table below or `terraform.tfvars.example` at the repo root.
 
@@ -45,9 +49,9 @@ For the full set of available inputs and their defaults, see the [Inputs](#input
 
 **Kubernetes provider authentication:**
 
-When `eks.enabled = true` (`testnet-complete`), the Kubernetes and Helm providers are configured automatically using the EKS cluster outputs — no manual credential configuration is needed.
+When `eks.enabled = true` (`*-complete`), the Kubernetes and Helm providers are configured automatically using the EKS cluster outputs — no manual credential configuration is needed.
 
-When `eks.enabled = false` (`testnet-existing-infra`), you must supply `kubernetes_provider` in `terraform.tfvars`:
+When `eks.enabled = false` (`*-existing-infra`), you must supply `kubernetes_provider` in `terraform.tfvars`:
 
 ```hcl
 kubernetes_provider = {
