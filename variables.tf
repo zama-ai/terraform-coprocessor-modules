@@ -556,7 +556,7 @@ variable "k8s_coprocessor_deps" {
 
       # sns_worker: IRSA role with S3 access (s3:*Object + s3:ListBucket).
       sns_worker = optional(object({
-        enabled       = optional(bool, true)
+        enabled       = optional(bool, false)
         s3_bucket_key = optional(string, "coprocessor")
       }), {})
 
@@ -568,7 +568,7 @@ variable "k8s_coprocessor_deps" {
       # tx_sender: IRSA role with KMS Sign/Verify on the coprocessor keypair.
       # Set kms_key_access = false to omit the KMS policy (e.g. when the key lives in another account).
       tx_sender = optional(object({
-        enabled        = optional(bool, true)
+        enabled        = optional(bool, false)
         kms_key_access = optional(bool, true)
       }), {})
 
