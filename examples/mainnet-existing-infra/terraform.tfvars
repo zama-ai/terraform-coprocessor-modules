@@ -113,6 +113,7 @@ k8s_coprocessor_deps = {
     sns_worker  = { enabled = true }
     db_admin    = { enabled = true }
     tx_sender   = { enabled = true }
+    s3_migrate  = { enabled = true }
   }
 
   storage_classes = {

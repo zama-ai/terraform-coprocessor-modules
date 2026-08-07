@@ -70,6 +70,30 @@ locals {
     annotations              = {}
   }
 
+  builtin_s3_migrate_sa = {
+    name      = "s3-migrate"
+    namespace = "coproc-admin"
+    s3_bucket_access = {
+      (var.k8s.service_accounts.s3_migrate.s3_bucket_key) = {
+        actions = ["s3:PutObject", "s3:GetObject", "s3:ListBucket", "s3:AbortMultipartUpload"]
+      }
+    }
+    rds_master_secret_access = false
+    kms_key_access           = false
+    iam_role_name_override   = null
+    iam_policy_statements = [
+      {
+        sid        = "AllowSourceBucketRead"
+        effect     = "Allow"
+        actions    = ["s3:GetObject", "s3:ListBucket"]
+        resources  = ["*"]
+        conditions = []
+      }
+    ]
+    labels      = {}
+    annotations = {}
+  }
+
   # ── Built-in storage classes ───────────────────────────────────────────────
   builtin_gp3 = {
     provisioner            = "ebs.csi.aws.com"
@@ -91,6 +115,7 @@ locals {
     var.k8s.service_accounts.sns_worker.enabled ? { sns-worker = local.builtin_sns_worker_sa } : {},
     var.k8s.service_accounts.db_admin.enabled ? { db-admin = local.builtin_db_admin_sa } : {},
     var.k8s.service_accounts.tx_sender.enabled ? { tx-sender = local.builtin_tx_sender_sa } : {},
+    var.k8s.service_accounts.s3_migrate.enabled ? { s3-migrate = local.builtin_s3_migrate_sa } : {},
     var.k8s.service_accounts.extra,
   )
 
