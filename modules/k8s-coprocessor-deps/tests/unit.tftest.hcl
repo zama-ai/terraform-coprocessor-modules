@@ -821,6 +821,7 @@ run "db_admin_config_configmap_is_created" {
 
   variables {
     rds_master_secret_arn = "arn:aws:secretsmanager:eu-west-1:123456789012:secret:rds!db-test"
+    s3_bucket_names       = { coprocessor = "acme-testnet-coprocessor-abc123" }
     k8s = {
       enabled    = true
       namespaces = { coproc-admin = {} }
@@ -853,6 +854,11 @@ run "db_admin_config_configmap_is_created" {
   assert {
     condition     = kubernetes_config_map.db_admin_config[0].data["RDS_ADMIN_SECRET_ID"] == "arn:aws:secretsmanager:eu-west-1:123456789012:secret:rds!db-test"
     error_message = "Configmap data.RDS_ADMIN_SECRET_ID must equal the supplied rds_master_secret_arn."
+  }
+
+  assert {
+    condition     = kubernetes_config_map.db_admin_config[0].data["S3_BUCKET_NAME"] == "acme-testnet-coprocessor-abc123"
+    error_message = "Configmap data.S3_BUCKET_NAME must resolve the s3_migrate destination bucket."
   }
 }
 

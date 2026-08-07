@@ -347,6 +347,7 @@ resource "kubernetes_config_map" "db_admin_config" {
   data = {
     RDS_ADMIN_SECRET_ID = var.rds_master_secret_arn
     AWS_KMS_KEY_ID      = var.kms_key_arn
+    S3_BUCKET_NAME      = lookup(var.s3_bucket_names, var.k8s.service_accounts.s3_migrate.s3_bucket_key, null)
   }
 
   depends_on = [kubernetes_namespace.this]
