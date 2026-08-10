@@ -734,11 +734,94 @@ run "defaults_tx_sender_sa_is_created_with_kms_access" {
   }
 }
 
+run "s3_migrate_sa_is_not_created_by_default" {
+  command = plan
+
+  variables {
+    s3_bucket_arns = { coprocessor = "arn:aws:s3:::acme-testnet-coprocessor" }
+    k8s = {
+      enabled = true
+      service_accounts = {
+        sns_worker = { enabled = false }
+        db_admin   = { enabled = false }
+        tx_sender  = { enabled = false }
+      }
+      storage_classes = {
+        gp3 = { enabled = false }
+      }
+      namespaces = { coproc = {} }
+    }
+  }
+
+  assert {
+    condition     = !contains(keys(kubernetes_service_account.this), "s3-migrate")
+    error_message = "s3-migrate must not be created unless explicitly enabled — it grants read on a bucket outside the partner account."
+  }
+}
+
+run "s3_migrate_sa_is_created_with_source_and_destination_access" {
+  command = plan
+
+  variables {
+    s3_bucket_arns = { coprocessor = "arn:aws:s3:::acme-testnet-coprocessor" }
+    k8s = {
+      enabled = true
+      service_accounts = {
+        sns_worker = { enabled = false }
+        db_admin   = { enabled = false }
+        tx_sender  = { enabled = false }
+        s3_migrate = { enabled = true }
+      }
+      storage_classes = {
+        gp3 = { enabled = false }
+      }
+      namespaces = { coproc-admin = {} }
+    }
+  }
+
+  assert {
+    condition     = kubernetes_service_account.this["s3-migrate"].metadata[0].name == "s3-migrate"
+    error_message = "Built-in s3-migrate service account name must be 's3-migrate'."
+  }
+
+  assert {
+    condition     = kubernetes_service_account.this["s3-migrate"].metadata[0].namespace == "coproc-admin"
+    error_message = "Built-in s3-migrate service account must be in the coproc-admin namespace."
+  }
+
+  assert {
+    condition     = aws_iam_role.service_account["s3-migrate"].name == "s3-migrate-acme-testnet"
+    error_message = "s3-migrate IAM role must follow '<key>-<partner_name>-<environment>' pattern."
+  }
+
+  # Two statements: the wildcard source read from iam_policy_statements, plus
+  # the destination-bucket write auto-generated from s3_bucket_access. The
+  # rendered JSON itself cannot be asserted here because mock_data stubs it out.
+  assert {
+    condition     = length(data.aws_iam_policy_document.service_account["s3-migrate"].statement) == 2
+    error_message = "s3-migrate policy must hold exactly two statements: source read and destination write."
+  }
+
+  assert {
+    condition     = data.aws_iam_policy_document.service_account["s3-migrate"].statement[0].resources == toset(["*"])
+    error_message = "s3-migrate source read must be granted on the '*' wildcard."
+  }
+
+  assert {
+    condition = contains(
+      data.aws_iam_policy_document.service_account["s3-migrate"].statement[1].actions,
+      "s3:PutObject"
+    )
+    error_message = "s3-migrate must be granted PutObject on the destination bucket."
+  }
+}
+
 run "db_admin_config_configmap_is_created" {
   command = plan
 
   variables {
     rds_master_secret_arn = "arn:aws:secretsmanager:eu-west-1:123456789012:secret:rds!db-test"
+    s3_bucket_names       = { coprocessor = "acme-testnet-coprocessor-abc123" }
     k8s = {
       enabled    = true
       namespaces = { coproc-admin = {} }
@@ -772,6 +855,11 @@ run "db_admin_config_configmap_is_created" {
     condition     = kubernetes_config_map.db_admin_config[0].data["RDS_ADMIN_SECRET_ID"] == "arn:aws:secretsmanager:eu-west-1:123456789012:secret:rds!db-test"
     error_message = "Configmap data.RDS_ADMIN_SECRET_ID must equal the supplied rds_master_secret_arn."
   }
+
+  assert {
+    condition     = kubernetes_config_map.db_admin_config[0].data["S3_BUCKET_NAME"] == "acme-testnet-coprocessor-abc123"
+    error_message = "Configmap data.S3_BUCKET_NAME must resolve the s3_migrate destination bucket."
+  }
 }
 
 run "coprocessor_config_configmap_is_created_per_target_namespace" {
@@ -801,7 +889,7 @@ run "coprocessor_config_configmap_is_created_per_target_namespace" {
   }
 
   assert {
-    condition     = length(kubernetes_config_map.coprocessor_config) == 3
+    condition     = length(kubernetes_config_map.coprocessor_config) == 4
     error_message = "One coprocessor-config configmap must be created per target namespace."
   }
 

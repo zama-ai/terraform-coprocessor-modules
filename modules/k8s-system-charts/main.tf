@@ -171,6 +171,7 @@ locals {
       enabled: true
       collector: alloy-logs
       namespaces:
+        - coproc-admin
         - coproc
         - gw-blockchain
         - eth-blockchain
