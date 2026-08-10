@@ -1,0 +1,12 @@
+diff --git a/terraform.tfvars b/terraform.tfvars
+index db5d2b0..47bc172 100644
+--- a/terraform.tfvars
++++ b/terraform.tfvars
+@@ -111,6 +111,7 @@ k8s_coprocessor_deps = {
+     sns_worker  = { enabled = true }
+     db_admin    = { enabled = true }
+     tx_sender   = { enabled = true }
++    s3_migrate  = { enabled = true }
+   }
+
+   storage_classes = {
