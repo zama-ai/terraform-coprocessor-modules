@@ -10,12 +10,12 @@
 #  Core
 # =============================================================================
 partner_name = "acme" # CHANGE ME: lowercase, used as a prefix in resource names
-environment  = "testnet"
-aws_region   = "eu-west-1" # CHANGE ME: AWS region to deploy into
+environment  = "mainnet"
+aws_region   = "us-east-2"
 
 default_tags = {
   Partner     = "acme" # CHANGE ME: match partner_name
-  Environment = "testnet"
+  Environment = "mainnet"
   ManagedBy   = "terraform"
 }
 
@@ -26,9 +26,9 @@ networking = {
   enabled = true
 
   vpc = {
-    cidr               = "10.1.0.0/16"                              # CHANGE ME: must not overlap with existing VPCs
-    availability_zones = ["eu-west-1a", "eu-west-1b", "eu-west-1c"] # CHANGE ME: match aws_region
-    single_nat_gateway = true
+    cidr               = "10.2.0.0/16"                              # CHANGE ME: must not overlap with existing VPCs
+    availability_zones = ["us-east-2a", "us-east-2b", "us-east-2c"] # REQUIRED - us-east-2b is the only AZ in us-east-2 offering hpc7a.96xlarge
+    single_nat_gateway = false
   }
 }
 
@@ -70,6 +70,7 @@ rds = {
   enabled  = true
   db_name  = "coprocessor"
   username = "coprocessor"
+  multi_az = true
 }
 
 # =============================================================================
@@ -93,7 +94,7 @@ s3 = {
 #  k8s Coprocessor Dependencies
 # =============================================================================
 k8s_coprocessor_deps = {
-  enabled = true
+  enabled = false # CHANGE ME: refer to operator documentation regarding order of deployments
 
   namespaces = {
     coproc             = { enabled = true }
@@ -130,10 +131,10 @@ k8s_coprocessor_deps = {
 #  k8s System Charts
 # =============================================================================
 k8s_system_charts = {
-  enabled = true # CHANGE ME: refer to operator documentation regarding order of deployments
+  enabled = false # CHANGE ME: refer to operator documentation regarding order of deployments
 
   defaults = {
-    karpenter_nodepools          = { enabled = true } # CHANGE ME: refer to operator documentation regarding order of deployments
+    karpenter_nodepools          = { enabled = false } # CHANGE ME: refer to operator documentation regarding order of deployments
     prometheus_operator_crds     = { enabled = true }
     metrics_server               = { enabled = true }
     karpenter                    = { enabled = true }
@@ -156,11 +157,4 @@ k8s_system_charts = {
 # =============================================================================
 kms = {
   enabled = true
-}
-
-# =============================================================================
-#  ElastiCache (Valkey)
-# =============================================================================
-elasticache = {
-  enabled = false
 }

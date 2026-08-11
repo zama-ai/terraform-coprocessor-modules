@@ -18,6 +18,8 @@ kubeconfig_*
 *.tfvars
 !examples/testnet-complete/terraform.tfvars
 !examples/testnet-existing-infra/terraform.tfvars
+!examples/mainnet-complete/terraform.tfvars
+!examples/mainnet-existing-infra/terraform.tfvars
 
 cluster-keys.json
 

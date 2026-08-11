@@ -572,6 +572,13 @@ variable "k8s_coprocessor_deps" {
         kms_key_access = optional(bool, true)
       }), {})
 
+      # s3_migrate: IRSA role in coproc-admin for a one-off bulk copy of an
+      # existing ciphertext corpus into the coprocessor bucket.
+      s3_migrate = optional(object({
+        enabled       = optional(bool, false)
+        s3_bucket_key = optional(string, "coprocessor")
+      }), {})
+
       # Additional service accounts. An entry with the same key as a built-in overrides it.
       extra = optional(map(object({
         name                   = string

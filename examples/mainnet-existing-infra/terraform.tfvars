@@ -10,12 +10,12 @@
 #  Core
 # =============================================================================
 partner_name = "acme" # CHANGE ME: lowercase, used as a prefix in resource names
-environment  = "testnet"
-aws_region   = "eu-west-1" # CHANGE ME: AWS region to deploy into
+environment  = "mainnet"
+aws_region   = "us-east-2" # CHANGE ME: must be a region offering hpc7a.96xlarge (us-east-2 recommended)
 
 default_tags = {
   Partner     = "acme" # CHANGE ME: match partner_name
-  Environment = "testnet"
+  Environment = "mainnet"
   ManagedBy   = "terraform"
 }
 
@@ -23,14 +23,18 @@ default_tags = {
 #  Kubernetes Provider — required when eks.enabled = false
 # =============================================================================
 kubernetes_provider = {
-  host                   = "https://XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX.gr7.eu-west-1.eks.amazonaws.com"                                     # CHANGE ME: your EKS cluster API endpoint
+  host                   = "https://XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX.gr7.us-east-2.eks.amazonaws.com"                                     # CHANGE ME: your EKS cluster API endpoint
   cluster_ca_certificate = "LS0tLS1CRUdJTi..."                                                                                            # CHANGE ME: base64-encoded CA cert from your cluster
-  cluster_name           = "acme-testnet"                                                                                                 # CHANGE ME: your existing cluster name
-  oidc_provider_arn      = "arn:aws:iam::123456789012:oidc-provider/oidc.eks.eu-west-1.amazonaws.com/id/EXAMPLED539D4633E53DE1B716D3041E" # CHANGE ME: your OIDC provider ARN
+  cluster_name           = "acme-mainnet"                                                                                                 # CHANGE ME: your existing cluster name
+  oidc_provider_arn      = "arn:aws:iam::123456789012:oidc-provider/oidc.eks.us-east-2.amazonaws.com/id/EXAMPLED539D4633E53DE1B716D3041E" # CHANGE ME: your OIDC provider ARN
 }
 
 # =============================================================================
 #  Networking — existing VPC, no new networking resources created
+#
+#  NOTE: us-east-2b is the only AZ in us-east-2 offering hpc7a.96xlarge
+#  (required by the Karpenter coprocessor-pool). At least one private subnet
+#  below must be in us-east-2b.
 # =============================================================================
 networking = {
   enabled = false
@@ -60,6 +64,7 @@ rds = {
   enabled  = true
   db_name  = "coprocessor"
   username = "coprocessor"
+  multi_az = true
 
   # Password is managed by AWS Secrets Manager by default (recommended).
   # Rotation is enabled automatically every 7 days.
@@ -134,7 +139,7 @@ k8s_coprocessor_deps = {
 #  system-level Helm releases. This module does not deploy:
 #    - metrics-server                  (assumed present in the existing cluster)
 #    - karpenter                       (assumed present; IAM/SQS resources are partner-managed)
-#    - karpenter NodePool/EC2NodeClass (assumed present; see testnet-complete for reference)
+#    - karpenter NodePool/EC2NodeClass (assumed present; see mainnet-complete for reference)
 #    - prometheus-operator-crds        (must be applied before any chart that creates ServiceMonitors)
 #    - k8s-monitoring                  (requires grafana-cloud-credentials secret in monitoring namespace)
 #    - prometheus-rds-exporter         (IRSA role created above via db-admin service account)
@@ -142,19 +147,5 @@ k8s_coprocessor_deps = {
 #    - coprocessor-sql-exporter        (requires sql-exporter-config secret in monitoring namespace)
 #
 #  To adopt these releases into Terraform management, set k8s_charts.enabled = true
-#  and add the relevant application entries (see testnet-complete for reference).
+#  and add the relevant application entries (see mainnet-complete for reference).
 # =============================================================================
-
-# =============================================================================
-#  KMS
-# =============================================================================
-kms = {
-  enabled = true
-}
-
-# =============================================================================
-#  ElastiCache (Valkey)
-# =============================================================================
-elasticache = {
-  enabled = false
-}
