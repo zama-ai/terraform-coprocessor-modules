@@ -21,6 +21,7 @@ locals {
 
     settings:
       featureGates:
+        # Enables spec.replicas so Karpenter maintains the configured fixed GPU node count.
         staticCapacity: ${var.defaults.karpenter_nodepools.enabled && var.defaults.karpenter_nodepools.gpu.enabled}
 
     nodeSelector:
