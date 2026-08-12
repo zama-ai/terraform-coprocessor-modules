@@ -1061,9 +1061,19 @@ k8s_system_charts = {
   # All built-ins are enabled by default except k8s_monitoring, prometheus_rds_exporter,
   # and prometheus_postgres_exporter which require explicit opt-in.
   defaults = {
-    # Karpenter EC2NodeClass + NodePool manifests.
-    # Default: { enabled = true }
-    karpenter_nodepools = { enabled = true }
+    # Karpenter EC2NodeClass + NodePool manifests. The GPU pool is opt-in and
+    # uses p5.4xlarge Bottlerocket nodes with the selected sharing strategy.
+    # Default: { enabled = true, gpu = { enabled = false, node_count = 1, capacity_type = "on-demand", sharing_strategy = "mig", sharing_replicas = 3 } }
+    karpenter_nodepools = {
+      enabled = true
+      gpu = {
+        enabled          = false
+        node_count       = 1 # Testnet: 1; mainnet: 2.
+        capacity_type    = "on-demand" # "on-demand", "spot", or "reserved".
+        sharing_strategy = "mig" # "mig", "mps", or "time-slicing".
+        sharing_replicas = 3
+      }
+    }
 
     # Prometheus Operator CRD chart (deployed before other monitoring charts).
     # Default: { enabled = true, repository = "https://prometheus-community.github.io/helm-charts", chart = "prometheus-operator-crds", version = "28.0.1" }

@@ -682,6 +682,177 @@ run "defaults_karpenter_nodepools_enabled_creates_three_manifests" {
   }
 }
 
+run "gpu_nodepool_enabled_creates_bottlerocket_static_capacity" {
+  command = plan
+
+  variables {
+    manifests_vars = {
+      cluster_name = "acme-testnet"
+      node_role    = "acme-testnet-Karpenter"
+    }
+    defaults = {
+      karpenter_nodepools = {
+        enabled = true
+        gpu = {
+          enabled          = true
+          node_count       = 2
+          capacity_type    = "spot"
+          sharing_strategy = "mig"
+          sharing_replicas = 3
+        }
+      }
+      prometheus_operator_crds = { enabled = false }
+      metrics_server           = { enabled = false }
+      karpenter                = { enabled = true }
+    }
+  }
+
+  assert {
+    condition     = length(kubernetes_manifest.additional) == 5
+    error_message = "GPU-enabled karpenter-nodepools must create the 3 default manifests plus a GPU EC2NodeClass and NodePool."
+  }
+
+  assert {
+    condition     = contains(keys(kubernetes_manifest.additional), "karpenter-nodepools/ec2nodeclass-gpu")
+    error_message = "GPU-enabled karpenter-nodepools must include the GPU EC2NodeClass."
+  }
+
+  assert {
+    condition     = contains(keys(kubernetes_manifest.additional), "karpenter-nodepools/nodepool-gpu")
+    error_message = "GPU-enabled karpenter-nodepools must include the GPU NodePool."
+  }
+
+  assert {
+    condition     = kubernetes_manifest.additional["karpenter-nodepools/ec2nodeclass-gpu"].manifest.spec.amiFamily == "Bottlerocket"
+    error_message = "The GPU EC2NodeClass must use the Bottlerocket AMI family."
+  }
+
+  assert {
+    condition     = kubernetes_manifest.additional["karpenter-nodepools/ec2nodeclass-gpu"].manifest.spec.amiSelectorTerms[0].alias == "bottlerocket@latest"
+    error_message = "The GPU EC2NodeClass must select the Bottlerocket AMI alias."
+  }
+
+  assert {
+    condition     = strcontains(kubernetes_manifest.additional["karpenter-nodepools/ec2nodeclass-gpu"].manifest.spec.userData, "device-partitioning-strategy = \"mig\"")
+    error_message = "The default GPU EC2NodeClass user data must enable MIG partitioning."
+  }
+
+  assert {
+    condition     = strcontains(kubernetes_manifest.additional["karpenter-nodepools/ec2nodeclass-gpu"].manifest.spec.userData, "\"h100.80gb\" = \"3\"")
+    error_message = "The default GPU EC2NodeClass user data must create three H100 MIG devices."
+  }
+
+  assert {
+    condition     = kubernetes_manifest.additional["karpenter-nodepools/nodepool-gpu"].manifest.spec.replicas == 2
+    error_message = "The GPU NodePool replicas field must match gpu.node_count."
+  }
+
+  assert {
+    condition     = kubernetes_manifest.additional["karpenter-nodepools/nodepool-gpu"].manifest.spec.limits.nodes == "2"
+    error_message = "The GPU NodePool node limit must match gpu.node_count."
+  }
+
+  assert {
+    condition = one([
+      for requirement in kubernetes_manifest.additional["karpenter-nodepools/nodepool-gpu"].manifest.spec.template.spec.requirements : requirement.values
+      if requirement.key == "node.kubernetes.io/instance-type"
+    ]) == ["p5.4xlarge"]
+    error_message = "The GPU NodePool must be restricted to p5.4xlarge instances."
+  }
+
+  assert {
+    condition = one([
+      for requirement in kubernetes_manifest.additional["karpenter-nodepools/nodepool-gpu"].manifest.spec.template.spec.requirements : requirement.values
+      if requirement.key == "karpenter.sh/capacity-type"
+    ]) == ["spot"]
+    error_message = "The GPU NodePool capacity-type requirement must match gpu.capacity_type."
+  }
+
+  assert {
+    condition     = strcontains(helm_release.apps["karpenter"].values[0], "staticCapacity: true")
+    error_message = "Enabling the GPU NodePool must enable Karpenter's StaticCapacity feature gate."
+  }
+}
+
+run "gpu_nodepool_supports_mps" {
+  command = plan
+
+  variables {
+    defaults = {
+      karpenter_nodepools = {
+        enabled = true
+        gpu = {
+          enabled          = true
+          sharing_strategy = "mps"
+          sharing_replicas = 3
+        }
+      }
+      prometheus_operator_crds = { enabled = false }
+      metrics_server           = { enabled = false }
+      karpenter                = { enabled = false }
+    }
+  }
+
+  assert {
+    condition     = strcontains(kubernetes_manifest.additional["karpenter-nodepools/ec2nodeclass-gpu"].manifest.spec.userData, "device-sharing-strategy = \"mps\"")
+    error_message = "The MPS strategy must render Bottlerocket MPS user data."
+  }
+
+  assert {
+    condition = one([
+      for requirement in kubernetes_manifest.additional["karpenter-nodepools/nodepool-gpu"].manifest.spec.template.spec.requirements : requirement.values
+      if requirement.key == "karpenter.sh/capacity-type"
+    ]) == ["on-demand"]
+    error_message = "The GPU NodePool must default to on-demand capacity."
+  }
+}
+
+run "gpu_nodepool_supports_time_slicing" {
+  command = plan
+
+  variables {
+    defaults = {
+      karpenter_nodepools = {
+        enabled = true
+        gpu = {
+          enabled          = true
+          sharing_strategy = "time-slicing"
+          sharing_replicas = 3
+        }
+      }
+      prometheus_operator_crds = { enabled = false }
+      metrics_server           = { enabled = false }
+      karpenter                = { enabled = false }
+    }
+  }
+
+  assert {
+    condition     = strcontains(kubernetes_manifest.additional["karpenter-nodepools/ec2nodeclass-gpu"].manifest.spec.userData, "device-sharing-strategy = \"time-slicing\"")
+    error_message = "The time-slicing strategy must render Bottlerocket time-slicing user data."
+  }
+}
+
+run "gpu_nodepool_rejects_invalid_capacity_type" {
+  command = plan
+
+  variables {
+    defaults = {
+      karpenter_nodepools = {
+        enabled = true
+        gpu = {
+          enabled       = true
+          capacity_type = "invalid"
+        }
+      }
+      prometheus_operator_crds = { enabled = false }
+      metrics_server           = { enabled = false }
+      karpenter                = { enabled = false }
+    }
+  }
+
+  expect_failures = [var.defaults]
+}
+
 run "defaults_prometheus_rds_exporter_enabled_creates_irsa" {
   command = plan
 
