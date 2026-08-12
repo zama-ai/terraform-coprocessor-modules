@@ -648,6 +648,13 @@ variable "k8s_system_charts" {
     defaults = optional(object({
       karpenter_nodepools = optional(object({
         enabled = optional(bool, true)
+        gpu = optional(object({
+          enabled          = optional(bool, false)
+          node_count       = optional(number, 1)
+          capacity_type    = optional(string, "on-demand")
+          sharing_strategy = optional(string, "mig")
+          sharing_replicas = optional(number, 3)
+        }), {})
       }), {})
       prometheus_operator_crds = optional(object({
         enabled    = optional(bool, true)
@@ -751,4 +758,30 @@ variable "k8s_system_charts" {
     })), {})
   })
   default = { enabled = false }
+
+  validation {
+    condition     = contains(["mig", "mps", "time-slicing"], var.k8s_system_charts.defaults.karpenter_nodepools.gpu.sharing_strategy)
+    error_message = "k8s_system_charts.defaults.karpenter_nodepools.gpu.sharing_strategy must be one of: mig, mps, time-slicing."
+  }
+
+  validation {
+    condition     = var.k8s_system_charts.defaults.karpenter_nodepools.gpu.node_count >= 1 && floor(var.k8s_system_charts.defaults.karpenter_nodepools.gpu.node_count) == var.k8s_system_charts.defaults.karpenter_nodepools.gpu.node_count
+    error_message = "k8s_system_charts.defaults.karpenter_nodepools.gpu.node_count must be a positive whole number."
+  }
+
+  validation {
+    condition     = contains(["on-demand", "spot", "reserved"], var.k8s_system_charts.defaults.karpenter_nodepools.gpu.capacity_type)
+    error_message = "k8s_system_charts.defaults.karpenter_nodepools.gpu.capacity_type must be one of: on-demand, spot, reserved."
+  }
+
+  validation {
+    condition = (
+      var.k8s_system_charts.defaults.karpenter_nodepools.gpu.sharing_strategy == "mig"
+      ? contains([1, 2, 3, 4, 7], var.k8s_system_charts.defaults.karpenter_nodepools.gpu.sharing_replicas)
+      : var.k8s_system_charts.defaults.karpenter_nodepools.gpu.sharing_strategy == "mps"
+      ? var.k8s_system_charts.defaults.karpenter_nodepools.gpu.sharing_replicas >= 2 && var.k8s_system_charts.defaults.karpenter_nodepools.gpu.sharing_replicas <= 48 && floor(var.k8s_system_charts.defaults.karpenter_nodepools.gpu.sharing_replicas) == var.k8s_system_charts.defaults.karpenter_nodepools.gpu.sharing_replicas
+      : var.k8s_system_charts.defaults.karpenter_nodepools.gpu.sharing_replicas >= 2 && floor(var.k8s_system_charts.defaults.karpenter_nodepools.gpu.sharing_replicas) == var.k8s_system_charts.defaults.karpenter_nodepools.gpu.sharing_replicas
+    )
+    error_message = "k8s_system_charts.defaults.karpenter_nodepools.gpu.sharing_replicas must be a supported MIG partition count (1, 2, 3, 4, or 7), an MPS count from 2 to 48, or a time-slicing count of at least 2."
+  }
 }

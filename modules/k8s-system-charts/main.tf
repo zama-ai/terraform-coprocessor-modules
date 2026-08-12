@@ -19,6 +19,11 @@ locals {
     replicas: 1
     dnsPolicy: Default
 
+    settings:
+      featureGates:
+        # Enables spec.replicas so Karpenter maintains the configured fixed GPU node count.
+        staticCapacity: ${var.defaults.karpenter_nodepools.enabled && var.defaults.karpenter_nodepools.gpu.enabled}
+
     nodeSelector:
       karpenter.sh/controller: "true"
     tolerations:
@@ -353,6 +358,39 @@ locals {
   YAML
 
   # ── Baked-in manifests for karpenter-nodepools ───────────────────────────────
+  # Bottlerocket NVIDIA device-plugin settings: https://bottlerocket.dev/en/os/1.62.x/api/settings/kubelet-device-plugins/
+  karpenter_gpu_user_data_by_strategy = {
+    mig          = <<-TOML
+      [settings.kubelet-device-plugins.nvidia]
+      device-partitioning-strategy = "mig"
+      device-sharing-strategy = "none"
+
+      [settings.kubelet-device-plugins.nvidia.mig.profile]
+      "h100.80gb" = "${var.defaults.karpenter_nodepools.gpu.sharing_replicas}"
+    TOML
+    mps          = <<-TOML
+      [settings.kubelet-device-plugins.nvidia]
+      device-partitioning-strategy = "none"
+      device-sharing-strategy = "mps"
+
+      [settings.kubelet-device-plugins.nvidia.mps]
+      replicas = ${var.defaults.karpenter_nodepools.gpu.sharing_replicas}
+      rename-by-default = false
+    TOML
+    time-slicing = <<-TOML
+      [settings.kubelet-device-plugins.nvidia]
+      device-partitioning-strategy = "none"
+      device-sharing-strategy = "time-slicing"
+
+      [settings.kubelet-device-plugins.nvidia.time-slicing]
+      replicas = ${var.defaults.karpenter_nodepools.gpu.sharing_replicas}
+      rename-by-default = false
+      fail-requests-greater-than-one = true
+    TOML
+  }
+
+  karpenter_gpu_user_data = local.karpenter_gpu_user_data_by_strategy[var.defaults.karpenter_nodepools.gpu.sharing_strategy]
+
   karpenter_ec2nodeclass = <<-YAML
     apiVersion: karpenter.k8s.aws/v1
     kind: EC2NodeClass
@@ -376,6 +414,44 @@ locals {
             iops: 3000
             throughput: 125
             deleteOnTermination: true
+      tags:
+        karpenter.sh/discovery: __cluster_name__
+  YAML
+
+  karpenter_ec2nodeclass_gpu = <<-YAML
+    apiVersion: karpenter.k8s.aws/v1
+    kind: EC2NodeClass
+    metadata:
+      name: coprocessor-gpu
+    spec:
+      amiFamily: Bottlerocket
+      amiSelectorTerms:
+        # The Bottlerocket alias discovers the NVIDIA SSM variant: https://github.com/aws/karpenter-provider-aws/blob/v1.11.0/pkg/providers/amifamily/bottlerocket.go#L53-L82
+        - alias: bottlerocket@latest
+      role: __node_role__
+      subnetSelectorTerms:
+        - tags:
+            karpenter.sh/discovery: __cluster_name__
+      securityGroupSelectorTerms:
+        - tags:
+            karpenter.sh/discovery: __cluster_name__
+      blockDeviceMappings:
+        - deviceName: /dev/xvda
+          ebs:
+            volumeType: gp3
+            volumeSize: 4Gi
+            encrypted: true
+            deleteOnTermination: true
+        - deviceName: /dev/xvdb
+          ebs:
+            volumeType: gp3
+            volumeSize: 100Gi
+            iops: 3000
+            throughput: 125
+            encrypted: true
+            deleteOnTermination: true
+      userData: |
+        ${indent(8, trimspace(local.karpenter_gpu_user_data))}
       tags:
         karpenter.sh/discovery: __cluster_name__
   YAML
@@ -452,6 +528,47 @@ locals {
           - nodes: "1"
   YAML
 
+  karpenter_nodepool_gpu = <<-YAML
+    apiVersion: karpenter.sh/v1
+    kind: NodePool
+    metadata:
+      name: coprocessor-gpu
+    spec:
+      replicas: ${var.defaults.karpenter_nodepools.gpu.node_count}
+      template:
+        metadata:
+          labels:
+            team: zws
+            workload: coprocessor-gpu
+            zama.ai/gpu-sharing-strategy: ${var.defaults.karpenter_nodepools.gpu.sharing_strategy}
+        spec:
+          expireAfter: Never
+          nodeClassRef:
+            group: karpenter.k8s.aws
+            kind: EC2NodeClass
+            name: coprocessor-gpu
+          taints:
+            - key: karpenter.sh/nodepool
+              value: coprocessor-gpu
+              effect: NoSchedule
+          requirements:
+            - key: karpenter.sh/capacity-type
+              operator: In
+              values: ["${var.defaults.karpenter_nodepools.gpu.capacity_type}"]
+            - key: kubernetes.io/arch
+              operator: In
+              values: ["amd64"]
+            - key: node.kubernetes.io/instance-type
+              operator: In
+              values: ["p5.4xlarge"]
+      limits:
+        nodes: "${var.defaults.karpenter_nodepools.gpu.node_count}"
+      disruption:
+        budgets:
+          - nodes: "1"
+            reasons: ["Drifted"]
+  YAML
+
   # ── Built-in application objects ─────────────────────────────────────────────
   # Each object uses all fields explicitly so merge() produces a consistent type.
   builtin_karpenter_nodepools = {
@@ -461,11 +578,17 @@ locals {
     helm_chart      = null
     additional_manifests = {
       enabled = true
-      manifests = {
-        ec2nodeclass         = local.karpenter_ec2nodeclass
-        nodepool-coprocessor = local.karpenter_nodepool_coprocessor
-        nodepool-services    = local.karpenter_nodepool_services
-      }
+      manifests = merge(
+        {
+          ec2nodeclass         = local.karpenter_ec2nodeclass
+          nodepool-coprocessor = local.karpenter_nodepool_coprocessor
+          nodepool-services    = local.karpenter_nodepool_services
+        },
+        var.defaults.karpenter_nodepools.gpu.enabled ? {
+          ec2nodeclass-gpu = local.karpenter_ec2nodeclass_gpu
+          nodepool-gpu     = local.karpenter_nodepool_gpu
+        } : {},
+      )
     }
   }
 
