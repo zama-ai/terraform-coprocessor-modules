@@ -441,7 +441,7 @@ locals {
               values: ["amd64"]
             - key: node.kubernetes.io/instance-type
               operator: In
-              values: ["m6i.large", "m6i.xlarge"]
+              values: ["m6i.large", "m6i.xlarge", "m6i.4xlarge"]
       limits:
         cpu: "800"
         memory: 1200Gi

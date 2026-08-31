@@ -680,6 +680,14 @@ run "defaults_karpenter_nodepools_enabled_creates_three_manifests" {
     condition     = contains(keys(kubernetes_manifest.additional), "karpenter-nodepools/nodepool-services")
     error_message = "Built-in karpenter-nodepools must include the nodepool-services manifest."
   }
+
+  assert {
+    condition = contains(
+      kubernetes_manifest.additional["karpenter-nodepools/nodepool-services"].manifest.spec.template.spec.requirements[2].values,
+      "m6i.4xlarge",
+    )
+    error_message = "Built-in zws-pool must allow an instance type that can schedule the 8-CPU gateway listener plus node overhead."
+  }
 }
 
 run "defaults_prometheus_rds_exporter_enabled_creates_irsa" {
