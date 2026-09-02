@@ -547,6 +547,11 @@ run "defaults_karpenter_enabled_creates_helm_release" {
     condition     = helm_release.apps["karpenter"].repository == "oci://public.ecr.aws/karpenter"
     error_message = "Built-in karpenter must use the public ECR repository."
   }
+
+  assert {
+    condition     = helm_release.apps["karpenter"].version == "1.11.0"
+    error_message = "Built-in karpenter chart version must match the default v1.11.0 controller image."
+  }
 }
 
 # Consolidates version, repository, and chart override tests into a single run.
