@@ -674,7 +674,7 @@ variable "k8s_system_charts" {
         enabled              = optional(bool, true)
         repository           = optional(string, "oci://public.ecr.aws/karpenter")
         chart                = optional(string, "karpenter")
-        version              = optional(string, "1.8.2")
+        version              = optional(string, "1.11.0")
         controller_image_tag = optional(string, "v1.11.0")
         values               = optional(string, "")
       }), {})
