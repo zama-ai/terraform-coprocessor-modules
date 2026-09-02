@@ -319,6 +319,86 @@ variable "rds" {
 }
 
 # ******************************************************
+#  Listener RDS
+# ******************************************************
+variable "listener_rds" {
+  description = <<-EOT
+    Dedicated RDS instance for the listener component. Set enabled = false to skip.
+
+    Schema is identical to var.rds. The instance reuses the coprocessor DB's pod-side
+    client security group (and therefore the same `network/rds-client` pod label), so
+    no second SecurityGroupPolicy or pod label is introduced. When var.rds is disabled,
+    this instance creates and manages its own client security group instead.
+
+    db_name must be set and must differ from rds.db_name: security group names and the
+    RDS identifier both derive from it, and security group names are unique per VPC.
+  EOT
+
+  type = object({
+    enabled = optional(bool, false)
+
+    # Naming
+    db_name             = optional(string, null)
+    identifier_override = optional(string, null)
+
+    # Engine
+    engine         = optional(string, "postgres")
+    engine_version = optional(string, "17")
+
+    # Instance
+    instance_class        = optional(string, "db.m5.4xlarge")
+    allocated_storage     = optional(number, 400)
+    max_allocated_storage = optional(number, 1000)
+    multi_az              = optional(bool, false)
+    port                  = optional(number, 5432)
+
+    # Credentials
+    username                            = optional(string, "postgres")
+    manage_master_user_password         = optional(bool, true)   # true = Secrets Manager managed (recommended)
+    password_wo                         = optional(string, null) # write-only; only used when manage_master_user_password = false
+    password_wo_version                 = optional(number, 1)    # increment to rotate a non-managed password
+    enable_master_password_rotation     = optional(bool, true)
+    master_password_rotation_days       = optional(number, 7)
+    iam_database_authentication_enabled = optional(bool, true)
+
+    # Maintenance & backups
+    maintenance_window      = optional(string, "Mon:00:00-Mon:03:00")
+    backup_retention_period = optional(number, 30)
+    deletion_protection     = optional(bool, true)
+
+    # Monitoring
+    monitoring_interval          = optional(number, 60)
+    create_monitoring_role       = optional(bool, true)
+    monitoring_role_name         = optional(string, null)
+    existing_monitoring_role_arn = optional(string, null)
+
+    # Parameters
+    # NOTE: rds.force_ssl = 0 is a temporary workaround for binary issues with
+    # SSL connections; remove once resolved.
+    parameters = optional(list(object({
+      name  = string
+      value = string
+    })), [{ name = "rds.force_ssl", value = "0" }])
+
+    # Security group
+    additional_allowed_cidr_blocks = optional(list(string), [])
+  })
+
+  default = { enabled = false }
+
+  validation {
+    condition = (
+      !var.listener_rds.enabled
+      || (
+        var.listener_rds.db_name != null
+        && var.listener_rds.db_name != try(var.rds.db_name, null)
+      )
+    )
+    error_message = "listener_rds.db_name must be set and must differ from rds.db_name: security group names and the RDS identifier derive from db_name, and security group names must be unique per VPC."
+  }
+}
+
+# ******************************************************
 #  ElastiCache
 # ******************************************************
 variable "elasticache" {

@@ -30,9 +30,19 @@ locals {
   # additional private subnets used by EKS node groups or Karpenter.
   all_private_subnet_cidr_blocks = concat(local.private_subnet_cidr_blocks, local.additional_subnet_cidr_blocks)
 
+  # Pod-side client SGs, one per database. Each database has its own client SG
+  # and its own SecurityGroupPolicy pod label, so a pod reaches only the database
+  # whose label it carries. Keys are driven by the enabled flags alone, so they
+  # are known at plan time and can drive for_each.
+  rds_client_security_group_ids = merge(
+    var.rds.enabled ? { coprocessor = module.rds.rds_client_security_group_id } : {},
+    var.listener_rds.enabled ? { listener = module.listener_rds.rds_client_security_group_id } : {},
+  )
+
   # ExternalName service endpoints — explicit tfvars value takes precedence, otherwise resolved from module outputs
   module_endpoints = {
     coprocessor-database = module.rds.db_instance_address
+    listener-database    = module.listener_rds.db_instance_address
   }
 
   k8s_config = merge(var.k8s_coprocessor_deps, {
@@ -98,29 +108,50 @@ module "rds" {
   rds = var.rds
 }
 
-# Pods carrying the rds-client SG (via SecurityGroupPolicy) get a branch ENI
-# that holds only that SG. To reach intra-cluster destinations they need
+# ******************************************************
+#  Listener RDS
+# ******************************************************
+# Dedicated instance for the listener component. It gets its own client and
+# server SGs (listener-client / listener-server, named from listener_rds.db_name)
+# and its own SecurityGroupPolicy pod label, so only pods labelled for the
+# listener can reach it — coprocessor pods cannot, and vice versa.
+module "listener_rds" {
+  source = "./modules/rds"
+
+  partner_name = var.partner_name
+  environment  = var.environment
+
+  vpc_id                     = local.vpc_id
+  private_subnet_ids         = local.private_subnet_ids
+  private_subnet_cidr_blocks = local.all_private_subnet_cidr_blocks
+
+  rds = var.listener_rds
+}
+
+# Pods carrying a database's client SG (via SecurityGroupPolicy) get a branch ENI
+# that holds only that SG. One pair of rules is created per database, since each
+# has its own client SG. To reach intra-cluster destinations these pods need
 # ingress allowed on the SGs of those destinations:
 #   - kube-apiserver (control plane ENIs)     -> cluster primary SG
 #   - CoreDNS / pods running on cluster nodes -> node SG
 #     (one shared node SG covers managed NGs and Karpenter nodes via the
 #      karpenter.sh/discovery tag selector on the EC2NodeClass)
 resource "aws_vpc_security_group_ingress_rule" "cluster_from_rds_client" {
-  count = var.rds.enabled && var.eks.enabled ? 1 : 0
+  for_each = var.eks.enabled ? local.rds_client_security_group_ids : {}
 
   security_group_id            = one(module.eks[*].cluster_primary_security_group_id)
-  referenced_security_group_id = module.rds.rds_client_security_group_id
+  referenced_security_group_id = each.value
   ip_protocol                  = "-1"
-  description                  = "Allow rds-client pods to reach the EKS kube-apiserver (control plane ENIs)"
+  description                  = "Allow ${each.key} rds-client pods to reach the EKS kube-apiserver (control plane ENIs)"
 }
 
 resource "aws_vpc_security_group_ingress_rule" "node_from_rds_client" {
-  count = var.rds.enabled && var.eks.enabled ? 1 : 0
+  for_each = var.eks.enabled ? local.rds_client_security_group_ids : {}
 
   security_group_id            = one(module.eks[*].node_security_group_id)
-  referenced_security_group_id = module.rds.rds_client_security_group_id
+  referenced_security_group_id = each.value
   ip_protocol                  = "-1"
-  description                  = "Allow rds-client pods to reach CoreDNS and other pods running on cluster nodes"
+  description                  = "Allow ${each.key} rds-client pods to reach CoreDNS and other pods running on cluster nodes"
 }
 
 # ******************************************************
@@ -204,11 +235,13 @@ module "k8s_coprocessor_deps" {
     : ""
   )
 
-  rds_master_secret_arn        = module.rds.rds_master_secret_arn
-  rds_client_security_group_id = module.rds.rds_client_security_group_id
-  s3_bucket_arns               = module.s3.bucket_arns
-  s3_bucket_names              = module.s3.bucket_names
-  kms_key_arn                  = module.kms.key_arn
+  rds_master_secret_arn                 = module.rds.rds_master_secret_arn
+  listener_rds_master_secret_arn        = module.listener_rds.rds_master_secret_arn
+  rds_client_security_group_id          = module.rds.rds_client_security_group_id
+  listener_rds_client_security_group_id = module.listener_rds.rds_client_security_group_id
+  s3_bucket_arns                        = module.s3.bucket_arns
+  s3_bucket_names                       = module.s3.bucket_names
+  kms_key_arn                           = module.kms.key_arn
 
   k8s = local.k8s_config
 

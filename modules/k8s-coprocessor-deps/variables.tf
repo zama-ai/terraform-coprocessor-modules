@@ -22,6 +22,12 @@ variable "rds_master_secret_arn" {
   default     = null
 }
 
+variable "listener_rds_master_secret_arn" {
+  description = "ARN of the Secrets Manager secret containing the listener RDS master user password. Granted alongside rds_master_secret_arn to any service account with rds_master_secret_access = true. Null when the listener RDS is disabled or manages its own password."
+  type        = string
+  default     = null
+}
+
 variable "s3_bucket_arns" {
   description = "Map of logical bucket key to ARN from the s3 module. Referenced by service_accounts[*].s3_bucket_access to generate S3 IAM statements automatically."
   type        = map(string)
@@ -42,6 +48,12 @@ variable "kms_key_arn" {
 
 variable "rds_client_security_group_id" {
   description = "ID of the rds-client security group from the rds module. Required when k8s.security_group_policies.rds_client.enabled = true; used as the groupIds value in the SecurityGroupPolicy resources that label pods for RDS access."
+  type        = string
+  default     = null
+}
+
+variable "listener_rds_client_security_group_id" {
+  description = "ID of the listener-rds-client security group from the listener RDS module. Required when k8s.security_group_policies.listener_rds_client.enabled = true; used as the groupIds value in the SecurityGroupPolicy resources that label pods for listener DB access."
   type        = string
   default     = null
 }
@@ -172,6 +184,27 @@ variable "k8s" {
           "coproc-admin", "coproc", "gw-blockchain", "eth-blockchain", "polygon-blockchain", "monitoring"
         ])
         pod_label_key   = optional(string, "network/rds-client")
+        pod_label_value = optional(string, "true")
+      }), {})
+
+      # listener_rds_client: same shape as rds_client, but for the dedicated
+      # listener database. A separate SG and a separate label mean a pod reaches
+      # only the database whose label it carries; a pod needing both (db-admin,
+      # exporters scraping both) must carry both labels.
+      #
+      # Namespaces default to the *-blockchain namespaces (one listener per
+      # blockchain), plus coproc-admin so db-admin can administer the database
+      # whose master secret it holds, and monitoring for exporters. Deliberately
+      # excludes coproc: keeping the coprocessor out of the listener DB is the
+      # isolation this separate SG exists to provide.
+      # Defaults to false, mirroring listener_rds.enabled: enable it alongside the
+      # listener database, and supply listener_rds_client_security_group_id with it.
+      listener_rds_client = optional(object({
+        enabled = optional(bool, false)
+        namespaces = optional(list(string), [
+          "eth-blockchain", "polygon-blockchain", "gw-blockchain", "coproc-admin", "monitoring"
+        ])
+        pod_label_key   = optional(string, "network/listener-rds-client")
         pod_label_value = optional(string, "true")
       }), {})
 
