@@ -69,6 +69,14 @@ variable "rds" {
     monitoring_role_name         = optional(string, null)
     existing_monitoring_role_arn = optional(string, null)
 
+    # Database Insights (formerly Performance Insights)
+    # Standard mode retains 7 days free; advanced mode retains 15 months and is
+    # billed per vCPU. Valid retention values: 7, 31 * n (n = 1..23), or 731.
+    performance_insights_enabled          = optional(bool, false)
+    performance_insights_retention_period = optional(number, 7)
+    performance_insights_kms_key_id       = optional(string, null)
+    database_insights_mode                = optional(string, null)
+
     # Parameters
     # NOTE: rds.force_ssl = 0 is a temporary workaround for binary issues with
     # SSL connections; remove once resolved.
@@ -85,4 +93,28 @@ variable "rds" {
   })
 
   default = { enabled = false }
+
+  # AWS rejects retention values outside this set with InvalidParameterValue.
+  validation {
+    condition = contains(
+      concat([7, 731], [for n in range(1, 24) : n * 31]),
+      var.rds.performance_insights_retention_period
+    )
+    error_message = "rds.performance_insights_retention_period must be 7, 731, or a multiple of 31 up to 713."
+  }
+
+  # Advanced mode is rejected at apply unless Performance Insights is on with
+  # at least 15 months (465 days) of retention.
+  validation {
+    condition = (
+      var.rds.database_insights_mode != "advanced"
+      || (var.rds.performance_insights_enabled && var.rds.performance_insights_retention_period >= 465)
+    )
+    error_message = "rds.database_insights_mode = \"advanced\" requires performance_insights_enabled = true and performance_insights_retention_period >= 465."
+  }
+
+  validation {
+    condition     = var.rds.database_insights_mode == null || contains(["standard", "advanced"], coalesce(var.rds.database_insights_mode, "standard"))
+    error_message = "rds.database_insights_mode must be \"standard\", \"advanced\", or null."
+  }
 }

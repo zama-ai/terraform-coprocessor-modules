@@ -303,6 +303,14 @@ variable "rds" {
     monitoring_role_name         = optional(string, null)
     existing_monitoring_role_arn = optional(string, null)
 
+    # Database Insights (formerly Performance Insights)
+    # Standard mode retains 7 days free; advanced mode retains 15 months and is
+    # billed per vCPU. Valid retention values: 7, 31 * n (n = 1..23), or 731.
+    performance_insights_enabled          = optional(bool, false)
+    performance_insights_retention_period = optional(number, 7)
+    performance_insights_kms_key_id       = optional(string, null)
+    database_insights_mode                = optional(string, null)
+
     # Parameters
     # NOTE: rds.force_ssl = 0 is a temporary workaround for binary issues with
     # SSL connections; remove once resolved.
@@ -371,6 +379,14 @@ variable "listener_rds" {
     create_monitoring_role       = optional(bool, true)
     monitoring_role_name         = optional(string, null)
     existing_monitoring_role_arn = optional(string, null)
+
+    # Database Insights (formerly Performance Insights)
+    # Standard mode retains 7 days free; advanced mode retains 15 months and is
+    # billed per vCPU. Valid retention values: 7, 31 * n (n = 1..23), or 731.
+    performance_insights_enabled          = optional(bool, false)
+    performance_insights_retention_period = optional(number, 7)
+    performance_insights_kms_key_id       = optional(string, null)
+    database_insights_mode                = optional(string, null)
 
     # Parameters
     # NOTE: rds.force_ssl = 0 is a temporary workaround for binary issues with
