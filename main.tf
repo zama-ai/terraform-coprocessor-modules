@@ -154,6 +154,24 @@ resource "aws_vpc_security_group_ingress_rule" "node_from_rds_client" {
   description                  = "Allow ${each.key} rds-client pods to reach CoreDNS and other pods running on cluster nodes"
 }
 
+# These two rules were previously gated by count, so the single coprocessor
+# instance lived at index [0]. Without these moved blocks, an already-deployed
+# stack would destroy and recreate them on upgrade, and pods on branch ENIs
+# would lose kube-apiserver and CoreDNS access for the duration.
+#
+# Both are no-ops on a fresh state: Terraform ignores a moved block whose source
+# address is absent, and ignores the destination when the key is not in the
+# current for_each (e.g. rds.enabled = false).
+moved {
+  from = aws_vpc_security_group_ingress_rule.cluster_from_rds_client[0]
+  to   = aws_vpc_security_group_ingress_rule.cluster_from_rds_client["coprocessor"]
+}
+
+moved {
+  from = aws_vpc_security_group_ingress_rule.node_from_rds_client[0]
+  to   = aws_vpc_security_group_ingress_rule.node_from_rds_client["coprocessor"]
+}
+
 # ******************************************************
 #  ElastiCache
 # ******************************************************
