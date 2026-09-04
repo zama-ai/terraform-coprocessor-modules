@@ -627,3 +627,75 @@ run "listener_rds_rejects_null_db_name" {
 
   expect_failures = [var.listener_rds]
 }
+
+# =============================================================================
+#  k8s_coprocessor_deps: security_group_policies and config_maps are reachable
+#
+# The root variable's object schema is hand-duplicated from the submodule's
+# var.k8s. Any attribute missing here is silently replaced by the submodule's
+# optional() default, so the setting becomes unreachable through the root
+# module rather than failing loudly. These runs pin both blocks in place.
+# =============================================================================
+
+run "listener_rds_client_policy_is_reachable_from_root" {
+  command = plan
+
+  variables {
+    rds          = { enabled = true, db_name = "coprocessor", monitoring_interval = 0, create_monitoring_role = false }
+    listener_rds = { enabled = true, db_name = "listener", monitoring_interval = 0, create_monitoring_role = false }
+
+    k8s_coprocessor_deps = {
+      enabled = true
+      security_group_policies = {
+        listener_rds_client = {
+          enabled    = true
+          namespaces = ["eth-blockchain"]
+        }
+      }
+    }
+  }
+
+  assert {
+    condition = contains(
+      keys(module.k8s_coprocessor_deps.security_group_policy_names),
+      "listener-rds-client-eth-blockchain",
+    )
+    error_message = "listener_rds_client SecurityGroupPolicy must be enableable through the root module."
+  }
+}
+
+run "rds_client_policy_is_disableable_from_root" {
+  command = plan
+
+  variables {
+    k8s_coprocessor_deps = {
+      enabled                 = true
+      security_group_policies = { rds_client = { enabled = false } }
+    }
+  }
+
+  assert {
+    condition     = module.k8s_coprocessor_deps.security_group_policy_names == {}
+    error_message = "rds_client defaults to enabled; the root module must be able to turn it off."
+  }
+}
+
+run "config_maps_are_reachable_from_root" {
+  command = plan
+
+  variables {
+    k8s_coprocessor_deps = {
+      enabled = true
+      config_maps = {
+        db_admin    = { enabled = false }
+        coprocessor = { enabled = true, namespaces = ["coproc"] }
+      }
+      security_group_policies = { rds_client = { enabled = false } }
+    }
+  }
+
+  assert {
+    condition     = keys(module.k8s_coprocessor_deps.config_map_names) == ["coproc/coprocessor-config"]
+    error_message = "config_maps toggles must be reachable through the root module, got: ${jsonencode(keys(module.k8s_coprocessor_deps.config_map_names))}"
+  }
+}

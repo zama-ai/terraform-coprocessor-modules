@@ -1395,3 +1395,119 @@ run "listener_rds_client_policy_precondition_fires_when_sg_id_is_null" {
     resource.kubernetes_manifest.security_group_policy,
   ]
 }
+
+# =============================================================================
+#  ConfigMap toggles
+#
+# db-admin-config and coprocessor-config default to enabled so that existing
+# deployments are unaffected. Turning both off lets a caller use this module
+# for a narrower slice — e.g. a stack that only declares an ExternalName
+# service — without claiming ConfigMaps another deployment owns.
+# =============================================================================
+
+run "config_maps_enabled_by_default" {
+  command = plan
+
+  variables {
+    k8s = { enabled = true }
+  }
+
+  assert {
+    condition     = length(kubernetes_config_map.db_admin_config) == 1
+    error_message = "db-admin-config must still be created by default."
+  }
+
+  assert {
+    condition = alltrue([
+      length(kubernetes_config_map.coprocessor_config) == 4,
+      alltrue([
+        for ns in ["coproc", "eth-blockchain", "gw-blockchain", "polygon-blockchain"] :
+        contains(keys(kubernetes_config_map.coprocessor_config), ns)
+      ]),
+    ])
+    error_message = "coprocessor-config must default to the four coprocessor namespaces."
+  }
+}
+
+run "config_maps_can_be_disabled_individually" {
+  command = plan
+
+  variables {
+    k8s = {
+      enabled     = true
+      config_maps = { db_admin = { enabled = false } }
+    }
+  }
+
+  assert {
+    condition     = length(kubernetes_config_map.db_admin_config) == 0
+    error_message = "db-admin-config must not be created when its toggle is off."
+  }
+
+  assert {
+    condition     = length(kubernetes_config_map.coprocessor_config) == 4
+    error_message = "Disabling db_admin must not affect coprocessor-config."
+  }
+}
+
+run "coprocessor_config_namespaces_are_configurable" {
+  command = plan
+
+  variables {
+    k8s = {
+      enabled     = true
+      config_maps = { coprocessor = { namespaces = ["coproc"] } }
+    }
+  }
+
+  assert {
+    condition     = keys(kubernetes_config_map.coprocessor_config) == ["coproc"]
+    error_message = "coprocessor-config must honour an explicit namespace list."
+  }
+}
+
+# The whole point of the toggles: an ExternalName-only deployment.
+run "externalname_only_creates_nothing_else" {
+  command = plan
+
+  variables {
+    k8s = {
+      enabled = true
+
+      service_accounts = {
+        coprocessor = { enabled = false }
+        sns_worker  = { enabled = false }
+        db_admin    = { enabled = false }
+        tx_sender   = { enabled = false }
+        s3_migrate  = { enabled = false }
+      }
+      storage_classes         = { gp3 = { enabled = false } }
+      config_maps             = { db_admin = { enabled = false }, coprocessor = { enabled = false } }
+      security_group_policies = { rds_client = { enabled = false } }
+
+      external_name_services = {
+        listener-database = {
+          endpoint    = "zama-testnet-listener.example.eu-west-1.rds.amazonaws.com:5432"
+          annotations = { "tailscale.com/expose" = "true" }
+        }
+      }
+    }
+  }
+
+  assert {
+    condition     = length(kubernetes_service.external_name) == 1
+    error_message = "The requested ExternalName service must be created."
+  }
+
+  assert {
+    condition = alltrue([
+      length(kubernetes_config_map.db_admin_config) == 0,
+      length(kubernetes_config_map.coprocessor_config) == 0,
+      length(kubernetes_service_account.this) == 0,
+      length(kubernetes_storage_class_v1.this) == 0,
+      length(kubernetes_manifest.security_group_policy) == 0,
+      length(kubernetes_namespace.this) == 0,
+    ])
+    error_message = "An ExternalName-only deployment must create nothing but the Service."
+  }
+}

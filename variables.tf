@@ -720,6 +720,25 @@ variable "k8s_coprocessor_deps" {
       })), {})
     }), {})
 
+    # ConfigMaps published for the coprocessor components.
+    #
+    # Both default to enabled, matching the behaviour before these toggles
+    # existed. Turn them off to use this module for a narrower slice — e.g. a
+    # stack that only declares an ExternalName service — without claiming
+    # ConfigMaps another deployment owns.
+    config_maps = optional(object({
+      # db-admin-config in coproc-admin: RDS/listener master secret ARNs, KMS key, migrate bucket.
+      db_admin = optional(object({
+        enabled = optional(bool, true)
+      }), {})
+
+      # coprocessor-config, one per namespace: DB endpoints and the coprocessor bucket.
+      coprocessor = optional(object({
+        enabled    = optional(bool, true)
+        namespaces = optional(list(string), ["coproc", "eth-blockchain", "gw-blockchain", "polygon-blockchain"])
+      }), {})
+    }), {})
+
     # ExternalName services — map key becomes the Service name.
     # When endpoint is omitted the root module resolves it from the matching module output (see local.module_endpoints).
     external_name_services = optional(map(object({
@@ -728,6 +747,50 @@ variable "k8s_coprocessor_deps" {
       namespace   = optional(string, null)
       annotations = optional(map(string), {})
     })), {})
+
+    # SecurityGroupPolicy resources for EKS Security Groups for Pods (SGP).
+    # The CRD is installed automatically by EKS via the VPC Resource Controller.
+    # Pods opt in by carrying the matching label on their pod template.
+    security_group_policies = optional(object({
+      # rds_client: built-in policy that attaches the rds-client SG to any pod
+      # carrying the configured label. Created once per listed namespace.
+      rds_client = optional(object({
+        enabled = optional(bool, true)
+        namespaces = optional(list(string), [
+          "coproc-admin", "coproc", "gw-blockchain", "eth-blockchain", "polygon-blockchain", "monitoring"
+        ])
+        pod_label_key   = optional(string, "network/rds-client")
+        pod_label_value = optional(string, "true")
+      }), {})
+
+      # listener_rds_client: same shape as rds_client, but for the dedicated
+      # listener database. A separate SG and a separate label mean a pod reaches
+      # only the database whose label it carries; a pod needing both (db-admin,
+      # exporters scraping both) must carry both labels.
+      #
+      # Namespaces default to the *-blockchain namespaces (one listener per
+      # blockchain), plus coproc-admin so db-admin can administer the database
+      # whose master secret it holds, and monitoring for exporters. Deliberately
+      # excludes coproc: keeping the coprocessor out of the listener DB is the
+      # isolation this separate SG exists to provide.
+      # Defaults to false, mirroring listener_rds.enabled: enable it alongside the
+      # listener database, and supply listener_rds_client_security_group_id with it.
+      listener_rds_client = optional(object({
+        enabled = optional(bool, false)
+        namespaces = optional(list(string), [
+          "eth-blockchain", "polygon-blockchain", "gw-blockchain", "coproc-admin", "monitoring"
+        ])
+        pod_label_key   = optional(string, "network/listener-rds-client")
+        pod_label_value = optional(string, "true")
+      }), {})
+
+      # Custom SecurityGroupPolicy resources beyond the built-ins.
+      extra = optional(map(object({
+        namespace          = string
+        pod_selector       = map(string)
+        security_group_ids = list(string)
+      })), {})
+    }), {})
   })
   default = { enabled = false }
 }

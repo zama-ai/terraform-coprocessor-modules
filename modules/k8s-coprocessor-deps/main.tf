@@ -361,7 +361,7 @@ resource "aws_iam_role_policy_attachment" "service_account" {
 #  Kubernetes ConfigMaps
 # ***************************************
 resource "kubernetes_config_map" "db_admin_config" {
-  count = var.k8s.enabled ? 1 : 0
+  count = var.k8s.enabled && var.k8s.config_maps.db_admin.enabled ? 1 : 0
 
   metadata {
     name      = "db-admin-config"
@@ -384,7 +384,11 @@ resource "kubernetes_config_map" "db_admin_config" {
 }
 
 resource "kubernetes_config_map" "coprocessor_config" {
-  for_each = var.k8s.enabled ? toset(["coproc", "eth-blockchain", "gw-blockchain", "polygon-blockchain"]) : toset([])
+  for_each = (
+    var.k8s.enabled && var.k8s.config_maps.coprocessor.enabled
+    ? toset(var.k8s.config_maps.coprocessor.namespaces)
+    : toset([])
+  )
 
   metadata {
     name      = "coprocessor-config"

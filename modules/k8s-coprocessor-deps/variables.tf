@@ -163,6 +163,25 @@ variable "k8s" {
       })), {})
     }), {})
 
+    # ConfigMaps published for the coprocessor components.
+    #
+    # Both default to enabled, matching the behaviour before these toggles
+    # existed. Turn them off to use this module for a narrower slice — e.g. a
+    # stack that only declares an ExternalName service — without claiming
+    # ConfigMaps another deployment owns.
+    config_maps = optional(object({
+      # db-admin-config in coproc-admin: RDS/listener master secret ARNs, KMS key, migrate bucket.
+      db_admin = optional(object({
+        enabled = optional(bool, true)
+      }), {})
+
+      # coprocessor-config, one per namespace: DB endpoints and the coprocessor bucket.
+      coprocessor = optional(object({
+        enabled    = optional(bool, true)
+        namespaces = optional(list(string), ["coproc", "eth-blockchain", "gw-blockchain", "polygon-blockchain"])
+      }), {})
+    }), {})
+
     # ExternalName services — map key becomes the Service name.
     # Endpoints resolved by the root module; port is stripped automatically.
     external_name_services = optional(map(object({
@@ -218,4 +237,17 @@ variable "k8s" {
   })
 
   default = { enabled = false }
+
+  # main.tf does split(":", endpoint)[0]. A null endpoint fails there with an
+  # opaque error, and "" silently plans a Service with an empty externalName.
+  # The root module fills this in from local.module_endpoints, but only for the
+  # keys it knows; any other key must supply its own.
+  validation {
+    condition = alltrue([
+      for key, svc in var.k8s.external_name_services :
+      svc.endpoint != null && svc.endpoint != ""
+      if svc.enabled
+    ])
+    error_message = "Every enabled k8s.external_name_services entry must set a non-empty endpoint (host, or host:port)."
+  }
 }
