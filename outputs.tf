@@ -98,6 +98,49 @@ output "rds_master_secret_arn" {
 }
 
 # ******************************************************
+#  Listener RDS
+# ******************************************************
+output "listener_rds_db_instance_endpoint" {
+  description = "The listener RDS instance connection endpoint (host:port). Null when listener_rds.enabled = false."
+  value       = module.listener_rds.db_instance_endpoint
+}
+
+output "listener_rds_db_instance_address" {
+  description = "The listener RDS instance hostname (without port). Null when listener_rds.enabled = false."
+  value       = module.listener_rds.db_instance_address
+}
+
+output "listener_rds_db_instance_arn" {
+  description = "The ARN of the listener RDS instance. Null when listener_rds.enabled = false."
+  value       = module.listener_rds.db_instance_arn
+}
+
+output "listener_rds_db_instance_identifier" {
+  description = "The identifier of the listener RDS instance. Null when listener_rds.enabled = false."
+  value       = module.listener_rds.db_instance_identifier
+}
+
+output "listener_rds_db_instance_port" {
+  description = "The port the listener RDS instance is listening on. Null when listener_rds.enabled = false."
+  value       = module.listener_rds.db_instance_port
+}
+
+output "listener_rds_client_security_group_id" {
+  description = "ID of the client SG used to reach the listener RDS instance. Equals rds_client_security_group_id whenever the coprocessor RDS is also enabled, since the listener reuses it."
+  value       = module.listener_rds.rds_client_security_group_id
+}
+
+output "listener_rds_server_security_group_id" {
+  description = "ID of the SG attached to the listener RDS instance. Null when listener_rds.enabled = false."
+  value       = module.listener_rds.rds_server_security_group_id
+}
+
+output "listener_rds_master_secret_arn" {
+  description = "ARN of the Secrets Manager secret containing the listener RDS master user password. Null when manage_master_user_password = false or listener_rds.enabled = false."
+  value       = module.listener_rds.rds_master_secret_arn
+}
+
+# ******************************************************
 #  ElastiCache
 # ******************************************************
 output "elasticache_replication_group_id" {

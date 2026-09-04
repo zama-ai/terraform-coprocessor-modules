@@ -40,6 +40,12 @@ variable "rds" {
   default     = { enabled = true }
 }
 
+variable "listener_rds" {
+  description = "Dedicated listener RDS instance configuration. See root module variables.tf for full schema."
+  type        = any
+  default     = { enabled = false }
+}
+
 variable "s3" {
   description = "S3 bucket configuration. See root module variables.tf for full schema."
   type        = any

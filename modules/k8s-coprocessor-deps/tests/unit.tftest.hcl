@@ -1091,3 +1091,423 @@ run "extra_security_group_policies_are_created" {
     error_message = "Extra SecurityGroupPolicy securityGroups.groupIds must contain all configured SG IDs."
   }
 }
+
+# =============================================================================
+#  Listener RDS
+#
+#  A dedicated listener RDS instance is surfaced alongside the coprocessor one:
+#  its master secret is granted to any SA with rds_master_secret_access, and its
+#  endpoint is published as a second key on the coprocessor-config ConfigMap.
+#  Both are additive — the existing RDS_ADMIN_SECRET_ID and DATABASE_ENDPOINT
+#  keys keep their names and values because GitOps charts consume them.
+# =============================================================================
+
+run "listener_secret_arn_appears_in_db_admin_configmap" {
+  command = plan
+
+  variables {
+    rds_master_secret_arn          = "arn:aws:secretsmanager:eu-west-1:123456789012:secret:rds!db-coproc"
+    listener_rds_master_secret_arn = "arn:aws:secretsmanager:eu-west-1:123456789012:secret:rds!db-listener"
+    s3_bucket_names                = { coprocessor = "acme-testnet-coprocessor-abc123" }
+    k8s = {
+      enabled    = true
+      namespaces = { coproc-admin = {} }
+      service_accounts = {
+        sns_worker = { enabled = false }
+        db_admin   = { enabled = true }
+        tx_sender  = { enabled = false }
+      }
+      storage_classes = { gp3 = { enabled = false } }
+    }
+  }
+
+  assert {
+    condition     = kubernetes_config_map.db_admin_config[0].data["RDS_ADMIN_SECRET_ID"] == "arn:aws:secretsmanager:eu-west-1:123456789012:secret:rds!db-coproc"
+    error_message = "RDS_ADMIN_SECRET_ID must keep its existing name and value; GitOps charts consume it."
+  }
+
+  assert {
+    condition     = kubernetes_config_map.db_admin_config[0].data["LISTENER_RDS_ADMIN_SECRET_ID"] == "arn:aws:secretsmanager:eu-west-1:123456789012:secret:rds!db-listener"
+    error_message = "LISTENER_RDS_ADMIN_SECRET_ID must equal the supplied listener_rds_master_secret_arn."
+  }
+
+  assert {
+    condition     = length(local.rds_master_secret_arns) == 2
+    error_message = "Both master secret ARNs must be granted when the listener RDS is enabled."
+  }
+}
+
+run "listener_secret_absent_when_not_supplied" {
+  command = plan
+
+  variables {
+    rds_master_secret_arn = "arn:aws:secretsmanager:eu-west-1:123456789012:secret:rds!db-coproc"
+    s3_bucket_names       = { coprocessor = "acme-testnet-coprocessor-abc123" }
+    k8s = {
+      enabled    = true
+      namespaces = { coproc-admin = {} }
+      service_accounts = {
+        sns_worker = { enabled = false }
+        db_admin   = { enabled = true }
+        tx_sender  = { enabled = false }
+      }
+      storage_classes = { gp3 = { enabled = false } }
+    }
+  }
+
+  assert {
+    condition     = length(local.rds_master_secret_arns) == 1
+    error_message = "Only the coprocessor secret must be granted when no listener ARN is supplied."
+  }
+
+  assert {
+    condition     = kubernetes_config_map.db_admin_config[0].data["LISTENER_RDS_ADMIN_SECRET_ID"] == null
+    error_message = "LISTENER_RDS_ADMIN_SECRET_ID must be null when no listener RDS is configured."
+  }
+}
+
+run "no_secret_arns_grants_nothing" {
+  command = plan
+
+  variables {
+    k8s = {
+      enabled    = true
+      namespaces = { coproc-admin = {} }
+      service_accounts = {
+        sns_worker = { enabled = false }
+        db_admin   = { enabled = true }
+        tx_sender  = { enabled = false }
+      }
+      storage_classes = { gp3 = { enabled = false } }
+    }
+  }
+
+  assert {
+    condition     = length(local.rds_master_secret_arns) == 0
+    error_message = "No secret ARNs must be collected when neither RDS instance supplies one."
+  }
+}
+
+run "listener_database_endpoint_published_to_coprocessor_config" {
+  command = plan
+
+  variables {
+    s3_bucket_names = { coprocessor = "acme-testnet-coprocessor-abc123" }
+    k8s = {
+      enabled = true
+      namespaces = {
+        coproc         = {}
+        eth-blockchain = {}
+        gw-blockchain  = {}
+      }
+      external_name_services = {
+        coprocessor-database = { endpoint = "coprocdb.abc.eu-west-1.rds.amazonaws.com:5432" }
+        listener-database    = { endpoint = "listenerdb.abc.eu-west-1.rds.amazonaws.com:5432" }
+      }
+      service_accounts = {
+        sns_worker = { enabled = false }
+        db_admin   = { enabled = false }
+        tx_sender  = { enabled = false }
+      }
+      storage_classes = { gp3 = { enabled = false } }
+    }
+  }
+
+  assert {
+    condition     = length(kubernetes_service.external_name) == 2
+    error_message = "Both the coprocessor-database and listener-database ExternalName services must be created."
+  }
+
+  assert {
+    condition     = kubernetes_config_map.coprocessor_config["coproc"].data["DATABASE_ENDPOINT"] == "coprocessor-database.coproc.svc.cluster.local"
+    error_message = "DATABASE_ENDPOINT must be unchanged by the addition of the listener DB."
+  }
+
+  assert {
+    condition     = kubernetes_config_map.coprocessor_config["coproc"].data["LISTENER_DATABASE_ENDPOINT"] == "listener-database.coproc.svc.cluster.local"
+    error_message = "LISTENER_DATABASE_ENDPOINT must be the in-cluster DNS name of the listener-database ExternalName service."
+  }
+}
+
+run "listener_database_endpoint_null_without_listener_service" {
+  command = plan
+
+  variables {
+    s3_bucket_names = { coprocessor = "acme-testnet-coprocessor-abc123" }
+    k8s = {
+      enabled    = true
+      namespaces = { coproc = {} }
+      external_name_services = {
+        coprocessor-database = { endpoint = "coprocdb.abc.eu-west-1.rds.amazonaws.com:5432" }
+      }
+      service_accounts = {
+        sns_worker = { enabled = false }
+        db_admin   = { enabled = false }
+        tx_sender  = { enabled = false }
+      }
+      storage_classes = { gp3 = { enabled = false } }
+    }
+  }
+
+  assert {
+    condition     = kubernetes_config_map.coprocessor_config["coproc"].data["LISTENER_DATABASE_ENDPOINT"] == null
+    error_message = "LISTENER_DATABASE_ENDPOINT must be null when no listener-database service is configured."
+  }
+
+  assert {
+    condition     = kubernetes_config_map.coprocessor_config["coproc"].data["DATABASE_ENDPOINT"] == "coprocessor-database.coproc.svc.cluster.local"
+    error_message = "DATABASE_ENDPOINT must still resolve when only the coprocessor DB is configured."
+  }
+}
+
+# =============================================================================
+#  Listener RDS SecurityGroupPolicy
+#
+#  The listener database gets its own client SG under its own pod label, so a
+#  pod reaches only the database whose label it carries. A pod that needs both
+#  (db-admin, exporters scraping both) must carry both labels.
+# =============================================================================
+
+run "listener_rds_client_policy_skipped_by_default" {
+  command = plan
+
+  variables {
+    rds_client_security_group_id = "sg-0123456789abcdef0"
+
+    k8s = {
+      enabled = true
+      security_group_policies = {
+        rds_client = { enabled = true, namespaces = ["coproc"] }
+      }
+    }
+  }
+
+  assert {
+    condition     = length(kubernetes_manifest.security_group_policy) == 1
+    error_message = "listener_rds_client must default to disabled, mirroring listener_rds.enabled."
+  }
+}
+
+run "listener_rds_client_policy_creates_one_per_namespace" {
+  command = plan
+
+  variables {
+    rds_client_security_group_id          = "sg-0123456789abcdef0"
+    listener_rds_client_security_group_id = "sg-0fedcba9876543210"
+
+    k8s = {
+      enabled = true
+      security_group_policies = {
+        rds_client          = { enabled = false }
+        listener_rds_client = { enabled = true }
+      }
+    }
+  }
+
+  # Default namespaces: eth-blockchain, polygon-blockchain, gw-blockchain,
+  # coproc-admin, monitoring — deliberately excluding coproc.
+  assert {
+    condition     = length(kubernetes_manifest.security_group_policy) == 5
+    error_message = "One SecurityGroupPolicy must be created per default listener_rds_client namespace."
+  }
+
+  assert {
+    condition     = contains(keys(kubernetes_manifest.security_group_policy), "listener-rds-client-eth-blockchain")
+    error_message = "Listener SGP must be created in eth-blockchain (one listener per blockchain)."
+  }
+
+  assert {
+    condition     = !contains(keys(kubernetes_manifest.security_group_policy), "listener-rds-client-coproc")
+    error_message = "Listener SGP must NOT be created in coproc: keeping the coprocessor out of the listener DB is the isolation this SG provides."
+  }
+
+  assert {
+    condition     = kubernetes_manifest.security_group_policy["listener-rds-client-eth-blockchain"].manifest.metadata.name == "listener-rds-client"
+    error_message = "SecurityGroupPolicy name must be 'listener-rds-client'."
+  }
+
+  assert {
+    condition     = kubernetes_manifest.security_group_policy["listener-rds-client-eth-blockchain"].manifest.spec.podSelector.matchLabels["network/listener-rds-client"] == "true"
+    error_message = "Listener SGP must select on its own label, not network/rds-client."
+  }
+
+  assert {
+    condition     = kubernetes_manifest.security_group_policy["listener-rds-client-eth-blockchain"].manifest.spec.securityGroups.groupIds[0] == "sg-0fedcba9876543210"
+    error_message = "Listener SGP must reference listener_rds_client_security_group_id."
+  }
+}
+
+# Both policies coexist: distinct names, labels and SGs, no key collisions.
+run "both_client_policies_are_independent" {
+  command = plan
+
+  variables {
+    rds_client_security_group_id          = "sg-0123456789abcdef0"
+    listener_rds_client_security_group_id = "sg-0fedcba9876543210"
+
+    k8s = {
+      enabled = true
+      security_group_policies = {
+        rds_client          = { enabled = true, namespaces = ["coproc", "eth-blockchain"] }
+        listener_rds_client = { enabled = true, namespaces = ["eth-blockchain"] }
+      }
+    }
+  }
+
+  assert {
+    condition     = length(kubernetes_manifest.security_group_policy) == 3
+    error_message = "Both policies must coexist without key collisions (2 rds-client + 1 listener-rds-client)."
+  }
+
+  assert {
+    condition = (
+      kubernetes_manifest.security_group_policy["rds-client-eth-blockchain"].manifest.spec.securityGroups.groupIds[0]
+      != kubernetes_manifest.security_group_policy["listener-rds-client-eth-blockchain"].manifest.spec.securityGroups.groupIds[0]
+    )
+    error_message = "The two policies must attach different security groups; sharing one would defeat the isolation."
+  }
+
+  assert {
+    condition = (
+      keys(kubernetes_manifest.security_group_policy["rds-client-eth-blockchain"].manifest.spec.podSelector.matchLabels)[0]
+      != keys(kubernetes_manifest.security_group_policy["listener-rds-client-eth-blockchain"].manifest.spec.podSelector.matchLabels)[0]
+    )
+    error_message = "The two policies must select on different pod labels."
+  }
+}
+
+run "listener_rds_client_policy_precondition_fires_when_sg_id_is_null" {
+  command = plan
+
+  variables {
+    listener_rds_client_security_group_id = null
+
+    k8s = {
+      enabled = true
+      security_group_policies = {
+        rds_client          = { enabled = false }
+        listener_rds_client = { enabled = true }
+      }
+    }
+  }
+
+  expect_failures = [
+    resource.kubernetes_manifest.security_group_policy,
+  ]
+}
+
+# =============================================================================
+#  ConfigMap toggles
+#
+# db-admin-config and coprocessor-config default to enabled so that existing
+# deployments are unaffected. Turning both off lets a caller use this module
+# for a narrower slice — e.g. a stack that only declares an ExternalName
+# service — without claiming ConfigMaps another deployment owns.
+# =============================================================================
+
+run "config_maps_enabled_by_default" {
+  command = plan
+
+  variables {
+    k8s = { enabled = true }
+  }
+
+  assert {
+    condition     = length(kubernetes_config_map.db_admin_config) == 1
+    error_message = "db-admin-config must still be created by default."
+  }
+
+  assert {
+    condition = alltrue([
+      length(kubernetes_config_map.coprocessor_config) == 4,
+      alltrue([
+        for ns in ["coproc", "eth-blockchain", "gw-blockchain", "polygon-blockchain"] :
+        contains(keys(kubernetes_config_map.coprocessor_config), ns)
+      ]),
+    ])
+    error_message = "coprocessor-config must default to the four coprocessor namespaces."
+  }
+}
+
+run "config_maps_can_be_disabled_individually" {
+  command = plan
+
+  variables {
+    k8s = {
+      enabled     = true
+      config_maps = { db_admin = { enabled = false } }
+    }
+  }
+
+  assert {
+    condition     = length(kubernetes_config_map.db_admin_config) == 0
+    error_message = "db-admin-config must not be created when its toggle is off."
+  }
+
+  assert {
+    condition     = length(kubernetes_config_map.coprocessor_config) == 4
+    error_message = "Disabling db_admin must not affect coprocessor-config."
+  }
+}
+
+run "coprocessor_config_namespaces_are_configurable" {
+  command = plan
+
+  variables {
+    k8s = {
+      enabled     = true
+      config_maps = { coprocessor = { namespaces = ["coproc"] } }
+    }
+  }
+
+  assert {
+    condition     = keys(kubernetes_config_map.coprocessor_config) == ["coproc"]
+    error_message = "coprocessor-config must honour an explicit namespace list."
+  }
+}
+
+# The whole point of the toggles: an ExternalName-only deployment.
+run "externalname_only_creates_nothing_else" {
+  command = plan
+
+  variables {
+    k8s = {
+      enabled = true
+
+      service_accounts = {
+        coprocessor = { enabled = false }
+        sns_worker  = { enabled = false }
+        db_admin    = { enabled = false }
+        tx_sender   = { enabled = false }
+        s3_migrate  = { enabled = false }
+      }
+      storage_classes         = { gp3 = { enabled = false } }
+      config_maps             = { db_admin = { enabled = false }, coprocessor = { enabled = false } }
+      security_group_policies = { rds_client = { enabled = false } }
+
+      external_name_services = {
+        listener-database = {
+          endpoint    = "zama-testnet-listener.example.eu-west-1.rds.amazonaws.com:5432"
+          annotations = { "tailscale.com/expose" = "true" }
+        }
+      }
+    }
+  }
+
+  assert {
+    condition     = length(kubernetes_service.external_name) == 1
+    error_message = "The requested ExternalName service must be created."
+  }
+
+  assert {
+    condition = alltrue([
+      length(kubernetes_config_map.db_admin_config) == 0,
+      length(kubernetes_config_map.coprocessor_config) == 0,
+      length(kubernetes_service_account.this) == 0,
+      length(kubernetes_storage_class_v1.this) == 0,
+      length(kubernetes_manifest.security_group_policy) == 0,
+      length(kubernetes_namespace.this) == 0,
+    ])
+    error_message = "An ExternalName-only deployment must create nothing but the Service."
+  }
+}

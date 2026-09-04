@@ -367,3 +367,125 @@ run "password_rotation_skipped_when_explicit_password_set" {
     error_message = "RDS instance must plan without rotation when an explicit password_wo is provided."
   }
 }
+
+# =============================================================================
+#  Database Insights (formerly Performance Insights)
+#
+# Valid retention values are 7, 731, or a multiple of 31 up to 713. Advanced
+# mode is rejected by the RDS API unless Performance Insights is on with at
+# least 465 days (15 months) of retention.
+# =============================================================================
+
+run "performance_insights_off_by_default" {
+  command = plan
+
+  variables {
+    rds = {
+      enabled                = true
+      db_name                = "coprocessor"
+      monitoring_interval    = 0
+      create_monitoring_role = false
+    }
+  }
+
+  assert {
+    condition     = var.rds.performance_insights_enabled == false
+    error_message = "Performance Insights must stay off unless explicitly enabled."
+  }
+
+  assert {
+    condition     = var.rds.database_insights_mode == null
+    error_message = "database_insights_mode must default to null (RDS then applies standard mode)."
+  }
+}
+
+run "performance_insights_standard_mode_plans_without_error" {
+  command = plan
+
+  variables {
+    rds = {
+      enabled                               = true
+      db_name                               = "coprocessor"
+      monitoring_interval                   = 0
+      create_monitoring_role                = false
+      performance_insights_enabled          = true
+      performance_insights_retention_period = 7
+    }
+  }
+
+  assert {
+    condition     = length(module.rds_instance) == 1
+    error_message = "RDS instance must be planned with Performance Insights in standard mode."
+  }
+}
+
+run "invalid_retention_period_is_rejected" {
+  command = plan
+
+  variables {
+    rds = {
+      enabled                               = true
+      db_name                               = "coprocessor"
+      monitoring_interval                   = 0
+      create_monitoring_role                = false
+      performance_insights_enabled          = true
+      performance_insights_retention_period = 94
+    }
+  }
+
+  expect_failures = [var.rds]
+}
+
+run "advanced_mode_without_sufficient_retention_is_rejected" {
+  command = plan
+
+  variables {
+    rds = {
+      enabled                      = true
+      db_name                      = "coprocessor"
+      monitoring_interval          = 0
+      create_monitoring_role       = false
+      performance_insights_enabled = true
+      database_insights_mode       = "advanced"
+    }
+  }
+
+  expect_failures = [var.rds]
+}
+
+run "advanced_mode_with_465_day_retention_plans_without_error" {
+  command = plan
+
+  variables {
+    rds = {
+      enabled                               = true
+      db_name                               = "coprocessor"
+      monitoring_interval                   = 0
+      create_monitoring_role                = false
+      performance_insights_enabled          = true
+      performance_insights_retention_period = 465
+      database_insights_mode                = "advanced"
+    }
+  }
+
+  assert {
+    condition     = length(module.rds_instance) == 1
+    error_message = "RDS instance must be planned when advanced mode is paired with 465-day retention."
+  }
+}
+
+run "unknown_insights_mode_is_rejected" {
+  command = plan
+
+  variables {
+    rds = {
+      enabled                = true
+      db_name                = "coprocessor"
+      monitoring_interval    = 0
+      create_monitoring_role = false
+      database_insights_mode = "turbo"
+    }
+  }
+
+  expect_failures = [var.rds]
+}

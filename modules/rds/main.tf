@@ -130,6 +130,11 @@ module "rds_instance" {
   monitoring_role_name   = local.monitoring_role_name
   monitoring_role_arn    = var.rds.existing_monitoring_role_arn
 
+  performance_insights_enabled          = var.rds.performance_insights_enabled
+  performance_insights_retention_period = var.rds.performance_insights_retention_period
+  performance_insights_kms_key_id       = var.rds.performance_insights_kms_key_id
+  database_insights_mode                = var.rds.database_insights_mode
+
   create_db_subnet_group = true
   subnet_ids             = var.private_subnet_ids
   vpc_security_group_ids = [aws_security_group.rds_server[0].id]
