@@ -182,10 +182,13 @@ variable "k8s" {
       }), {})
     }), {})
 
-    # ExternalName services — map key becomes the Service name.
+    # ExternalName services — the map key becomes the Service name unless `name`
+    # overrides it. Set `name` to publish the same Service name in more than one
+    # namespace: the keys stay unique, metadata.name repeats.
     # Endpoints resolved by the root module; port is stripped automatically.
     external_name_services = optional(map(object({
       enabled     = optional(bool, true)
+      name        = optional(string, null) # defaults to the map key
       endpoint    = optional(string, null) # host:port or bare hostname
       namespace   = optional(string, null) # defaults to k8s.default_namespace
       annotations = optional(map(string), {})
@@ -249,5 +252,19 @@ variable "k8s" {
       if svc.enabled
     ])
     error_message = "Every enabled k8s.external_name_services entry must set a non-empty endpoint (host, or host:port)."
+  }
+
+  # Two entries may now share a Service name across namespaces, but not within
+  # one — that would be two Terraform resources fighting over the same object.
+  validation {
+    condition = length(distinct([
+      for key, svc in var.k8s.external_name_services :
+      "${coalesce(svc.namespace, var.k8s.default_namespace)}/${coalesce(svc.name, key)}"
+      if svc.enabled
+      ])) == length([
+      for key, svc in var.k8s.external_name_services : key
+      if svc.enabled
+    ])
+    error_message = "Every enabled k8s.external_name_services entry must resolve to a unique <namespace>/<name>; two entries currently target the same Service."
   }
 }

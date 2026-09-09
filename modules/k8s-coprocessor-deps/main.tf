@@ -9,6 +9,18 @@ locals {
   #     → "oidc.eks.us-east-1.amazonaws.com/id/EXAMPLE"
   oidc_provider_id = replace(var.oidc_provider_arn, "/^.*oidc-provider\\//", "")
 
+  # In-cluster FQDN of each ExternalName Service, keyed by Service *name*.
+  # The coprocessor ConfigMap looks endpoints up here rather than by map key,
+  # so an entry may be keyed freely once external_name_services[*].name is set.
+  # Grouped because the same name may be published in several namespaces; the
+  # first by map key wins, which is the only deterministic choice available.
+  external_name_fqdns = {
+    for name, services in {
+      for service in values(kubernetes_service.external_name) :
+      service.metadata[0].name => service...
+    } : name => "${name}.${services[0].metadata[0].namespace}.svc.cluster.local"
+  }
+
   # ── Built-in service accounts ──────────────────────────────────────────────
   builtin_coprocessor_sa = {
     name      = "coprocessor"
@@ -401,17 +413,11 @@ resource "kubernetes_config_map" "coprocessor_config" {
   }
 
   data = {
-    DATABASE_ENDPOINT = try(
-      "${kubernetes_service.external_name["coprocessor-database"].metadata[0].name}.${kubernetes_service.external_name["coprocessor-database"].metadata[0].namespace}.svc.cluster.local",
-      null,
-    )
+    DATABASE_ENDPOINT = lookup(local.external_name_fqdns, "coprocessor-database", null)
     # Null when no listener-database ExternalName service is configured, so the
     # key is simply absent on deployments without a dedicated listener RDS.
-    LISTENER_DATABASE_ENDPOINT = try(
-      "${kubernetes_service.external_name["listener-database"].metadata[0].name}.${kubernetes_service.external_name["listener-database"].metadata[0].namespace}.svc.cluster.local",
-      null,
-    )
-    S3_BUCKET_NAME = lookup(var.s3_bucket_names, var.k8s.service_accounts.sns_worker.s3_bucket_key, null)
+    LISTENER_DATABASE_ENDPOINT = lookup(local.external_name_fqdns, "listener-database", null)
+    S3_BUCKET_NAME             = lookup(var.s3_bucket_names, var.k8s.service_accounts.sns_worker.s3_bucket_key, null)
   }
 
   depends_on = [kubernetes_namespace.this]
@@ -470,7 +476,7 @@ resource "kubernetes_service" "external_name" {
   for_each = var.k8s.enabled ? { for key, config in var.k8s.external_name_services : key => config if config.enabled } : {}
 
   metadata {
-    name        = each.key
+    name        = coalesce(each.value.name, each.key)
     namespace   = coalesce(each.value.namespace, local.namespace)
     annotations = each.value.annotations
   }
