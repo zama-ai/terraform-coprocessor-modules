@@ -315,8 +315,14 @@ run "elasticache_k8s_service_is_published_per_namespace" {
       k8s_service = {
         enabled     = true
         name        = "redis"
-        namespaces  = ["coproc", "eth-blockchain"]
-        annotations = { "argocd.argoproj.io/sync-options" = "Prune=false" }
+        annotations = { "app.kubernetes.io/managed-by" = "terraform" }
+        namespaces = {
+          "coproc" = { annotations = { "argocd.argoproj.io/sync-options" = "Prune=false" } }
+          "eth-blockchain" = {
+            name   = "redis-broker"
+            labels = { "app.kubernetes.io/component" = "broker" }
+          }
+        }
       }
     }
   }
@@ -329,6 +335,11 @@ run "elasticache_k8s_service_is_published_per_namespace" {
   assert {
     condition     = output.elasticache_k8s_service_fqdns["coproc"] == "redis.coproc.svc.cluster.local"
     error_message = "The root module must expose the in-cluster DNS name pods use to reach ElastiCache."
+  }
+
+  assert {
+    condition     = output.elasticache_k8s_service_fqdns["eth-blockchain"] == "redis-broker.eth-blockchain.svc.cluster.local"
+    error_message = "A per-namespace name override must be reflected in the FQDN the root module publishes."
   }
 }
 

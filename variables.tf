@@ -471,14 +471,26 @@ variable "elasticache" {
     additional_allowed_cidr_blocks = optional(list(string), [])
 
     # Kubernetes ExternalName Service publishing the primary endpoint as
-    # <name>.<namespace>.svc.cluster.local. One Service per namespace; the
+    # <name>.<namespace>.svc.cluster.local. One Service per namespace, each with
+    # its own name, annotations and labels merged over the baseline; the
     # namespaces must already exist (see modules/k8s-coprocessor-deps).
     k8s_service = optional(object({
-      enabled     = optional(bool, false)
+      enabled = optional(bool, false)
+
+      # Baseline applied to every namespace. A namespace's own values are
+      # merged on top, per key, so an annotation can target one namespace
+      # without appearing in the others.
       name        = optional(string, "redis")
-      namespaces  = optional(list(string), ["coproc"])
       annotations = optional(map(string), {})
       labels      = optional(map(string), {})
+
+      # Map key = namespace. One ExternalName Service per enabled entry.
+      namespaces = optional(map(object({
+        enabled     = optional(bool, true)
+        name        = optional(string, null) # null keeps the baseline name
+        annotations = optional(map(string), {})
+        labels      = optional(map(string), {})
+      })), { coproc = {} })
     }), {})
   })
 
@@ -510,8 +522,8 @@ variable "elasticache" {
   }
 
   validation {
-    condition     = !var.elasticache.k8s_service.enabled || length(var.elasticache.k8s_service.namespaces) > 0
-    error_message = "k8s_service.enabled = true requires at least one namespace in k8s_service.namespaces."
+    condition     = !var.elasticache.k8s_service.enabled || length([for ns, cfg in var.elasticache.k8s_service.namespaces : ns if cfg.enabled]) > 0
+    error_message = "k8s_service.enabled = true requires at least one enabled entry in k8s_service.namespaces."
   }
 }
 

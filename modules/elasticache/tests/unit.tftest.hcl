@@ -555,7 +555,7 @@ run "k8s_service_not_created_when_elasticache_disabled" {
   variables {
     elasticache = {
       enabled     = false
-      k8s_service = { enabled = false, namespaces = ["coproc"] }
+      k8s_service = { enabled = false, namespaces = { "coproc" = {} } }
     }
   }
 
@@ -572,8 +572,12 @@ run "k8s_service_creates_one_service_per_namespace" {
     elasticache = {
       enabled = true
       k8s_service = {
-        enabled    = true
-        namespaces = ["coproc", "eth-blockchain", "gw-blockchain"]
+        enabled = true
+        namespaces = {
+          "coproc"         = {}
+          "eth-blockchain" = {}
+          "gw-blockchain"  = {}
+        }
       }
     }
   }
@@ -625,7 +629,7 @@ run "k8s_service_defaults_to_redis_in_coproc" {
   }
 }
 
-run "k8s_service_propagates_annotations_and_labels" {
+run "k8s_service_baseline_applies_to_every_namespace" {
   command = plan
 
   variables {
@@ -634,30 +638,148 @@ run "k8s_service_propagates_annotations_and_labels" {
       k8s_service = {
         enabled     = true
         name        = "listener-broker"
-        namespaces  = ["eth-blockchain"]
-        annotations = { "argocd.argoproj.io/sync-options" = "Prune=false" }
+        annotations = { "app.kubernetes.io/managed-by" = "terraform" }
         labels      = { "app.kubernetes.io/component" = "cache" }
+        namespaces = {
+          "coproc"         = {}
+          "eth-blockchain" = {}
+        }
       }
     }
   }
 
   assert {
-    condition = kubernetes_service.external_name["eth-blockchain"].metadata[0].annotations == tomap({
-      "argocd.argoproj.io/sync-options" = "Prune=false"
+    condition = kubernetes_service.external_name["coproc"].metadata[0].annotations == tomap({
+      "app.kubernetes.io/managed-by" = "terraform"
     })
-    error_message = "Annotations must be passed through verbatim, with no injected baseline keys."
+    error_message = "Baseline annotations must apply to a namespace that declares none of its own."
   }
 
   assert {
     condition = kubernetes_service.external_name["eth-blockchain"].metadata[0].labels == tomap({
       "app.kubernetes.io/component" = "cache"
     })
-    error_message = "Labels must be passed through verbatim."
+    error_message = "Baseline labels must apply to every namespace."
   }
 
   assert {
     condition     = kubernetes_service.external_name["eth-blockchain"].metadata[0].name == "listener-broker"
-    error_message = "k8s_service.name must override the default Service name."
+    error_message = "The baseline k8s_service.name must apply to every namespace that does not override it."
+  }
+}
+
+run "k8s_service_per_namespace_annotations_are_namespace_scoped" {
+  command = plan
+
+  variables {
+    elasticache = {
+      enabled = true
+      k8s_service = {
+        enabled     = true
+        annotations = { "app.kubernetes.io/managed-by" = "terraform" }
+        namespaces = {
+          "coproc"         = { annotations = { "argocd.argoproj.io/sync-options" = "Prune=false" } }
+          "eth-blockchain" = {}
+        }
+      }
+    }
+  }
+
+  assert {
+    condition = kubernetes_service.external_name["coproc"].metadata[0].annotations == tomap({
+      "app.kubernetes.io/managed-by"    = "terraform"
+      "argocd.argoproj.io/sync-options" = "Prune=false"
+    })
+    error_message = "A namespace's own annotations must be merged on top of the baseline."
+  }
+
+  assert {
+    condition = kubernetes_service.external_name["eth-blockchain"].metadata[0].annotations == tomap({
+      "app.kubernetes.io/managed-by" = "terraform"
+    })
+    error_message = "An annotation declared for one namespace must not leak into the others."
+  }
+}
+
+run "k8s_service_per_namespace_values_override_the_baseline" {
+  command = plan
+
+  variables {
+    elasticache = {
+      enabled = true
+      k8s_service = {
+        enabled     = true
+        name        = "redis"
+        annotations = { "argocd.argoproj.io/sync-options" = "Prune=false" }
+        labels      = { "app.kubernetes.io/component" = "cache" }
+        namespaces = {
+          "coproc" = {}
+          "gw-blockchain" = {
+            name        = "redis-broker"
+            annotations = { "argocd.argoproj.io/sync-options" = "Prune=true" }
+            labels      = { "app.kubernetes.io/component" = "broker" }
+          }
+        }
+      }
+    }
+  }
+
+  assert {
+    condition = kubernetes_service.external_name["gw-blockchain"].metadata[0].annotations == tomap({
+      "argocd.argoproj.io/sync-options" = "Prune=true"
+    })
+    error_message = "A namespace must be able to override a baseline annotation value for itself only."
+  }
+
+  assert {
+    condition = kubernetes_service.external_name["coproc"].metadata[0].annotations == tomap({
+      "argocd.argoproj.io/sync-options" = "Prune=false"
+    })
+    error_message = "Overriding a baseline annotation in one namespace must not change the others."
+  }
+
+  assert {
+    condition = kubernetes_service.external_name["gw-blockchain"].metadata[0].labels == tomap({
+      "app.kubernetes.io/component" = "broker"
+    })
+    error_message = "A namespace must be able to override a baseline label value."
+  }
+
+  assert {
+    condition     = output.k8s_service_fqdns["gw-blockchain"] == "redis-broker.gw-blockchain.svc.cluster.local"
+    error_message = "A per-namespace name override must be reflected in the published FQDN."
+  }
+
+  assert {
+    condition     = output.k8s_service_fqdns["coproc"] == "redis.coproc.svc.cluster.local"
+    error_message = "A per-namespace name override must not change the name used in other namespaces."
+  }
+}
+
+run "k8s_service_skips_disabled_namespace_entries" {
+  command = plan
+
+  variables {
+    elasticache = {
+      enabled = true
+      k8s_service = {
+        enabled = true
+        namespaces = {
+          "coproc"         = {}
+          "eth-blockchain" = { enabled = false }
+        }
+      }
+    }
+  }
+
+  assert {
+    condition     = toset(keys(kubernetes_service.external_name)) == toset(["coproc"])
+    error_message = "A namespace entry with enabled = false must not create a Service."
+  }
+
+  assert {
+    condition     = keys(output.k8s_service_fqdns) == ["coproc"]
+    error_message = "k8s_service_fqdns must only list the namespaces that actually have a Service."
   }
 }
 
@@ -696,7 +818,26 @@ run "k8s_service_with_empty_namespaces_fails_validation" {
   variables {
     elasticache = {
       enabled     = true
-      k8s_service = { enabled = true, namespaces = [] }
+      k8s_service = { enabled = true, namespaces = {} }
+    }
+  }
+
+  expect_failures = [var.elasticache]
+}
+
+run "k8s_service_with_every_namespace_disabled_fails_validation" {
+  command = plan
+
+  variables {
+    elasticache = {
+      enabled = true
+      k8s_service = {
+        enabled = true
+        namespaces = {
+          "coproc"         = { enabled = false }
+          "eth-blockchain" = { enabled = false }
+        }
+      }
     }
   }
 
