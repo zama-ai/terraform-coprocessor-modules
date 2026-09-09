@@ -469,6 +469,17 @@ variable "elasticache" {
 
     # Security group
     additional_allowed_cidr_blocks = optional(list(string), [])
+
+    # Kubernetes ExternalName Service publishing the primary endpoint as
+    # <name>.<namespace>.svc.cluster.local. One Service per namespace; the
+    # namespaces must already exist (see modules/k8s-coprocessor-deps).
+    k8s_service = optional(object({
+      enabled     = optional(bool, false)
+      name        = optional(string, "redis")
+      namespaces  = optional(list(string), ["coproc"])
+      annotations = optional(map(string), {})
+      labels      = optional(map(string), {})
+    }), {})
   })
 
   default = { enabled = false }
@@ -491,6 +502,16 @@ variable "elasticache" {
   validation {
     condition     = !var.elasticache.multi_az_enabled || var.elasticache.automatic_failover_enabled
     error_message = "multi_az_enabled requires automatic_failover_enabled = true."
+  }
+
+  validation {
+    condition     = !var.elasticache.k8s_service.enabled || var.elasticache.enabled
+    error_message = "k8s_service.enabled = true requires elasticache.enabled = true: without a replication group there is no endpoint for the ExternalName Service to point at."
+  }
+
+  validation {
+    condition     = !var.elasticache.k8s_service.enabled || length(var.elasticache.k8s_service.namespaces) > 0
+    error_message = "k8s_service.enabled = true requires at least one namespace in k8s_service.namespaces."
   }
 }
 
