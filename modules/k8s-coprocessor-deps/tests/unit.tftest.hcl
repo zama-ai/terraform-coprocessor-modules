@@ -425,6 +425,146 @@ run "external_name_service_namespace_override_is_respected" {
   }
 }
 
+run "external_name_service_name_defaults_to_map_key" {
+  command = plan
+
+  variables {
+    k8s = {
+      enabled = true
+      external_name_services = {
+        coprocessor-db = { endpoint = "mydb.abc123.eu-west-1.rds.amazonaws.com:5432" }
+      }
+    }
+  }
+
+  assert {
+    condition     = kubernetes_service.external_name["coprocessor-db"].metadata[0].name == "coprocessor-db"
+    error_message = "ExternalName service without an explicit name must fall back to the map key."
+  }
+}
+
+run "external_name_service_name_override_is_respected" {
+  command = plan
+
+  variables {
+    k8s = {
+      enabled = true
+      external_name_services = {
+        listener-db-eth = {
+          name     = "listener-database"
+          endpoint = "mydb.abc123.eu-west-1.rds.amazonaws.com:5432"
+        }
+      }
+    }
+  }
+
+  assert {
+    condition     = kubernetes_service.external_name["listener-db-eth"].metadata[0].name == "listener-database"
+    error_message = "ExternalName service with an explicit name must use it instead of the map key."
+  }
+}
+
+run "external_name_service_same_name_in_two_namespaces" {
+  command = plan
+
+  variables {
+    k8s = {
+      enabled = true
+      external_name_services = {
+        listener-db-eth = {
+          name      = "listener-database"
+          namespace = "eth-blockchain"
+          endpoint  = "mydb.abc123.eu-west-1.rds.amazonaws.com:5432"
+        }
+        listener-db-coproc = {
+          name      = "listener-database"
+          namespace = "coproc"
+          endpoint  = "mydb.abc123.eu-west-1.rds.amazonaws.com:5432"
+        }
+      }
+    }
+  }
+
+  assert {
+    condition = alltrue([
+      kubernetes_service.external_name["listener-db-eth"].metadata[0].name == "listener-database",
+      kubernetes_service.external_name["listener-db-coproc"].metadata[0].name == "listener-database",
+    ])
+    error_message = "The same Service name must be publishable from two entries."
+  }
+
+  assert {
+    condition = alltrue([
+      kubernetes_service.external_name["listener-db-eth"].metadata[0].namespace == "eth-blockchain",
+      kubernetes_service.external_name["listener-db-coproc"].metadata[0].namespace == "coproc",
+    ])
+    error_message = "Each entry sharing a Service name must land in its own namespace."
+  }
+}
+
+run "renamed_listener_entry_still_reaches_coprocessor_config" {
+  command = plan
+
+  variables {
+    s3_bucket_names = { coprocessor = "acme-testnet-coprocessor-abc123" }
+    k8s = {
+      enabled = true
+      namespaces = {
+        coproc         = {}
+        eth-blockchain = {}
+      }
+      # Keyed by namespace, named "listener-database" — the ConfigMap must still
+      # find it, because the lookup is on the Service name, not the map key.
+      external_name_services = {
+        listener-db-eth = {
+          name      = "listener-database"
+          namespace = "eth-blockchain"
+          endpoint  = "listenerdb.abc.eu-west-1.rds.amazonaws.com:5432"
+        }
+      }
+      service_accounts = {
+        sns_worker = { enabled = false }
+        db_admin   = { enabled = false }
+        tx_sender  = { enabled = false }
+      }
+      storage_classes = { gp3 = { enabled = false } }
+    }
+  }
+
+  assert {
+    condition = alltrue([
+      for cm in values(kubernetes_config_map.coprocessor_config) :
+      cm.data.LISTENER_DATABASE_ENDPOINT == "listener-database.eth-blockchain.svc.cluster.local"
+    ])
+    error_message = "LISTENER_DATABASE_ENDPOINT must resolve from the Service name even when the map key differs."
+  }
+}
+
+run "external_name_service_rejects_duplicate_name_in_one_namespace" {
+  command = plan
+
+  variables {
+    k8s = {
+      enabled           = true
+      default_namespace = "coproc"
+      external_name_services = {
+        listener-db = {
+          name     = "listener-database"
+          endpoint = "mydb.abc123.eu-west-1.rds.amazonaws.com:5432"
+        }
+        listener-db-alias = {
+          name     = "listener-database"
+          endpoint = "mydb.abc123.eu-west-1.rds.amazonaws.com:5432"
+        }
+      }
+    }
+  }
+
+  expect_failures = [
+    var.k8s,
+  ]
+}
+
 # =============================================================================
 #  Storage classes
 # =============================================================================
