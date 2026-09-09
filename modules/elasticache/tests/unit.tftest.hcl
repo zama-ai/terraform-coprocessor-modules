@@ -1,5 +1,7 @@
 mock_provider "aws" {}
 
+mock_provider "kubernetes" {}
+
 # Shared defaults across all runs.
 variables {
   partner_name               = "acme"
@@ -523,4 +525,180 @@ run "explicit_vpc_overrides_discovery" {
     condition     = output.vpc_id == "vpc-00000000000000000"
     error_message = "Explicit vpc_id must take precedence over the value discovered from cluster_name."
   }
+}
+
+# =============================================================================
+#  Kubernetes ExternalName Service
+# =============================================================================
+
+run "k8s_service_disabled_by_default" {
+  command = plan
+
+  variables {
+    elasticache = { enabled = true }
+  }
+
+  assert {
+    condition     = length(kubernetes_service.external_name) == 0
+    error_message = "No ExternalName Service must be created when elasticache.k8s_service is omitted."
+  }
+
+  assert {
+    condition     = output.k8s_service_fqdns == {}
+    error_message = "k8s_service_fqdns must be an empty map when the ExternalName Service is disabled."
+  }
+}
+
+run "k8s_service_not_created_when_elasticache_disabled" {
+  command = plan
+
+  variables {
+    elasticache = {
+      enabled     = false
+      k8s_service = { enabled = false, namespaces = ["coproc"] }
+    }
+  }
+
+  assert {
+    condition     = length(kubernetes_service.external_name) == 0
+    error_message = "No ExternalName Service must be created when elasticache.enabled = false."
+  }
+}
+
+run "k8s_service_creates_one_service_per_namespace" {
+  command = plan
+
+  variables {
+    elasticache = {
+      enabled = true
+      k8s_service = {
+        enabled    = true
+        namespaces = ["coproc", "eth-blockchain", "gw-blockchain"]
+      }
+    }
+  }
+
+  assert {
+    condition     = length(kubernetes_service.external_name) == 3
+    error_message = "One ExternalName Service must be created per entry in k8s_service.namespaces."
+  }
+
+  assert {
+    condition     = toset(keys(kubernetes_service.external_name)) == toset(["coproc", "eth-blockchain", "gw-blockchain"])
+    error_message = "ExternalName Services must be keyed by namespace so adding a namespace never re-creates the others."
+  }
+
+  assert {
+    condition     = kubernetes_service.external_name["eth-blockchain"].metadata[0].namespace == "eth-blockchain"
+    error_message = "Each ExternalName Service must land in the namespace it is keyed by."
+  }
+
+  assert {
+    condition     = output.k8s_service_fqdns["gw-blockchain"] == "redis.gw-blockchain.svc.cluster.local"
+    error_message = "k8s_service_fqdns must expose the in-cluster DNS name of every created Service."
+  }
+}
+
+run "k8s_service_defaults_to_redis_in_coproc" {
+  command = plan
+
+  variables {
+    elasticache = {
+      enabled     = true
+      k8s_service = { enabled = true }
+    }
+  }
+
+  assert {
+    condition     = length(kubernetes_service.external_name) == 1
+    error_message = "k8s_service must default to a single namespace."
+  }
+
+  assert {
+    condition     = kubernetes_service.external_name["coproc"].metadata[0].name == "redis"
+    error_message = "The ExternalName Service must default to the name \"redis\"."
+  }
+
+  assert {
+    condition     = kubernetes_service.external_name["coproc"].spec[0].type == "ExternalName"
+    error_message = "The Service type must be ExternalName."
+  }
+}
+
+run "k8s_service_propagates_annotations_and_labels" {
+  command = plan
+
+  variables {
+    elasticache = {
+      enabled = true
+      k8s_service = {
+        enabled     = true
+        name        = "listener-broker"
+        namespaces  = ["eth-blockchain"]
+        annotations = { "argocd.argoproj.io/sync-options" = "Prune=false" }
+        labels      = { "app.kubernetes.io/component" = "cache" }
+      }
+    }
+  }
+
+  assert {
+    condition = kubernetes_service.external_name["eth-blockchain"].metadata[0].annotations == tomap({
+      "argocd.argoproj.io/sync-options" = "Prune=false"
+    })
+    error_message = "Annotations must be passed through verbatim, with no injected baseline keys."
+  }
+
+  assert {
+    condition = kubernetes_service.external_name["eth-blockchain"].metadata[0].labels == tomap({
+      "app.kubernetes.io/component" = "cache"
+    })
+    error_message = "Labels must be passed through verbatim."
+  }
+
+  assert {
+    condition     = kubernetes_service.external_name["eth-blockchain"].metadata[0].name == "listener-broker"
+    error_message = "k8s_service.name must override the default Service name."
+  }
+}
+
+run "k8s_service_targets_the_primary_endpoint" {
+  command = apply
+
+  variables {
+    elasticache = {
+      enabled     = true
+      k8s_service = { enabled = true }
+    }
+  }
+
+  assert {
+    condition     = kubernetes_service.external_name["coproc"].spec[0].external_name == split(":", module.elasticache[0].replication_group_primary_endpoint_address)[0]
+    error_message = "The ExternalName Service must point at the replication group primary endpoint hostname, without a port suffix."
+  }
+}
+
+run "k8s_service_enabled_without_elasticache_fails_validation" {
+  command = plan
+
+  variables {
+    elasticache = {
+      enabled     = false
+      k8s_service = { enabled = true }
+    }
+  }
+
+  expect_failures = [var.elasticache]
+}
+
+run "k8s_service_with_empty_namespaces_fails_validation" {
+  command = plan
+
+  variables {
+    elasticache = {
+      enabled     = true
+      k8s_service = { enabled = true, namespaces = [] }
+    }
+  }
+
+  expect_failures = [var.elasticache]
 }

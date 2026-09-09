@@ -291,6 +291,60 @@ run "elasticache_multi_az_requires_failover" {
   expect_failures = [var.elasticache]
 }
 
+run "elasticache_k8s_service_disabled_by_default" {
+  command = plan
+
+  variables {
+    elasticache = {
+      enabled = true
+    }
+  }
+
+  assert {
+    condition     = output.elasticache_k8s_service_fqdns == {}
+    error_message = "The root module must not publish any ExternalName Service FQDN unless elasticache.k8s_service is enabled."
+  }
+}
+
+run "elasticache_k8s_service_is_published_per_namespace" {
+  command = plan
+
+  variables {
+    elasticache = {
+      enabled = true
+      k8s_service = {
+        enabled     = true
+        name        = "redis"
+        namespaces  = ["coproc", "eth-blockchain"]
+        annotations = { "argocd.argoproj.io/sync-options" = "Prune=false" }
+      }
+    }
+  }
+
+  assert {
+    condition     = length(output.elasticache_k8s_service_fqdns) == 2
+    error_message = "The root module must publish one ExternalName Service FQDN per configured namespace."
+  }
+
+  assert {
+    condition     = output.elasticache_k8s_service_fqdns["coproc"] == "redis.coproc.svc.cluster.local"
+    error_message = "The root module must expose the in-cluster DNS name pods use to reach ElastiCache."
+  }
+}
+
+run "elasticache_k8s_service_requires_elasticache_enabled" {
+  command = plan
+
+  variables {
+    elasticache = {
+      enabled     = false
+      k8s_service = { enabled = true }
+    }
+  }
+
+  expect_failures = [var.elasticache]
+}
+
 # =============================================================================
 #  KMS module
 # =============================================================================

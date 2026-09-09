@@ -223,3 +223,8 @@ output "kms_alias_arn" {
   description = "KMS alias ARN. Null when kms.enabled = false."
   value       = module.kms.alias_arn
 }
+
+output "elasticache_k8s_service_fqdns" {
+  description = "In-cluster DNS names of the ElastiCache ExternalName Services, keyed by namespace. Empty map when elasticache.k8s_service.enabled = false."
+  value       = module.elasticache.k8s_service_fqdns
+}

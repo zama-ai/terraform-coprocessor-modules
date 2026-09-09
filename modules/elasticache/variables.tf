@@ -96,6 +96,23 @@ variable "elasticache" {
 
     # Security group
     additional_allowed_cidr_blocks = optional(list(string), [])
+
+    # ── Kubernetes ExternalName Service ─────────────────────────────────────────
+    # Publishes the replication group primary endpoint as a stable in-cluster DNS
+    # name, so pods connect to <name>.<namespace>.svc.cluster.local instead of the
+    # AWS-generated hostname. One identical Service is created per namespace.
+    #
+    # The target namespaces must already exist. They are created by
+    # modules/k8s-coprocessor-deps (k8s.namespaces), and Terraform has no
+    # dependency edge between that module and this one, so on a greenfield
+    # single-pass apply enable this only once those namespaces are in place.
+    k8s_service = optional(object({
+      enabled     = optional(bool, false)
+      name        = optional(string, "redis")
+      namespaces  = optional(list(string), ["coproc"])
+      annotations = optional(map(string), {})
+      labels      = optional(map(string), {})
+    }), {})
   })
 
   default = { enabled = false }
@@ -123,5 +140,15 @@ variable "elasticache" {
   validation {
     condition     = var.elasticache.auth_token == null || var.elasticache.transit_encryption_enabled
     error_message = "auth_token can only be set when transit_encryption_enabled = true."
+  }
+
+  validation {
+    condition     = !var.elasticache.k8s_service.enabled || var.elasticache.enabled
+    error_message = "k8s_service.enabled = true requires elasticache.enabled = true: without a replication group there is no endpoint for the ExternalName Service to point at."
+  }
+
+  validation {
+    condition     = !var.elasticache.k8s_service.enabled || length(var.elasticache.k8s_service.namespaces) > 0
+    error_message = "k8s_service.enabled = true requires at least one namespace in k8s_service.namespaces."
   }
 }

@@ -42,3 +42,11 @@ output "private_subnet_ids" {
   description = "The private subnet IDs used for the ElastiCache subnet group (explicit input or discovered from cluster_name)."
   value       = local.private_subnet_ids
 }
+
+output "k8s_service_fqdns" {
+  description = "In-cluster DNS names of the ExternalName Services, keyed by namespace. Empty map when elasticache.k8s_service.enabled = false."
+  value = {
+    for namespace, svc in kubernetes_service.external_name :
+    namespace => "${svc.metadata[0].name}.${namespace}.svc.cluster.local"
+  }
+}
