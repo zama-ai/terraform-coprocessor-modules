@@ -100,18 +100,30 @@ variable "elasticache" {
     # ── Kubernetes ExternalName Service ─────────────────────────────────────────
     # Publishes the replication group primary endpoint as a stable in-cluster DNS
     # name, so pods connect to <name>.<namespace>.svc.cluster.local instead of the
-    # AWS-generated hostname. One identical Service is created per namespace.
+    # AWS-generated hostname. One Service is created per namespace, each with its
+    # own name, annotations and labels.
     #
     # The target namespaces must already exist. They are created by
     # modules/k8s-coprocessor-deps (k8s.namespaces), and Terraform has no
     # dependency edge between that module and this one, so on a greenfield
     # single-pass apply enable this only once those namespaces are in place.
     k8s_service = optional(object({
-      enabled     = optional(bool, false)
+      enabled = optional(bool, false)
+
+      # Baseline applied to every namespace. A namespace's own values are
+      # merged on top, per key, so an annotation can target one namespace
+      # without appearing in the others.
       name        = optional(string, "redis")
-      namespaces  = optional(list(string), ["coproc"])
       annotations = optional(map(string), {})
       labels      = optional(map(string), {})
+
+      # Map key = namespace. One ExternalName Service per enabled entry.
+      namespaces = optional(map(object({
+        enabled     = optional(bool, true)
+        name        = optional(string, null) # null keeps the baseline name
+        annotations = optional(map(string), {})
+        labels      = optional(map(string), {})
+      })), { coproc = {} })
     }), {})
   })
 
@@ -148,7 +160,7 @@ variable "elasticache" {
   }
 
   validation {
-    condition     = !var.elasticache.k8s_service.enabled || length(var.elasticache.k8s_service.namespaces) > 0
-    error_message = "k8s_service.enabled = true requires at least one namespace in k8s_service.namespaces."
+    condition     = !var.elasticache.k8s_service.enabled || length([for ns, cfg in var.elasticache.k8s_service.namespaces : ns if cfg.enabled]) > 0
+    error_message = "k8s_service.enabled = true requires at least one enabled entry in k8s_service.namespaces."
   }
 }
