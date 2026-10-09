@@ -77,6 +77,12 @@ terraform apply
 
 ---
 
+## Coprocessor worker autoscaling
+
+The shared `coprocessor-pool` supports HPA-driven workers in both testnet and mainnet. It provisions on-demand `hpc7a.96xlarge` nodes for pending pods and consolidates empty or underutilized nodes with `consolidateAfter: 30s` and a one-node disruption budget. Existing instance types, pool limits, affinity and taints are unchanged.
+
+The worker HPAs are configured separately in `coprocessor-operator` Helm values. Their 30-minute downscale stabilization window is not a Karpenter setting: Karpenter uses pod resource requests and scheduling constraints, not measured CPU utilization. The 30-second consolidation delay starts after pod additions or removals and avoids adding another 30-minute wait after HPA releases capacity. Consolidation can evict running workers, so validate work recovery and graceful termination before rollout.
+
 ## Tests
 
 Uses the native [Terraform test framework](https://developer.hashicorp.com/terraform/language/testing) (requires Terraform ≥ 1.10). All tests use mock providers and `command = plan` — no real AWS credentials needed.

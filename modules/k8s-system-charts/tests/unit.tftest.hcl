@@ -677,6 +677,15 @@ run "defaults_karpenter_nodepools_enabled_creates_three_manifests" {
   }
 
   assert {
+    condition = (
+      kubernetes_manifest.additional["karpenter-nodepools/nodepool-coprocessor"].manifest.spec.disruption.consolidationPolicy == "WhenEmptyOrUnderutilized" &&
+      kubernetes_manifest.additional["karpenter-nodepools/nodepool-coprocessor"].manifest.spec.disruption.consolidateAfter == "30s" &&
+      kubernetes_manifest.additional["karpenter-nodepools/nodepool-coprocessor"].manifest.spec.disruption.budgets[0].nodes == "1"
+    )
+    error_message = "Coprocessor nodes must consolidate after worker HPA releases capacity, with at most one voluntary disruption at a time."
+  }
+
+  assert {
     condition     = contains(keys(kubernetes_manifest.additional), "karpenter-nodepools/nodepool-services")
     error_message = "Built-in karpenter-nodepools must include the nodepool-services manifest."
   }

@@ -410,7 +410,9 @@ locals {
         cpu: "2500"
         memory: 8000Gi
       disruption:
-        consolidationPolicy: WhenEmpty
+        # Worker HPA owns the 30-minute CPU downscale window. Consolidation uses
+        # pod resource requests and can reclaim partially occupied nodes too.
+        consolidationPolicy: WhenEmptyOrUnderutilized
         consolidateAfter: 30s
         budgets:
           - nodes: "1"
