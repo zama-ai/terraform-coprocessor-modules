@@ -679,10 +679,10 @@ run "defaults_karpenter_nodepools_enabled_creates_three_manifests" {
   assert {
     condition = (
       kubernetes_manifest.additional["karpenter-nodepools/nodepool-coprocessor"].manifest.spec.disruption.consolidationPolicy == "WhenEmptyOrUnderutilized" &&
-      kubernetes_manifest.additional["karpenter-nodepools/nodepool-coprocessor"].manifest.spec.disruption.consolidateAfter == "30s" &&
+      kubernetes_manifest.additional["karpenter-nodepools/nodepool-coprocessor"].manifest.spec.disruption.consolidateAfter == "12h" &&
       kubernetes_manifest.additional["karpenter-nodepools/nodepool-coprocessor"].manifest.spec.disruption.budgets[0].nodes == "1"
     )
-    error_message = "Coprocessor nodes must consolidate after worker HPA releases capacity, with at most one voluntary disruption at a time."
+    error_message = "Coprocessor nodes must wait twelve hours after pod placement changes before consolidation, with at most one node disrupted at a time."
   }
 
   assert {

@@ -79,9 +79,9 @@ terraform apply
 
 ## Coprocessor worker autoscaling
 
-The shared `coprocessor-pool` supports HPA-driven workers in both testnet and mainnet. It provisions on-demand `hpc7a.96xlarge` nodes for pending pods and consolidates empty or underutilized nodes with `consolidateAfter: 30s` and a one-node disruption budget. Existing instance types, pool limits, affinity and taints are unchanged.
+The shared `coprocessor-pool` supports HPA-driven workers in both testnet and mainnet. It provisions on-demand `hpc7a.96xlarge` nodes for pending pods and consolidates empty or underutilized nodes with `consolidateAfter: 12h` and a one-node disruption budget. Existing instance types, pool limits, affinity and taints are unchanged.
 
-The worker HPAs are configured separately in `coprocessor-operator` Helm values. Their 30-minute downscale stabilization window is not a Karpenter setting: Karpenter uses pod resource requests and scheduling constraints, not measured CPU utilization. The 30-second consolidation delay starts after pod additions or removals and avoids adding another 30-minute wait after HPA releases capacity. Consolidation can evict running workers, so validate work recovery and graceful termination before rollout.
+The worker HPAs are configured separately in `coprocessor-operator` Helm values, with a one-hour downscale stabilization window. Karpenter uses pod resource requests and scheduling constraints, not measured CPU utilization. Its twelve-hour consolidation delay resets when a pod is added to or removed from the candidate node; CPU activity does not reset it. Consolidation can evict running workers, so validate work recovery and graceful termination before rollout.
 
 ## Tests
 
@@ -95,6 +95,16 @@ cd modules/<name> && terraform test   # individual submodule
 ```
 
 Tests live in `tests/unit.tftest.hcl` within each module directory.
+
+---
+
+## Development and releases
+
+Active development for partner releases takes place on release branches, currently `release/v0.4`. `main` is used for experimental and future features, including GPU and Lv2.
+
+For partner updates, create a branch from the current release branch, currently `release/v0.4`, merge the changes back into `release/v0.4`, and create the release tag from that release branch.
+
+Patch files, found in `examples/<example>/upgrades` are only needed when partners must change their `terraform.tfvars`. Otherwise, partners update the module's Git tag reference without applying a patch.
 
 ---
 
