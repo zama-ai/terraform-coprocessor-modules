@@ -98,6 +98,16 @@ Tests live in `tests/unit.tftest.hcl` within each module directory.
 
 ---
 
+## Development and releases
+
+Active development for partner releases takes place on release branches, currently `release/v0.4`. `main` is used for experimental and future features, including GPU and Lv2.
+
+For partner updates, create a branch from the current release branch, currently `release/v0.4`, merge the changes back into `release/v0.4`, and create the release tag from that release branch.
+
+Patch files are only needed when partners must change their `terraform.tfvars`. Otherwise, partners update the module's Git tag reference without applying a patch.
+
+---
+
 ## Pre-commit
 
 This repo uses [pre-commit](https://pre-commit.com/) to enforce consistency on every commit.
