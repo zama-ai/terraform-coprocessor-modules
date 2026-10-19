@@ -7,6 +7,17 @@ mock_provider "aws" {
       json = "{\"Version\":\"2012-10-17\",\"Statement\":[]}"
     }
   }
+
+  # Fixed values so the rds-db:connect ARN can be asserted exactly.
+  mock_data "aws_partition" {
+    defaults = { partition = "aws" }
+  }
+  mock_data "aws_region" {
+    defaults = { region = "eu-west-1" }
+  }
+  mock_data "aws_caller_identity" {
+    defaults = { account_id = "123456789012" }
+  }
 }
 
 # kubernetes_manifest requires a live cluster client at plan time to validate
@@ -161,9 +172,10 @@ run "one_set_of_iam_resources_per_service_account" {
     k8s = {
       enabled = true
       service_accounts = {
-        sns_worker = { enabled = false }
-        db_admin   = { enabled = false }
-        tx_sender  = { enabled = false }
+        sns_worker     = { enabled = false }
+        db_admin       = { enabled = false }
+        tx_sender      = { enabled = false }
+        operator_check = { enabled = false }
         extra = {
           custom-sns = {
             name = "custom-sns"
@@ -675,9 +687,10 @@ run "defaults_all_disabled_creates_no_builtin_resources" {
     k8s = {
       enabled = true
       service_accounts = {
-        sns_worker = { enabled = false }
-        db_admin   = { enabled = false }
-        tx_sender  = { enabled = false }
+        sns_worker     = { enabled = false }
+        db_admin       = { enabled = false }
+        tx_sender      = { enabled = false }
+        operator_check = { enabled = false }
       }
       storage_classes = {
         gp3 = { enabled = false }
@@ -1051,9 +1064,10 @@ run "extra_service_account_overrides_builtin_with_same_key" {
     k8s = {
       enabled = true
       service_accounts = {
-        sns_worker = { enabled = true }
-        db_admin   = { enabled = false }
-        tx_sender  = { enabled = false }
+        sns_worker     = { enabled = true }
+        db_admin       = { enabled = false }
+        tx_sender      = { enabled = false }
+        operator_check = { enabled = false }
         extra = {
           sns-worker = {
             name = "sns-worker"
@@ -1615,11 +1629,12 @@ run "externalname_only_creates_nothing_else" {
       enabled = true
 
       service_accounts = {
-        coprocessor = { enabled = false }
-        sns_worker  = { enabled = false }
-        db_admin    = { enabled = false }
-        tx_sender   = { enabled = false }
-        s3_migrate  = { enabled = false }
+        coprocessor    = { enabled = false }
+        sns_worker     = { enabled = false }
+        db_admin       = { enabled = false }
+        tx_sender      = { enabled = false }
+        s3_migrate     = { enabled = false }
+        operator_check = { enabled = false }
       }
       storage_classes         = { gp3 = { enabled = false } }
       config_maps             = { db_admin = { enabled = false }, coprocessor = { enabled = false } }
@@ -1649,5 +1664,271 @@ run "externalname_only_creates_nothing_else" {
       length(kubernetes_namespace.this) == 0,
     ])
     error_message = "An ExternalName-only deployment must create nothing but the Service."
+  }
+}
+
+# =============================================================================
+#  coprocessor-operator-check service account and RBAC
+#
+#  The chart runs its checks as this account instead of db-admin and no longer
+#  ships RBAC: everything it may read is granted here, get only, by name.
+# =============================================================================
+
+run "operator_check_sa_is_created_by_default" {
+  command = plan
+
+  # Master secret ARNs are supplied on purpose: the check must not be granted them.
+  variables {
+    rds_master_secret_arn          = "arn:aws:secretsmanager:eu-west-1:123456789012:secret:rds!db-coproc"
+    listener_rds_master_secret_arn = "arn:aws:secretsmanager:eu-west-1:123456789012:secret:rds!db-listener"
+    kms_key_arn                    = "arn:aws:kms:eu-west-1:123456789012:key/abcd-1234"
+    rds_resource_id                = "db-ABCDEFGHIJKLMNOP"
+    rds_address                    = "acme-testnet.abc123.eu-west-1.rds.amazonaws.com"
+    rds_port                       = 5432
+    k8s = {
+      enabled         = true
+      storage_classes = { gp3 = { enabled = false } }
+    }
+  }
+
+  assert {
+    condition     = kubernetes_service_account.this["operator-check"].metadata[0].name == "coprocessor-operator-check"
+    error_message = "Built-in operator-check service account must be named 'coprocessor-operator-check'."
+  }
+
+  assert {
+    condition     = kubernetes_service_account.this["operator-check"].metadata[0].namespace == "coproc-admin"
+    error_message = "Built-in operator-check service account must be in the coproc-admin namespace."
+  }
+
+  assert {
+    condition     = aws_iam_role.service_account["operator-check"].name == "operator-check-acme-testnet"
+    error_message = "operator-check IAM role must follow '<key>-<partner_name>-<environment>' pattern."
+  }
+
+  assert {
+    condition     = length(data.aws_iam_policy_document.service_account["operator-check"].statement) == 2
+    error_message = "operator-check policy must hold exactly two statements: IAM database login and KMS public key."
+  }
+
+  # IAM database authentication as the read-only check role, on the coprocessor instance only.
+  assert {
+    condition = (
+      data.aws_iam_policy_document.service_account["operator-check"].statement[0].actions == toset(["rds-db:connect"])
+      && data.aws_iam_policy_document.service_account["operator-check"].statement[0].resources == toset(["arn:aws:rds-db:eu-west-1:123456789012:dbuser:db-ABCDEFGHIJKLMNOP/operator_check"])
+    )
+    error_message = "operator-check must only get rds-db:connect as operator_check on the coprocessor instance."
+  }
+
+  # GetPublicKey only: the check derives the address and must never sign.
+  assert {
+    condition = (
+      data.aws_iam_policy_document.service_account["operator-check"].statement[1].actions == toset(["kms:GetPublicKey"])
+      && data.aws_iam_policy_document.service_account["operator-check"].statement[1].resources == toset(["arn:aws:kms:eu-west-1:123456789012:key/abcd-1234"])
+    )
+    error_message = "operator-check must only get GetPublicKey on the coprocessor keypair."
+  }
+
+  assert {
+    condition = !anytrue([
+      for statement in data.aws_iam_policy_document.service_account["operator-check"].statement :
+      anytrue([for action in statement.actions : startswith(action, "secretsmanager:")])
+    ])
+    error_message = "operator-check must never be granted Secrets Manager access (no master secret)."
+  }
+
+  assert {
+    condition = kubernetes_config_map.operator_check_config[0].data == tomap({
+      AWS_REGION       = "eu-west-1"
+      AWS_KMS_KEY_ID   = "arn:aws:kms:eu-west-1:123456789012:key/abcd-1234"
+      DATABASE_ADDRESS = "acme-testnet.abc123.eu-west-1.rds.amazonaws.com"
+      DATABASE_PORT    = "5432"
+      DATABASE_USER    = "operator_check"
+    })
+    error_message = "operator-check ConfigMap must publish the region, KMS key, database address, port and user."
+  }
+
+  assert {
+    condition = (
+      kubernetes_config_map.operator_check_config[0].metadata[0].name == "coprocessor-operator-check"
+      && kubernetes_config_map.operator_check_config[0].metadata[0].namespace == "coproc-admin"
+    )
+    error_message = "operator-check ConfigMap must be coproc-admin/coprocessor-operator-check."
+  }
+}
+
+run "operator_check_policy_skips_absent_arns" {
+  command = plan
+
+  variables {
+    k8s = {
+      enabled         = true
+      storage_classes = { gp3 = { enabled = false } }
+    }
+  }
+
+  assert {
+    condition     = length(data.aws_iam_policy_document.service_account["operator-check"].statement) == 0
+    error_message = "No IAM statement must be rendered for a database or key that is not supplied."
+  }
+}
+
+run "operator_check_rbac_is_get_on_named_objects_only" {
+  command = plan
+
+  variables {
+    k8s = {
+      enabled         = true
+      storage_classes = { gp3 = { enabled = false } }
+    }
+  }
+
+  assert {
+    condition = keys(kubernetes_role_v1.operator_check) == [
+      "coproc", "coproc-admin", "eth-blockchain", "gw-blockchain", "monitoring", "polygon-blockchain"
+    ]
+    error_message = "One Role must be created per namespace checked by the chart, got: ${jsonencode(keys(kubernetes_role_v1.operator_check))}"
+  }
+
+  assert {
+    condition = alltrue(flatten([
+      for role in values(kubernetes_role_v1.operator_check) : [
+        for rule in role.rule : rule.verbs == toset(["get"]) && length(rule.resource_names) > 0
+      ]
+    ]))
+    error_message = "Every Role rule must be get only and restricted to resource names (no list, no wildcard)."
+  }
+
+  assert {
+    condition = alltrue([
+      for role in values(kubernetes_role_v1.operator_check) :
+      alltrue([for rule in role.rule : !contains(rule.resources, "*") && rule.api_groups == toset([""])])
+    ])
+    error_message = "Role rules must target named core resources, never a wildcard."
+  }
+
+  assert {
+    condition = toset(flatten([
+      for rule in kubernetes_role_v1.operator_check["monitoring"].rule : rule.resources
+    ])) == toset(["secrets"])
+    error_message = "A namespace with secrets only must not get a rule for ConfigMaps or Services."
+  }
+
+  assert {
+    condition = alltrue([
+      for binding in values(kubernetes_role_binding_v1.operator_check) :
+      binding.subject[0].name == "coprocessor-operator-check" && binding.subject[0].namespace == "coproc-admin"
+    ])
+    error_message = "Every RoleBinding must bind coproc-admin/coprocessor-operator-check, never a production service account."
+  }
+
+  assert {
+    condition = (
+      kubernetes_cluster_role_v1.operator_check[0].rule[0].resources == tolist(["namespaces"])
+      && kubernetes_cluster_role_v1.operator_check[0].rule[0].verbs == tolist(["get"])
+      && length(kubernetes_cluster_role_v1.operator_check[0].rule) == 1
+    )
+    error_message = "The ClusterRole must only allow get on namespaces."
+  }
+
+  assert {
+    condition = (
+      kubernetes_cluster_role_binding_v1.operator_check[0].subject[0].name == "coprocessor-operator-check"
+      && kubernetes_cluster_role_binding_v1.operator_check[0].subject[0].namespace == "coproc-admin"
+    )
+    error_message = "The ClusterRoleBinding must bind coproc-admin/coprocessor-operator-check."
+  }
+}
+
+# resource_names = [] would match every object of the kind: such kinds, and
+# namespaces left with nothing to read, must not be rendered at all.
+run "operator_check_rbac_never_renders_empty_resource_names" {
+  command = plan
+
+  variables {
+    k8s = {
+      enabled         = true
+      storage_classes = { gp3 = { enabled = false } }
+      service_accounts = {
+        operator_check = {
+          resources = {
+            coproc       = { config_maps = ["coprocessor-config"] }
+            coproc-admin = {}
+          }
+        }
+      }
+    }
+  }
+
+  assert {
+    condition     = keys(kubernetes_role_v1.operator_check) == ["coproc"]
+    error_message = "A namespace with no named object must not get a Role."
+  }
+
+  assert {
+    condition = (
+      length(kubernetes_role_v1.operator_check["coproc"].rule) == 1
+      && kubernetes_role_v1.operator_check["coproc"].rule[0].resources == toset(["configmaps"])
+    )
+    error_message = "Only the kinds with named objects must get a rule."
+  }
+
+  assert {
+    condition     = toset(kubernetes_cluster_role_v1.operator_check[0].rule[0].resource_names) == toset(["coproc", "coproc-admin"])
+    error_message = "Namespace get must still cover every checked namespace."
+  }
+}
+
+run "operator_check_disabled_creates_nothing" {
+  command = plan
+
+  variables {
+    k8s = {
+      enabled         = true
+      storage_classes = { gp3 = { enabled = false } }
+      service_accounts = {
+        operator_check = { enabled = false }
+      }
+    }
+  }
+
+  assert {
+    condition = alltrue([
+      !contains(keys(kubernetes_service_account.this), "operator-check"),
+      !contains(keys(aws_iam_role.service_account), "operator-check"),
+      length(kubernetes_role_v1.operator_check) == 0,
+      length(kubernetes_role_binding_v1.operator_check) == 0,
+      length(kubernetes_cluster_role_v1.operator_check) == 0,
+      length(kubernetes_cluster_role_binding_v1.operator_check) == 0,
+      length(kubernetes_config_map.operator_check_config) == 0,
+    ])
+    error_message = "operator_check.enabled = false must create no service account, IAM role, RBAC or ConfigMap."
+  }
+}
+
+run "operator_check_rbac_follows_extra_override" {
+  command = plan
+
+  variables {
+    k8s = {
+      enabled         = true
+      storage_classes = { gp3 = { enabled = false } }
+      service_accounts = {
+        extra = {
+          operator-check = {
+            name      = "custom-check"
+            namespace = "ops"
+          }
+        }
+      }
+    }
+  }
+
+  assert {
+    condition = alltrue([
+      for binding in concat(values(kubernetes_role_binding_v1.operator_check), kubernetes_cluster_role_binding_v1.operator_check) :
+      binding.subject[0].name == "custom-check" && binding.subject[0].namespace == "ops"
+    ])
+    error_message = "RBAC must bind the service account that overrides the operator-check key."
   }
 }

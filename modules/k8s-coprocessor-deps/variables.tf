@@ -28,6 +28,24 @@ variable "listener_rds_master_secret_arn" {
   default     = null
 }
 
+variable "rds_resource_id" {
+  description = "Resource ID of the coprocessor RDS instance, used to grant rds-db:connect to service accounts setting rds_iam_db_user. Null when the instance is disabled or IAM database authentication is off."
+  type        = string
+  default     = null
+}
+
+variable "rds_address" {
+  description = "Hostname of the coprocessor RDS instance. Published in the operator-check ConfigMap: IAM authentication tokens are signed for this hostname."
+  type        = string
+  default     = null
+}
+
+variable "rds_port" {
+  description = "Port of the coprocessor RDS instance. Published in the operator-check ConfigMap alongside rds_address."
+  type        = number
+  default     = null
+}
+
 variable "s3_bucket_arns" {
   description = "Map of logical bucket key to ARN from the s3 module. Referenced by service_accounts[*].s3_bucket_access to generate S3 IAM statements automatically."
   type        = map(string)
@@ -115,6 +133,55 @@ variable "k8s" {
         s3_bucket_key = optional(string, "coprocessor")
       }), {})
 
+      # operator_check: least privilege identity for the coprocessor-operator-check
+      # chart, created as coprocessor-operator-check in coproc-admin, so the checks
+      # no longer run as db-admin.
+      # IRSA: rds-db:connect as db_user on the coprocessor instance (db check, IAM
+      # database authentication, never the master secret) and GetPublicKey on the
+      # coprocessor keypair (KMS check).
+      # RBAC: get on the namespaces keyed in `resources` and, in each, on the named
+      # Secrets, ConfigMaps and Services only. No list and no wildcard, so nothing
+      # else can be read or enumerated.
+      operator_check = optional(object({
+        enabled = optional(bool, true)
+        # Postgres role the db check logs in as, through RDS IAM authentication. Created
+        # by the coprocessor-operator db user setup job, with no password and only CONNECT.
+        db_user = optional(string, "operator_check")
+        # Map key = namespace. Mirrors the objects looked up by the chart's default
+        # k8s check: keep both in sync when the check script is customised, an
+        # object missing here is reported as MISSING by the check.
+        resources = optional(map(object({
+          secrets     = optional(list(string), [])
+          config_maps = optional(list(string), [])
+          services    = optional(list(string), [])
+          })), {
+          coproc = {
+            secrets     = ["coprocessor-user-rds-credentials", "registry-credentials"]
+            config_maps = ["coprocessor-config", "eth-sc-addresses"]
+            services    = ["coprocessor-database"]
+          }
+          coproc-admin = {
+            secrets     = ["coprocessor-user-rds-credentials", "registry-credentials", "postgres-exporter-rds-credentials", "sql-exporter-rds-credentials"]
+            config_maps = ["db-admin-config"]
+          }
+          gw-blockchain = {
+            secrets     = ["coprocessor-user-rds-credentials", "registry-credentials"]
+            config_maps = ["coprocessor-tx-sender", "gw-sc-addresses"]
+          }
+          eth-blockchain = {
+            secrets     = ["coprocessor-user-rds-credentials", "registry-credentials"]
+            config_maps = ["eth-sc-addresses"]
+          }
+          polygon-blockchain = {
+            secrets     = ["coprocessor-user-rds-credentials", "registry-credentials", "rpc-credentials"]
+            config_maps = ["coprocessor-config"]
+          }
+          monitoring = {
+            secrets = ["postgres-exporter-config", "sql-exporter-config", "grafana-cloud-credentials"]
+          }
+        })
+      }), {})
+
       # Custom service accounts beyond the built-ins.
       # An entry with the same key as a built-in overrides it entirely.
       # Every entry creates an IRSA role + policy.
@@ -127,6 +194,11 @@ variable "k8s" {
         })), {})
         rds_master_secret_access = optional(bool, false)
         kms_key_access           = optional(bool, false)
+        # Postgres role this account may log in as through RDS IAM authentication
+        # (rds-db:connect on the coprocessor instance), and GetPublicKey only on the
+        # coprocessor keypair.
+        rds_iam_db_user     = optional(string, null)
+        kms_public_key_read = optional(bool, false)
         iam_policy_statements = optional(list(object({
           sid       = optional(string, "")
           effect    = string

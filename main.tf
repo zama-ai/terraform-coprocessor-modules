@@ -261,6 +261,12 @@ module "k8s_coprocessor_deps" {
   s3_bucket_names                       = module.s3.bucket_names
   kms_key_arn                           = module.kms.key_arn
 
+  # IAM database authentication target for the operator-check service account.
+  # Null without IAM auth, so no rds-db:connect is granted on an instance refusing it.
+  rds_resource_id = var.rds.iam_database_authentication_enabled ? module.rds.db_instance_resource_id : null
+  rds_address     = module.rds.db_instance_address
+  rds_port        = module.rds.db_instance_port
+
   k8s = local.k8s_config
 
   depends_on = [module.eks]

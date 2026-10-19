@@ -755,6 +755,7 @@ run "config_maps_are_reachable_from_root" {
         db_admin    = { enabled = false }
         coprocessor = { enabled = true, namespaces = ["coproc"] }
       }
+      service_accounts        = { operator_check = { enabled = false } }
       security_group_policies = { rds_client = { enabled = false } }
     }
   }

@@ -8,6 +8,11 @@ output "db_instance_arn" {
   value       = var.rds.enabled ? module.rds_instance[0].db_instance_arn : null
 }
 
+output "db_instance_resource_id" {
+  description = "The RDS instance resource ID, used in rds-db:connect ARNs for IAM database authentication."
+  value       = var.rds.enabled ? module.rds_instance[0].db_instance_resource_id : null
+}
+
 output "db_instance_endpoint" {
   description = "The connection endpoint of the RDS instance (host:port)."
   value       = var.rds.enabled ? module.rds_instance[0].db_instance_endpoint : null
