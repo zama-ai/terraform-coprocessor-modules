@@ -708,6 +708,47 @@ variable "k8s_coprocessor_deps" {
         s3_bucket_key = optional(string, "coprocessor")
       }), {})
 
+      # operator_check: least privilege identity for the coprocessor-operator-check
+      # chart (coprocessor-operator-check in coproc-admin). IRSA: rds-db:connect as
+      # db_user (IAM database authentication, never the master secret), GetPublicKey
+      # on the coprocessor keypair.
+      # RBAC: get on the namespaces keyed in `resources` and on the named objects in
+      # each, nothing else. Keep `resources` in sync with a customised check script.
+      operator_check = optional(object({
+        enabled = optional(bool, true)
+        db_user = optional(string, "operator_check")
+        resources = optional(map(object({
+          secrets     = optional(list(string), [])
+          config_maps = optional(list(string), [])
+          services    = optional(list(string), [])
+          })), {
+          coproc = {
+            secrets     = ["coprocessor-user-rds-credentials", "registry-credentials"]
+            config_maps = ["coprocessor-config", "eth-sc-addresses"]
+            services    = ["coprocessor-database"]
+          }
+          coproc-admin = {
+            secrets     = ["coprocessor-user-rds-credentials", "registry-credentials", "postgres-exporter-rds-credentials", "sql-exporter-rds-credentials"]
+            config_maps = ["db-admin-config"]
+          }
+          gw-blockchain = {
+            secrets     = ["coprocessor-user-rds-credentials", "registry-credentials"]
+            config_maps = ["coprocessor-tx-sender", "gw-sc-addresses"]
+          }
+          eth-blockchain = {
+            secrets     = ["coprocessor-user-rds-credentials", "registry-credentials"]
+            config_maps = ["eth-sc-addresses"]
+          }
+          polygon-blockchain = {
+            secrets     = ["coprocessor-user-rds-credentials", "registry-credentials", "rpc-credentials"]
+            config_maps = ["coprocessor-config"]
+          }
+          monitoring = {
+            secrets = ["postgres-exporter-config", "sql-exporter-config", "grafana-cloud-credentials"]
+          }
+        })
+      }), {})
+
       # Additional service accounts. An entry with the same key as a built-in overrides it.
       extra = optional(map(object({
         name                   = string
@@ -718,6 +759,11 @@ variable "k8s_coprocessor_deps" {
         })), {})
         rds_master_secret_access = optional(bool, false)
         kms_key_access           = optional(bool, false)
+        # Postgres role this account may log in as through RDS IAM authentication
+        # (rds-db:connect on the coprocessor instance), and GetPublicKey only on the
+        # coprocessor keypair.
+        rds_iam_db_user     = optional(string, null)
+        kms_public_key_read = optional(bool, false)
         iam_policy_statements = optional(list(object({
           sid       = optional(string, "")
           effect    = string

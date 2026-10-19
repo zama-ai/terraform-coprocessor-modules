@@ -1,4 +1,11 @@
 # ***************************************
+#  Data sources
+# ***************************************
+data "aws_partition" "current" {}
+data "aws_region" "current" {}
+data "aws_caller_identity" "current" {}
+
+# ***************************************
 #  Locals
 # ***************************************
 locals {
@@ -29,7 +36,9 @@ locals {
       (var.k8s.service_accounts.coprocessor.s3_bucket_key) = { actions = ["s3:*Object", "s3:ListBucket"] }
     }
     rds_master_secret_access = false
+    rds_iam_db_user          = null
     kms_key_access           = false
+    kms_public_key_read      = false
     iam_role_name_override   = null
     iam_policy_statements    = []
     labels                   = {}
@@ -43,7 +52,9 @@ locals {
       (var.k8s.service_accounts.sns_worker.s3_bucket_key) = { actions = ["s3:*Object", "s3:ListBucket"] }
     }
     rds_master_secret_access = false
+    rds_iam_db_user          = null
     kms_key_access           = false
+    kms_public_key_read      = false
     iam_role_name_override   = null
     iam_policy_statements    = []
     labels                   = {}
@@ -55,7 +66,9 @@ locals {
     namespace                = "coproc-admin"
     s3_bucket_access         = {}
     rds_master_secret_access = true
+    rds_iam_db_user          = null
     kms_key_access           = true
+    kms_public_key_read      = false
     iam_role_name_override   = null
     iam_policy_statements = [
       {
@@ -75,7 +88,9 @@ locals {
     namespace                = "gw-blockchain"
     s3_bucket_access         = {}
     rds_master_secret_access = false
+    rds_iam_db_user          = null
     kms_key_access           = var.k8s.service_accounts.tx_sender.kms_key_access
+    kms_public_key_read      = false
     iam_role_name_override   = null
     iam_policy_statements    = []
     labels                   = {}
@@ -91,7 +106,9 @@ locals {
       }
     }
     rds_master_secret_access = false
+    rds_iam_db_user          = null
     kms_key_access           = false
+    kms_public_key_read      = false
     iam_role_name_override   = null
     iam_policy_statements = [
       {
@@ -104,6 +121,23 @@ locals {
     ]
     labels      = {}
     annotations = {}
+  }
+
+  # Read-only identity for the coprocessor-operator-check chart: logs in to the
+  # database as a CONNECT-only role through IAM authentication (never the master
+  # secret), and only reads the keypair's public key (no Sign).
+  builtin_operator_check_sa = {
+    name                     = "coprocessor-operator-check"
+    namespace                = "coproc-admin"
+    s3_bucket_access         = {}
+    rds_master_secret_access = false
+    rds_iam_db_user          = var.k8s.service_accounts.operator_check.db_user
+    kms_key_access           = false
+    kms_public_key_read      = true
+    iam_role_name_override   = null
+    iam_policy_statements    = []
+    labels                   = {}
+    annotations              = {}
   }
 
   # ── Built-in storage classes ───────────────────────────────────────────────
@@ -128,8 +162,33 @@ locals {
     var.k8s.service_accounts.db_admin.enabled ? { db-admin = local.builtin_db_admin_sa } : {},
     var.k8s.service_accounts.tx_sender.enabled ? { tx-sender = local.builtin_tx_sender_sa } : {},
     var.k8s.service_accounts.s3_migrate.enabled ? { s3-migrate = local.builtin_s3_migrate_sa } : {},
+    var.k8s.service_accounts.operator_check.enabled ? { operator-check = local.builtin_operator_check_sa } : {},
     var.k8s.service_accounts.extra,
   )
+
+  # ── coprocessor-operator-check RBAC ────────────────────────────────────────
+  # Bound to the service account under the operator-check key, built-in or an
+  # extra entry overriding it.
+  operator_check_enabled = var.k8s.enabled && var.k8s.service_accounts.operator_check.enabled
+  operator_check_subject = local.operator_check_enabled ? {
+    name      = local.service_accounts["operator-check"].name
+    namespace = coalesce(local.service_accounts["operator-check"].namespace, local.namespace)
+  } : null
+
+  # One Role per namespace holding at least one named object. A rule with an
+  # empty resource_names would match every object of its kind, so empty kinds
+  # are dropped rather than rendered.
+  operator_check_roles = local.operator_check_enabled ? {
+    for ns, objects in var.k8s.service_accounts.operator_check.resources :
+    ns => {
+      for kind, names in {
+        secrets    = objects.secrets
+        configmaps = objects.config_maps
+        services   = objects.services
+      } : kind => names if length(names) > 0
+    }
+    if length(concat(objects.secrets, objects.config_maps, objects.services)) > 0
+  } : {}
 
   storage_classes = merge(
     var.k8s.storage_classes.gp3.enabled ? { gp3 = local.builtin_gp3 } : {},
@@ -320,6 +379,33 @@ data "aws_iam_policy_document" "service_account" {
       resources = [var.kms_key_arn]
     }
   }
+
+  # Auto-generated statement from rds_iam_db_user: IAM database authentication
+  # as that Postgres role only, on the coprocessor instance only.
+  dynamic "statement" {
+    for_each = each.value.rds_iam_db_user != null && var.rds_resource_id != null ? [1] : []
+
+    content {
+      sid       = "AllowRDSIAMConnect"
+      effect    = "Allow"
+      actions   = ["rds-db:connect"]
+      resources = ["arn:${data.aws_partition.current.partition}:rds-db:${data.aws_region.current.region}:${data.aws_caller_identity.current.account_id}:dbuser:${var.rds_resource_id}/${each.value.rds_iam_db_user}"]
+    }
+  }
+
+  # Auto-generated statement from kms_public_key_read: GetPublicKey on the
+  # keypair only (no signing).
+
+  dynamic "statement" {
+    for_each = each.value.kms_public_key_read && var.kms_key_arn != null ? [1] : []
+
+    content {
+      sid       = "AllowKMSGetPublicKey"
+      effect    = "Allow"
+      actions   = ["kms:GetPublicKey"]
+      resources = [var.kms_key_arn]
+    }
+  }
 }
 
 data "aws_iam_policy_document" "service_account_assume_role" {
@@ -423,6 +509,33 @@ resource "kubernetes_config_map" "coprocessor_config" {
   depends_on = [kubernetes_namespace.this]
 }
 
+# Everything the operator-check Job needs to reach AWS and the database, so it
+# depends on no admin ConfigMap. DATABASE_ADDRESS is the instance hostname IAM
+# tokens are signed for; the Job may still connect through the ExternalName.
+resource "kubernetes_config_map" "operator_check_config" {
+  count = local.operator_check_enabled ? 1 : 0
+
+  metadata {
+    name      = "coprocessor-operator-check"
+    namespace = local.operator_check_subject.namespace
+
+    labels = merge(
+      local.common_labels,
+      { "app.kubernetes.io/component" = "operator-check" },
+    )
+  }
+
+  data = {
+    AWS_REGION       = data.aws_region.current.region
+    AWS_KMS_KEY_ID   = var.kms_key_arn
+    DATABASE_ADDRESS = var.rds_address
+    DATABASE_PORT    = var.rds_port != null ? tostring(var.rds_port) : null
+    DATABASE_USER    = var.k8s.service_accounts.operator_check.db_user
+  }
+
+  depends_on = [kubernetes_namespace.this]
+}
+
 resource "kubernetes_config_map" "coprocessor_tx_sender" {
   count = var.k8s.enabled && var.k8s.service_accounts.tx_sender.enabled && var.k8s.service_accounts.tx_sender.kms_key_access ? 1 : 0
 
@@ -467,6 +580,113 @@ resource "kubernetes_service_account" "this" {
   }
 
   depends_on = [kubernetes_namespace.this, aws_iam_role_policy_attachment.service_account]
+}
+
+# ***************************************
+#  RBAC: coprocessor-operator-check
+#
+#  Owned here rather than by the chart, so no check run (failed, timed out or
+#  interrupted) can leave access behind, and no production service account
+#  holds it. get only, on named objects only: the checks test for presence
+#  and never list.
+# ***************************************
+resource "kubernetes_role_v1" "operator_check" {
+  for_each = local.operator_check_roles
+
+  metadata {
+    name      = "coprocessor-operator-check"
+    namespace = each.key
+
+    labels = merge(
+      local.common_labels,
+      { "app.kubernetes.io/component" = "operator-check" },
+    )
+  }
+
+  dynamic "rule" {
+    for_each = each.value
+
+    content {
+      api_groups     = [""]
+      resources      = [rule.key]
+      resource_names = rule.value
+      verbs          = ["get"]
+    }
+  }
+
+  depends_on = [kubernetes_namespace.this]
+}
+
+resource "kubernetes_role_binding_v1" "operator_check" {
+  for_each = local.operator_check_roles
+
+  metadata {
+    name      = "coprocessor-operator-check"
+    namespace = each.key
+
+    labels = merge(
+      local.common_labels,
+      { "app.kubernetes.io/component" = "operator-check" },
+    )
+  }
+
+  role_ref {
+    api_group = "rbac.authorization.k8s.io"
+    kind      = "Role"
+    name      = kubernetes_role_v1.operator_check[each.key].metadata[0].name
+  }
+
+  subject {
+    kind      = "ServiceAccount"
+    name      = local.operator_check_subject.name
+    namespace = local.operator_check_subject.namespace
+  }
+}
+
+# Namespace presence check: get on the checked namespaces only.
+resource "kubernetes_cluster_role_v1" "operator_check" {
+  count = local.operator_check_enabled && length(var.k8s.service_accounts.operator_check.resources) > 0 ? 1 : 0
+
+  metadata {
+    name = "coprocessor-operator-check"
+
+    labels = merge(
+      local.common_labels,
+      { "app.kubernetes.io/component" = "operator-check" },
+    )
+  }
+
+  rule {
+    api_groups     = [""]
+    resources      = ["namespaces"]
+    resource_names = keys(var.k8s.service_accounts.operator_check.resources)
+    verbs          = ["get"]
+  }
+}
+
+resource "kubernetes_cluster_role_binding_v1" "operator_check" {
+  count = length(kubernetes_cluster_role_v1.operator_check)
+
+  metadata {
+    name = "coprocessor-operator-check"
+
+    labels = merge(
+      local.common_labels,
+      { "app.kubernetes.io/component" = "operator-check" },
+    )
+  }
+
+  role_ref {
+    api_group = "rbac.authorization.k8s.io"
+    kind      = "ClusterRole"
+    name      = kubernetes_cluster_role_v1.operator_check[0].metadata[0].name
+  }
+
+  subject {
+    kind      = "ServiceAccount"
+    name      = local.operator_check_subject.name
+    namespace = local.operator_check_subject.namespace
+  }
 }
 
 # ***************************************

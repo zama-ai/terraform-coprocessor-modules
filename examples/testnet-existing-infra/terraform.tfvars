@@ -104,11 +104,12 @@ k8s_coprocessor_deps = {
   }
 
   service_accounts = {
-    coprocessor = { enabled = true }
-    sns_worker  = { enabled = true }
-    db_admin    = { enabled = true }
-    tx_sender   = { enabled = true }
-    s3_migrate  = { enabled = true }
+    coprocessor    = { enabled = true }
+    sns_worker     = { enabled = true }
+    db_admin       = { enabled = true }
+    tx_sender      = { enabled = true }
+    s3_migrate     = { enabled = true }
+    operator_check = { enabled = true } # coprocessor-operator-check chart identity
   }
 
   storage_classes = {

@@ -50,6 +50,7 @@
 | <a name="output_db_instance_identifier"></a> [db\_instance\_identifier](#output\_db\_instance\_identifier) | The RDS instance identifier. |
 | <a name="output_db_instance_name"></a> [db\_instance\_name](#output\_db\_instance\_name) | The name of the default database. |
 | <a name="output_db_instance_port"></a> [db\_instance\_port](#output\_db\_instance\_port) | The port the RDS instance is listening on. |
+| <a name="output_db_instance_resource_id"></a> [db\_instance\_resource\_id](#output\_db\_instance\_resource\_id) | The RDS instance resource ID, used in rds-db:connect ARNs for IAM database authentication. |
 | <a name="output_rds_client_security_group_id"></a> [rds\_client\_security\_group\_id](#output\_rds\_client\_security\_group\_id) | ID of the rds-client SG attached to pods (via SecurityGroupPolicy) that need DB access. |
 | <a name="output_rds_master_secret_arn"></a> [rds\_master\_secret\_arn](#output\_rds\_master\_secret\_arn) | ARN of the Secrets Manager secret containing the RDS master user password. Null when manage\_master\_user\_password = false or rds.enabled = false. |
 | <a name="output_rds_server_security_group_id"></a> [rds\_server\_security\_group\_id](#output\_rds\_server\_security\_group\_id) | ID of the rds-server SG attached to the RDS instance. |

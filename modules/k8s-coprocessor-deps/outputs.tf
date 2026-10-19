@@ -30,6 +30,8 @@ output "config_map_names" {
     "${cm.metadata[0].namespace}/${cm.metadata[0].name}" => cm.metadata[0].name },
     { for cm in kubernetes_config_map.coprocessor_config :
     "${cm.metadata[0].namespace}/${cm.metadata[0].name}" => cm.metadata[0].name },
+    { for cm in kubernetes_config_map.operator_check_config :
+    "${cm.metadata[0].namespace}/${cm.metadata[0].name}" => cm.metadata[0].name },
   )
 }
 
