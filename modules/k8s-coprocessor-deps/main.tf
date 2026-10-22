@@ -38,22 +38,40 @@ locals {
     annotations              = {}
   }
 
+  # Defaults are selected centrally, not repeated in each operator's tfvars.
+  db_admin_default_source_bucket_arns = {
+    mainnet = toset(["arn:aws:s3:::zama-mainnet-coprocessor-table-dump"])
+    testnet = toset(["arn:aws:s3:::zama-testnet-coprocessor-table-dump"])
+  }
+  db_admin_source_bucket_arns = (
+    var.k8s.service_accounts.db_admin.source_bucket_arns != null
+    ? var.k8s.service_accounts.db_admin.source_bucket_arns
+    : lookup(local.db_admin_default_source_bucket_arns, var.environment, toset([]))
+  )
+
   builtin_db_admin_sa = {
     name                     = "db-admin"
     namespace                = "coproc-admin"
     s3_bucket_access         = {}
     rds_master_secret_access = true
-    kms_key_access           = true
+    kms_key_access           = false
     iam_role_name_override   = null
-    iam_policy_statements = [
+    iam_policy_statements = length(local.db_admin_source_bucket_arns) > 0 ? [
       {
-        sid        = "AllowPublicS3Download"
+        sid        = "AllowSourceBucketList"
         effect     = "Allow"
-        actions    = ["s3:GetObject", "s3:ListBucket"]
-        resources  = ["*"]
+        actions    = ["s3:ListBucket"]
+        resources  = tolist(local.db_admin_source_bucket_arns)
+        conditions = []
+      },
+      {
+        sid        = "AllowSourceObjectRead"
+        effect     = "Allow"
+        actions    = ["s3:GetObject"]
+        resources  = [for arn in local.db_admin_source_bucket_arns : "${arn}/*"]
         conditions = []
       }
-    ]
+    ] : []
     labels      = {}
     annotations = {}
   }
