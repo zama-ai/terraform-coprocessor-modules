@@ -286,12 +286,6 @@ locals {
       imagePullSecrets:
         - name: registry-credentials
 
-      # Opts the pod into the SecurityGroupPolicy that attaches the rds-client
-      # AWS security group, allowing it to reach RDS. Created in the monitoring
-      # namespace by k8s-coprocessor-deps.
-      podLabels:
-        network/rds-client: "true"
-
       serviceMonitor:
         enabled: true
         interval: 30s
@@ -312,12 +306,6 @@ locals {
       tag: ${var.defaults.prometheus_postgres_exporter.image_tag}
       pullSecrets:
         - registry-credentials
-
-    # Opts the pod into the SecurityGroupPolicy that attaches the rds-client
-    # AWS security group, allowing it to reach RDS. Created in the monitoring
-    # namespace by k8s-coprocessor-deps.
-    podLabels:
-      network/rds-client: "true"
 
     serviceAccount:
       create: true
