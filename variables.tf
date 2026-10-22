@@ -480,9 +480,11 @@ variable "k8s_coprocessor_deps" {
         s3_bucket_key = optional(string, "coprocessor")
       }), {})
 
-      # db_admin: IRSA role with RDS master secret (GetSecretValue + DescribeSecret).
+      # db_admin: RDS master secrets and read-only access to explicit source buckets.
+      # No KMS permissions. Null selects the mainnet/testnet bootstrap bucket for var.environment.
       db_admin = optional(object({
-        enabled = optional(bool, true)
+        enabled            = optional(bool, true)
+        source_bucket_arns = optional(set(string), null)
       }), {})
 
       # tx_sender: IRSA role with KMS Sign/Verify on the coprocessor keypair.
@@ -499,7 +501,7 @@ variable "k8s_coprocessor_deps" {
         s3_bucket_key = optional(string, "coprocessor")
       }), {})
 
-      # Additional service accounts. An entry with the same key as a built-in overrides it.
+      # Additional service accounts. An entry with the same key as a built-in overrides it, except db-admin.
       extra = optional(map(object({
         name                   = string
         namespace              = optional(string, null)
@@ -554,6 +556,33 @@ variable "k8s_coprocessor_deps" {
     })), {})
   })
   default = { enabled = false }
+
+  validation {
+    condition = (
+      !var.k8s_coprocessor_deps.enabled || !var.k8s_coprocessor_deps.service_accounts.db_admin.enabled ||
+      (var.k8s_coprocessor_deps.service_accounts.db_admin.source_bucket_arns == null
+        ? contains(["mainnet", "testnet"], var.environment)
+      : length(var.k8s_coprocessor_deps.service_accounts.db_admin.source_bucket_arns) > 0)
+    )
+    error_message = "Enabled db-admin requires environment mainnet/testnet for the default bootstrap bucket, or a nonempty explicit db_admin.source_bucket_arns override."
+  }
+
+  validation {
+    condition = var.k8s_coprocessor_deps.service_accounts.db_admin.source_bucket_arns == null ? true : alltrue([
+      for arn in var.k8s_coprocessor_deps.service_accounts.db_admin.source_bucket_arns :
+      can(regex("^arn:aws(-[a-z0-9-]+)?:s3:::[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$", arn))
+    ])
+    error_message = "db_admin.source_bucket_arns must contain S3 bucket ARNs without wildcards, object paths, or prefixes (for example arn:aws:s3:::bootstrap-data)."
+  }
+
+  # Reserve the built-in identity so extra cannot restore wildcard S3 or KMS access.
+  validation {
+    condition = !var.k8s_coprocessor_deps.enabled || alltrue([
+      for key, account in var.k8s_coprocessor_deps.service_accounts.extra :
+      key != "db-admin" && !(account.name == "db-admin" && coalesce(account.namespace, var.k8s_coprocessor_deps.default_namespace) == "coproc-admin")
+    ])
+    error_message = "The db-admin key and coproc-admin/db-admin identity are reserved; configure service_accounts.db_admin instead of overriding it through extra."
+  }
 }
 
 # ******************************************************
