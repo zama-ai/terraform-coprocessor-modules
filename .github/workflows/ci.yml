@@ -1,0 +1,65 @@
+name: CI
+
+on:
+  push:
+    branches: [main, 'release/*']
+  pull_request:
+
+permissions: {}
+
+jobs:
+  test:
+    name: Terraform tests (${{ matrix.dir }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        dir:
+          - .
+          - modules/eks
+          - modules/k8s-coprocessor-deps
+          - modules/k8s-system-charts
+          - modules/kms
+          - modules/networking
+          - modules/rds
+          - modules/s3
+    defaults:
+      run:
+        working-directory: ${{ matrix.dir }}
+    env:
+      TF_IN_AUTOMATION: 'true'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4.0.1
+        with:
+          terraform_version: 1.12.2
+          terraform_wrapper: false
+
+      - name: Initialize without a remote backend
+        run: terraform init -backend=false -input=false -no-color
+
+      - name: Validate Terraform
+        run: terraform validate -no-color
+
+      - name: Run mocked unit tests
+        run: terraform test -no-color
+
+  test-gate:
+    name: Tests (bpr)
+    if: ${{ always() }}
+    needs: test
+    runs-on: ubuntu-24.04
+    permissions: {}
+    steps:
+      - name: Require every test suite to pass
+        env:
+          TEST_RESULT: ${{ needs.test.result }}
+        run: test "$TEST_RESULT" = success

@@ -96,6 +96,36 @@ cd modules/<name> && terraform test   # individual submodule
 
 Tests live in `tests/unit.tftest.hcl` within each module directory.
 
+CI initializes and validates the root module and every submodule with an existing
+test suite, then runs their mocked unit tests on each pull request. The combined
+`Tests (bpr)` check passes only when every suite passes.
+
+Trivy scans dependencies and Terraform configurations on pull requests targeting
+`main` or `release/*`, on pushes to those branches, and weekly on the default
+branch. High and critical findings fail the scan and are uploaded to GitHub
+Security. Custom checks also reject Helm releases that disable TLS verification
+or use HTTP chart repositories. These checks inspect Terraform configuration;
+they do not render or scan the contents of remote Helm charts.
+
+The dependency scan covers supported package manifests added to this repository.
+It does not provide vulnerability coverage for Terraform providers or modules.
+
+Exceptions for the current public ciphertext-storage and pod-egress design are
+documented beside the affected Terraform resources. The upstream EKS node-egress
+exception is limited to one check and source path in
+[the Trivy ignore file](.github/trivy/ignore.yaml). Other high and critical
+findings continue to fail CI.
+
+## Contributing
+
+We do not accept pull requests from external contributors. If you have a bug
+report, feature request, or question, please
+[open an issue](https://github.com/zama-ai/terraform-coprocessor-modules/issues).
+
+For security vulnerabilities, use
+[private vulnerability reporting](https://github.com/zama-ai/terraform-coprocessor-modules/security/advisories/new)
+instead of opening a public issue. See [our security policy](SECURITY.md).
+
 ---
 
 ## Development and releases

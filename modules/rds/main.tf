@@ -80,6 +80,10 @@ resource "aws_vpc_security_group_ingress_rule" "rds_server_from_extra_cidrs" {
   description       = "Allow ${var.rds.engine} traffic from break-glass CIDR ${each.value}"
 }
 
+# Pods carrying this SG also call AWS APIs and external chain/RPC endpoints.
+# Keep their existing egress until those destinations have an explicit allowlist.
+# This exception applies only to the pod-side rule, not the RDS server SG.
+#trivy:ignore:AWS-0104
 resource "aws_vpc_security_group_egress_rule" "rds_client_allow_all" {
   count = var.rds.enabled ? 1 : 0
 

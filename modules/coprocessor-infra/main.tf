@@ -52,6 +52,10 @@ resource "kubernetes_namespace" "coprocessor_namespace" {
 # ***************************************
 #  S3 Buckets for Vault Public Storage
 # ***************************************
+# Public ciphertext storage needs anonymous reads. SSE-KMS would require callers
+# to authenticate for KMS decryption; retain S3's default SSE-S3 encryption.
+# This exception does not cover private buckets or disabling encryption.
+#trivy:ignore:AWS-0132
 resource "aws_s3_bucket" "coprocessor_bucket" {
   bucket        = local.coprocessor_bucket_name
   force_destroy = true
@@ -76,6 +80,13 @@ resource "aws_s3_bucket_versioning" "coprocessor_bucket" {
   }
 }
 
+# This bucket intentionally serves public ciphertext via the policy below.
+# BucketOwnerEnforced disables ACLs; public writes are not granted by the policy.
+# Preserve the existing public-storage settings without exempting other buckets.
+#trivy:ignore:AWS-0086
+#trivy:ignore:AWS-0087
+#trivy:ignore:AWS-0091
+#trivy:ignore:AWS-0093
 resource "aws_s3_bucket_public_access_block" "coprocessor_bucket" {
   bucket = aws_s3_bucket.coprocessor_bucket.id
 
