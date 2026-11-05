@@ -147,6 +147,7 @@ locals {
           - gw-blockchain
           - eth-blockchain
           - polygon-blockchain
+          - bnb-blockchain
           - kube-system
         extraDiscoveryRules: |
           rule {
@@ -160,12 +161,14 @@ locals {
           - gw-blockchain
           - eth-blockchain
           - polygon-blockchain
+          - bnb-blockchain
       probes:
         namespaces:
           - coproc
           - gw-blockchain
           - eth-blockchain
           - polygon-blockchain
+          - bnb-blockchain
 
     podLogsViaLoki:
       enabled: true
@@ -176,6 +179,7 @@ locals {
         - gw-blockchain
         - eth-blockchain
         - polygon-blockchain
+        - bnb-blockchain
 
     applicationObservability:
       enabled: true

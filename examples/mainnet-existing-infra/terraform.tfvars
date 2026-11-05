@@ -105,6 +105,7 @@ k8s_coprocessor_deps = {
     gw-blockchain      = { enabled = true }
     eth-blockchain     = { enabled = true }
     polygon-blockchain = { enabled = true }
+    bnb-blockchain     = { enabled = true }
     monitoring         = { enabled = true }
   }
 

@@ -769,6 +769,7 @@ k8s_coprocessor_deps = {
     gw-blockchain      = { enabled = true }
     eth-blockchain     = { enabled = true }
     polygon-blockchain = { enabled = true }
+    bnb-blockchain     = { enabled = true }
   }
 
   # ── Service Accounts ─────────────────────────────────────────────────────────
@@ -899,7 +900,8 @@ k8s_coprocessor_deps = {
     # Built-in: attaches the rds-client SG (created by the rds module) to any
     # pod that carries the configured label. One SecurityGroupPolicy is created
     # per listed namespace.
-    # Default: { enabled = true, namespaces = ["coproc-admin", "coproc", "gw-blockchain", "eth-blockchain", "polygon-blockchain", "monitoring"], pod_label_key = "network/rds-client", pod_label_value = "true" }
+    # Default: { enabled = true, namespaces = null, pod_label_key = "network/rds-client", pod_label_value = "true" }
+    # Unset namespaces uses coprocessor_config_namespaces plus coproc-admin and monitoring.
     rds_client = {
       enabled = true
       namespaces = [
@@ -908,6 +910,7 @@ k8s_coprocessor_deps = {
         "gw-blockchain",
         "eth-blockchain",
         "polygon-blockchain",
+        "bnb-blockchain",
         "monitoring",
       ]
       pod_label_key   = "network/rds-client"

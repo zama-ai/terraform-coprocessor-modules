@@ -240,6 +240,7 @@ run "k8s_enabled_plans_without_error" {
   command = plan
 
   variables {
+    kms = { enabled = true }
     k8s_coprocessor_deps = {
       enabled           = true
       default_namespace = "coprocessor"
@@ -267,6 +268,7 @@ run "byoc_oidc_provider_arn_plans_without_error" {
   command = plan
 
   variables {
+    kms = { enabled = true }
     kubernetes_provider = {
       host                   = "https://byoc.example.com"
       cluster_ca_certificate = "dGVzdA=="
@@ -287,5 +289,18 @@ run "byoc_oidc_provider_arn_plans_without_error" {
   assert {
     condition     = module.k8s_coprocessor_deps.namespace == "coprocessor"
     error_message = "k8s_coprocessor_deps must plan successfully with a BYOC OIDC provider ARN."
+  }
+}
+
+run "branch_activation_heights_are_forwarded_to_dependencies" {
+  command = plan
+  variables {
+    k8s_coprocessor_deps = {
+      branch_activation_blocks = { ethereum = 12345678, polygon = 56789012 }
+    }
+  }
+  assert {
+    condition     = local.k8s_config.branch_activation_blocks.ethereum == 12345678 && local.k8s_config.branch_activation_blocks.polygon == 56789012
+    error_message = "Root module must forward explicit activation overrides to k8s dependencies."
   }
 }

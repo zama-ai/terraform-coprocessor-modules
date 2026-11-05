@@ -60,6 +60,13 @@ variable "k8s" {
     # Fallback namespace for service accounts and ExternalName services that omit their own.
     default_namespace = optional(string, "coproc")
 
+    # Optional per-chain overrides; null selects the environment default in k8s-coprocessor-deps.
+    # Testnet/mainnet defaults are MOCK heights and must be replaced before rollout.
+    branch_activation_blocks = optional(object({
+      ethereum = optional(number, null)
+      polygon  = optional(number, null)
+    }), {})
+
     # Namespaces
     namespaces = optional(map(object({
       enabled     = optional(bool, true)
@@ -76,11 +83,12 @@ variable "k8s" {
         s3_bucket_key = optional(string, "coprocessor")
       }), {})
 
-      # sns_worker: IRSA role with S3 access (s3:*Object + s3:ListBucket).
+      # sns_worker: IRSA role with ciphertext bucket read/write access.
+      # KMS signing for v0.14 ciphertext attestations is enabled by default.
       sns_worker = optional(object({
-        enabled = optional(bool, true)
-        # Key in var.s3_bucket_arns to grant access to.
-        s3_bucket_key = optional(string, "coprocessor")
+        enabled        = optional(bool, true)
+        s3_bucket_key  = optional(string, "coprocessor")
+        kms_key_access = optional(bool, true)
       }), {})
 
       # db_admin: RDS master secrets and read-only access to explicit source buckets.
@@ -170,9 +178,9 @@ variable "k8s" {
       # carrying the configured label. Created once per listed namespace.
       rds_client = optional(object({
         enabled = optional(bool, true)
-        namespaces = optional(list(string), [
-          "coproc-admin", "coproc", "gw-blockchain", "eth-blockchain", "polygon-blockchain", "monitoring"
-        ])
+        # Unset uses coprocessor_config_namespaces plus coproc-admin and monitoring.
+        # An explicit list replaces the default.
+        namespaces      = optional(list(string), null)
         pod_label_key   = optional(string, "network/rds-client")
         pod_label_value = optional(string, "true")
       }), {})
@@ -214,4 +222,21 @@ variable "k8s" {
     ])
     error_message = "The db-admin key and coproc-admin/db-admin identity are reserved; configure service_accounts.db_admin instead of overriding it through extra."
   }
+  # Signing roles use stable names shared with the root KMS key policy.
+  validation {
+    condition = alltrue([
+      for key, account in var.k8s.service_accounts.extra :
+      !contains(["tx-sender", "sns-worker"], key) || account.iam_role_name_override == null
+    ])
+    error_message = "iam_role_name_override is not supported for tx-sender or sns-worker; their IAM roles use <key>-<partner_name>-<environment>."
+  }
+
+  validation {
+    condition = alltrue([
+      for height in [var.k8s.branch_activation_blocks.ethereum, var.k8s.branch_activation_blocks.polygon] :
+      height == null ? true : height >= 0 && height == floor(height) && height <= 18446744073709551615
+    ])
+    error_message = "Branch activation heights must be non-negative integers fitting in uint64, or null."
+  }
+
 }
