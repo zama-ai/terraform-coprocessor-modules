@@ -4,9 +4,15 @@
 locals {
   namespace = var.k8s.default_namespace
 
-  # MOCK ONLY: replace each network's heights with fleet-agreed values before rollout.
+  # Testnet estimates use seven-day block rates observed 2026-11-05; confirm before rollout.
+  # Mainnet values remain mocks.
   branch_activation_block_defaults = {
-    testnet = { ethereum = 999999999, polygon = 999999999 }
+    testnet = {
+      # Estimated around 2026-11-13 12:11 CET (11:11 UTC) on Sepolia.
+      ethereum = 12126200
+      # Estimated around 2026-11-13 12:01 CET (11:01 UTC) on Polygon Amoy.
+      polygon = 52745000
+    }
     mainnet = { ethereum = 999999999, polygon = 999999999 }
   }
   branch_activation_blocks = {
