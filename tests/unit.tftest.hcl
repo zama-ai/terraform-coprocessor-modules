@@ -43,6 +43,14 @@ variables {
   }
 
   eks = { enabled = false }
+
+  # Keep the suite independent of untracked terraform.tfvars files. The root
+  # module requires at least one bucket, even when testing unrelated features.
+  s3 = {
+    buckets = {
+      test = {}
+    }
+  }
 }
 
 # =============================================================================

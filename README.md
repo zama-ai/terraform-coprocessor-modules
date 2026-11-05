@@ -110,6 +110,12 @@ they do not render or scan the contents of remote Helm charts.
 The dependency scan covers supported package manifests added to this repository.
 It does not provide vulnerability coverage for Terraform providers or modules.
 
+Exceptions for the current public ciphertext-storage and pod-egress design are
+documented beside the affected Terraform resources. The upstream EKS node-egress
+exception is limited to one check and source path in
+[the Trivy ignore file](.github/trivy/ignore.yaml). Other high and critical
+findings continue to fail CI.
+
 ## Contributing
 
 We do not accept pull requests from external contributors. If you have a bug
