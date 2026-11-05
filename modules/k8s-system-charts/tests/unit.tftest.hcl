@@ -751,3 +751,28 @@ run "extra_overrides_builtin_with_same_key" {
     error_message = "extra override must not create a duplicate release alongside the built-in."
   }
 }
+
+run "bnb_monitoring_discovers_metrics_probes_and_logs" {
+  command = plan
+  variables {
+    defaults = {
+      karpenter_nodepools      = { enabled = false }
+      prometheus_operator_crds = { enabled = false }
+      metrics_server           = { enabled = false }
+      karpenter                = { enabled = false }
+      k8s_monitoring           = { enabled = true }
+    }
+  }
+  assert {
+    condition     = contains(yamldecode(helm_release.apps["k8s-monitoring"].values[0]).prometheusOperatorObjects.serviceMonitors.namespaces, "bnb-blockchain")
+    error_message = "BNB ServiceMonitors must be discovered."
+  }
+  assert {
+    condition     = contains(yamldecode(helm_release.apps["k8s-monitoring"].values[0]).prometheusOperatorObjects.podMonitors.namespaces, "bnb-blockchain") && contains(yamldecode(helm_release.apps["k8s-monitoring"].values[0]).prometheusOperatorObjects.probes.namespaces, "bnb-blockchain")
+    error_message = "BNB PodMonitors and probes must be discovered."
+  }
+  assert {
+    condition     = contains(yamldecode(helm_release.apps["k8s-monitoring"].values[0]).podLogsViaLoki.namespaces, "bnb-blockchain")
+    error_message = "BNB pod logs must be collected."
+  }
+}
