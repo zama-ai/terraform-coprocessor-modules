@@ -542,6 +542,261 @@ rds = {
   # Default: []
   additional_allowed_cidr_blocks = ["10.1.0.0/16"]
 }
+# ==============================================================================
+#  Listener RDS (PostgreSQL)
+#
+#  Dedicated instance for the listener component. Schema is identical to `rds`.
+#
+#  The instance gets its own client and server security groups (listener-client /
+#  listener-server, named from db_name) and its own SecurityGroupPolicy pod label
+#  (`network/listener-rds-client`). Only pods carrying that label can reach it —
+#  coprocessor pods cannot, and vice versa. Enable
+#  k8s_coprocessor_deps.security_group_policies.listener_rds_client alongside this.
+#
+#  A pod that needs BOTH databases (db-admin, an exporter scraping both) must
+#  carry both labels. EKS merges the SGs from every matching SecurityGroupPolicy
+#  onto the pod's branch ENI, up to 5 SGs per pod.
+#
+#  db_name must be set and must differ from rds.db_name: security group names and
+#  the RDS identifier both derive from it, and SG names are unique per VPC.
+#
+#  Default: { enabled = false }
+# ==============================================================================
+listener_rds = {
+  # Default: false
+  enabled = true
+
+  # ── Naming ──────────────────────────────────────────────────────────────────
+
+  # Required when enabled, and must differ from rds.db_name.
+  db_name = "listener"
+
+  # Override the computed RDS instance identifier "<partner>-<env>-<db_name>".
+  # Default: null (uses computed identifier)
+  identifier_override = null
+
+  # ── Engine ──────────────────────────────────────────────────────────────────
+
+  # Defaults: "postgres", "17"
+  engine         = "postgres"
+  engine_version = "17"
+
+  # ── Instance ────────────────────────────────────────────────────────────────
+
+  # The listener workload is typically lighter than the coprocessor DB; size it
+  # from observed event rate rather than copying the coprocessor values.
+  # Defaults: "db.m5.4xlarge", 400, 1000, false, 5432
+  instance_class        = "db.m5.xlarge"
+  allocated_storage     = 100
+  max_allocated_storage = 500
+  multi_az              = false
+  port                  = 5432
+
+  # ── Credentials ─────────────────────────────────────────────────────────────
+
+  # Default: "postgres"
+  username = "listener"
+
+  # true = AWS Secrets Manager manages the password (recommended). Its ARN is
+  # published to the db-admin ConfigMap as LISTENER_RDS_ADMIN_SECRET_ID.
+  # Default: true
+  manage_master_user_password = true
+
+  # Defaults: true, 7
+  enable_master_password_rotation = true
+  master_password_rotation_days   = 7
+
+  # Default: true
+  iam_database_authentication_enabled = true
+
+  # ── Maintenance & backups ───────────────────────────────────────────────────
+
+  # Defaults: "Mon:00:00-Mon:03:00", 30, true
+  maintenance_window      = "Mon:00:00-Mon:03:00"
+  backup_retention_period = 30
+  deletion_protection     = true
+
+  # ── Monitoring ──────────────────────────────────────────────────────────────
+
+  # Defaults: 60, true, null, null
+  monitoring_interval    = 60
+  create_monitoring_role = true
+
+  # ── Parameters ──────────────────────────────────────────────────────────────
+
+  # Default: [{ name = "rds.force_ssl", value = "0" }]
+  parameters = [
+    {
+      name  = "rds.force_ssl"
+      value = "0"
+    },
+  ]
+
+  # ── Security Group ──────────────────────────────────────────────────────────
+
+  # Default: []
+  additional_allowed_cidr_blocks = []
+}
+
+
+
+# ==============================================================================
+#  ElastiCache (Valkey/Redis) — Listener V2 broker
+#
+#  Default: { enabled = false }
+# ==============================================================================
+elasticache = {
+  # Default: false
+  enabled = true
+
+  # Override the computed replication group ID "<partner>-<env>-redis".
+  # Default: null
+  replication_group_id = null
+
+  # ── Engine ──────────────────────────────────────────────────────────────────
+
+  # Secure new deployments default to Valkey 7.2. Redis 7.1 can be selected
+  # temporarily to match an existing Listener V2 test environment.
+  # Defaults: "valkey", "7.2"
+  engine         = "valkey"
+  engine_version = "7.2"
+
+  # ── Capacity ────────────────────────────────────────────────────────────────
+
+  # These values are starting points, not environment profiles. Validate them
+  # against event rate, event size, and maximum slow-consumer backlog.
+  # Defaults: cache.r7g.large, 3 nodes, no data tiering
+  node_type            = "cache.r7g.large"
+  num_cache_clusters   = 3
+  port                 = 6379
+  data_tiering_enabled = false
+
+  # Set data_tiering_enabled = true only with an r6gd node type, for example:
+  # node_type            = "cache.r6gd.xlarge"
+  # data_tiering_enabled = true
+
+  # ── High availability ───────────────────────────────────────────────────────
+
+  # Defaults: true
+  multi_az_enabled           = true
+  automatic_failover_enabled = true
+
+  # ── Encryption ──────────────────────────────────────────────────────────────
+
+  # At-rest encryption is enabled by default and has no Listener V2 client impact.
+  at_rest_encryption_enabled = true
+
+  # New deployments require TLS by default.
+  transit_encryption_enabled = true
+
+  # Temporary shadow-mode compatibility for Listener V2 without TLS support:
+  # engine                     = "redis"
+  # engine_version             = "7.1"
+  # transit_encryption_enabled = false
+  #
+  # Keep at-rest encryption enabled in that temporary posture. Do not use it
+  # after Listener V2 becomes the primary listener.
+
+  # Optional AUTH token. Requires transit encryption and is stored in
+  # Terraform state. Default: null.
+  auth_token = null
+
+  # ── Maintenance & backups ───────────────────────────────────────────────────
+
+  maintenance_window       = "Mon:00:00-Mon:03:00"
+  snapshot_retention_limit = 7
+  snapshot_window          = "03:00-05:00"
+
+  # Default: []
+  parameters = []
+
+  # For stream-broker semantics, consider explicitly using noeviction after
+  # validating capacity. Avoid allkeys-lru if silent stream eviction is unacceptable:
+  # parameters = [
+  #   {
+  #     name  = "maxmemory-policy"
+  #     value = "noeviction"
+  #   },
+  # ]
+
+  # Additional source CIDRs beyond the private subnet CIDRs.
+  # Default: []
+  additional_allowed_cidr_blocks = []
+
+  # ── Kubernetes ExternalName Service ─────────────────────────────────────────
+  #
+  # Publishes the replication group primary endpoint as a stable in-cluster DNS
+  # name, so Listener V2 pods connect to redis.<namespace>.svc.cluster.local
+  # instead of the AWS-generated hostname, and client configuration survives a
+  # replication group replacement.
+  #
+  # One Service is created per namespace entry. The top-level name, annotations
+  # and labels are the baseline for every namespace; each namespace can add or
+  # override them for itself, so an annotation can target a single namespace
+  # without appearing in the others.
+  #
+  # The namespaces must already exist -- they are created by
+  # k8s_coprocessor_deps.namespaces, and Terraform has no dependency edge
+  # between that module and this one, so on a greenfield single-pass apply
+  # enable this only once those namespaces are in place.
+  #
+  # No port is declared: an ExternalName Service resolves to a CNAME and
+  # kube-proxy ignores declared ports. Clients keep using elasticache.port.
+  #
+  # Default: { enabled = false }
+  k8s_service = {
+    # Default: false
+    enabled = false
+
+    # ── Baseline, applied to every namespace below ────────────────────────────
+
+    # Service name, and therefore the DNS name pods resolve.
+    # Default: "redis"
+    name = "redis"
+
+    # Merged into every namespace's annotations. A namespace's own value wins
+    # per key. No keys are injected on top of what is set here.
+    # Default: {}
+    annotations = {}
+
+    # Default: {}
+    labels = {}
+
+    # ── Per namespace ─────────────────────────────────────────────────────────
+
+    # Map key = namespace, and the key is what the Service is addressed by in
+    # state, so adding or removing a namespace never re-creates the others.
+    # Listeners run one per blockchain, so add the *-blockchain namespaces
+    # alongside coproc when they need the broker.
+    #
+    # Every field is optional and overrides the baseline for that namespace
+    # only; name = null keeps the baseline name.
+    #
+    # Default: { coproc = {} }
+    namespaces = {
+      coproc = {}
+    }
+
+    # Example: a shared baseline annotation everywhere, one ArgoCD annotation
+    # only in coproc, and a different Service name plus label in gw-blockchain.
+    #
+    # annotations = { "app.kubernetes.io/managed-by" = "terraform" }
+    # namespaces = {
+    #   coproc = {
+    #     annotations = { "argocd.argoproj.io/sync-options" = "Prune=false" }
+    #   }
+    #   eth-blockchain = {}
+    #   gw-blockchain = {
+    #     name   = "redis-broker"
+    #     labels = { "app.kubernetes.io/component" = "broker" }
+    #   }
+    #   polygon-blockchain = {
+    #     # Declared but not created yet -- flip to true when the listener lands.
+    #     enabled = false
+    #   }
+    # }
+  }
+}
 
 
 # ==============================================================================
@@ -917,6 +1172,31 @@ k8s_coprocessor_deps = {
       pod_label_value = "true"
     }
 
+    # Built-in: same shape as rds_client, but for the dedicated listener
+    # database. A separate SG under a separate label means a pod reaches only
+    # the database whose label it carries.
+    #
+    # Namespaces default to the *-blockchain namespaces (one listener per
+    # blockchain), plus coproc-admin so db-admin can administer the database
+    # whose master secret it holds, and monitoring for exporters. `coproc` is
+    # deliberately excluded — keeping the coprocessor out of the listener DB is
+    # the isolation this separate SG exists to provide.
+    #
+    # Enable this alongside listener_rds.enabled = true.
+    # Default: { enabled = false, namespaces = ["eth-blockchain", "polygon-blockchain", "gw-blockchain", "coproc-admin", "monitoring"], pod_label_key = "network/listener-rds-client", pod_label_value = "true" }
+    listener_rds_client = {
+      enabled = true
+      namespaces = [
+        "eth-blockchain",
+        "polygon-blockchain",
+        "gw-blockchain",
+        "coproc-admin",
+        "monitoring",
+      ]
+      pod_label_key   = "network/listener-rds-client"
+      pod_label_value = "true"
+    }
+
     # Custom SecurityGroupPolicy resources beyond the built-in. Map key becomes
     # the SecurityGroupPolicy resource name.
     # Default: {}
@@ -953,6 +1233,23 @@ k8s_coprocessor_deps = {
       # Default: {}
       annotations = {}
     }
+
+    # Dedicated listener database. Omit this entry when listener_rds.enabled = false.
+    # Published to the coprocessor ConfigMap as LISTENER_DATABASE_ENDPOINT.
+    listener-database = {
+      # Default: true
+      enabled = true
+
+      # Omit endpoint to have the root module inject the listener RDS hostname.
+      # Default: null
+      endpoint = null
+
+      # Default: null
+      namespace = "coproc"
+
+      # Default: {}
+      annotations = {}
+    }
   }
 }
 
@@ -982,9 +1279,19 @@ k8s_system_charts = {
   # All built-ins are enabled by default except k8s_monitoring, prometheus_rds_exporter,
   # and prometheus_postgres_exporter which require explicit opt-in.
   defaults = {
-    # Karpenter EC2NodeClass + NodePool manifests.
-    # Default: { enabled = true }
-    karpenter_nodepools = { enabled = true }
+    # Karpenter EC2NodeClass + NodePool manifests. The GPU pool is opt-in and
+    # uses p5.4xlarge Bottlerocket nodes with the selected sharing strategy.
+    # Default: { enabled = true, gpu = { enabled = false, node_count = 1, capacity_type = "on-demand", sharing_strategy = "mig", sharing_replicas = 3 } }
+    karpenter_nodepools = {
+      enabled = true
+      gpu = {
+        enabled          = false
+        node_count       = 1 # Testnet: 1; mainnet: 2.
+        capacity_type    = "on-demand" # "on-demand", "spot", or "reserved".
+        sharing_strategy = "mig" # "mig", "mps", or "time-slicing".
+        sharing_replicas = 3
+      }
+    }
 
     # Prometheus Operator CRD chart (deployed before other monitoring charts).
     # Default: { enabled = true, repository = "https://prometheus-community.github.io/helm-charts", chart = "prometheus-operator-crds", version = "28.0.1" }

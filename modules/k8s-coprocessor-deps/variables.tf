@@ -22,6 +22,12 @@ variable "rds_master_secret_arn" {
   default     = null
 }
 
+variable "listener_rds_master_secret_arn" {
+  description = "ARN of the Secrets Manager secret containing the listener RDS master user password. Granted alongside rds_master_secret_arn to any service account with rds_master_secret_access = true. Null when the listener RDS is disabled or manages its own password."
+  type        = string
+  default     = null
+}
+
 variable "s3_bucket_arns" {
   description = "Map of logical bucket key to ARN from the s3 module. Referenced by service_accounts[*].s3_bucket_access to generate S3 IAM statements automatically."
   type        = map(string)
@@ -42,6 +48,12 @@ variable "kms_key_arn" {
 
 variable "rds_client_security_group_id" {
   description = "ID of the rds-client security group from the rds module. Required when k8s.security_group_policies.rds_client.enabled = true; used as the groupIds value in the SecurityGroupPolicy resources that label pods for RDS access."
+  type        = string
+  default     = null
+}
+
+variable "listener_rds_client_security_group_id" {
+  description = "ID of the listener-rds-client security group from the listener RDS module. Required when k8s.security_group_policies.listener_rds_client.enabled = true; used as the groupIds value in the SecurityGroupPolicy resources that label pods for listener DB access."
   type        = string
   default     = null
 }
@@ -161,10 +173,32 @@ variable "k8s" {
       })), {})
     }), {})
 
-    # ExternalName services — map key becomes the Service name.
+    # ConfigMaps published for the coprocessor components.
+    #
+    # Both default to enabled, matching the behaviour before these toggles
+    # existed. Turn them off to use this module for a narrower slice — e.g. a
+    # stack that only declares an ExternalName service — without claiming
+    # ConfigMaps another deployment owns.
+    config_maps = optional(object({
+      # db-admin-config in coproc-admin: RDS/listener master secret ARNs, KMS key, migrate bucket.
+      db_admin = optional(object({
+        enabled = optional(bool, true)
+      }), {})
+
+      # coprocessor-config, one per namespace: DB endpoints and the coprocessor bucket.
+      coprocessor = optional(object({
+        enabled    = optional(bool, true)
+        namespaces = optional(list(string), ["coproc", "eth-blockchain", "gw-blockchain", "polygon-blockchain"])
+      }), {})
+    }), {})
+
+    # ExternalName services — the map key becomes the Service name unless `name`
+    # overrides it. Set `name` to publish the same Service name in more than one
+    # namespace: the keys stay unique, metadata.name repeats.
     # Endpoints resolved by the root module; port is stripped automatically.
     external_name_services = optional(map(object({
       enabled     = optional(bool, true)
+      name        = optional(string, null) # defaults to the map key
       endpoint    = optional(string, null) # host:port or bare hostname
       namespace   = optional(string, null) # defaults to k8s.default_namespace
       annotations = optional(map(string), {})
@@ -182,6 +216,27 @@ variable "k8s" {
         # An explicit list replaces the default.
         namespaces      = optional(list(string), null)
         pod_label_key   = optional(string, "network/rds-client")
+        pod_label_value = optional(string, "true")
+      }), {})
+
+      # listener_rds_client: same shape as rds_client, but for the dedicated
+      # listener database. A separate SG and a separate label mean a pod reaches
+      # only the database whose label it carries; a pod needing both (db-admin,
+      # exporters scraping both) must carry both labels.
+      #
+      # Namespaces default to the *-blockchain namespaces (one listener per
+      # blockchain), plus coproc-admin so db-admin can administer the database
+      # whose master secret it holds, and monitoring for exporters. Deliberately
+      # excludes coproc: keeping the coprocessor out of the listener DB is the
+      # isolation this separate SG exists to provide.
+      # Defaults to false, mirroring listener_rds.enabled: enable it alongside the
+      # listener database, and supply listener_rds_client_security_group_id with it.
+      listener_rds_client = optional(object({
+        enabled = optional(bool, false)
+        namespaces = optional(list(string), [
+          "eth-blockchain", "polygon-blockchain", "gw-blockchain", "coproc-admin", "monitoring"
+        ])
+        pod_label_key   = optional(string, "network/listener-rds-client")
         pod_label_value = optional(string, "true")
       }), {})
 
@@ -239,4 +294,30 @@ variable "k8s" {
     error_message = "Branch activation heights must be non-negative integers fitting in uint64, or null."
   }
 
+  # main.tf does split(":", endpoint)[0]. A null endpoint fails there with an
+  # opaque error, and "" silently plans a Service with an empty externalName.
+  # The root module fills this in from local.module_endpoints, but only for the
+  # keys it knows; any other key must supply its own.
+  validation {
+    condition = alltrue([
+      for key, svc in var.k8s.external_name_services :
+      svc.endpoint != null && svc.endpoint != ""
+      if svc.enabled
+    ])
+    error_message = "Every enabled k8s.external_name_services entry must set a non-empty endpoint (host, or host:port)."
+  }
+
+  # Two entries may now share a Service name across namespaces, but not within
+  # one — that would be two Terraform resources fighting over the same object.
+  validation {
+    condition = length(distinct([
+      for key, svc in var.k8s.external_name_services :
+      "${coalesce(svc.namespace, var.k8s.default_namespace)}/${coalesce(svc.name, key)}"
+      if svc.enabled
+      ])) == length([
+      for key, svc in var.k8s.external_name_services : key
+      if svc.enabled
+    ])
+    error_message = "Every enabled k8s.external_name_services entry must resolve to a unique <namespace>/<name>; two entries currently target the same Service."
+  }
 }

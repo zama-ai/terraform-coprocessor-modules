@@ -49,6 +49,13 @@ variable "defaults" {
   type = object({
     karpenter_nodepools = optional(object({
       enabled = optional(bool, true)
+      gpu = optional(object({
+        enabled          = optional(bool, false)
+        node_count       = optional(number, 1)
+        capacity_type    = optional(string, "on-demand")
+        sharing_strategy = optional(string, "mig")
+        sharing_replicas = optional(number, 3)
+      }), {})
     }), {})
     prometheus_operator_crds = optional(object({
       enabled    = optional(bool, true)
@@ -112,6 +119,32 @@ variable "defaults" {
     }), {})
   })
   default = {}
+
+  validation {
+    condition     = contains(["mig", "mps", "time-slicing"], var.defaults.karpenter_nodepools.gpu.sharing_strategy)
+    error_message = "karpenter_nodepools.gpu.sharing_strategy must be one of: mig, mps, time-slicing."
+  }
+
+  validation {
+    condition     = var.defaults.karpenter_nodepools.gpu.node_count >= 1 && floor(var.defaults.karpenter_nodepools.gpu.node_count) == var.defaults.karpenter_nodepools.gpu.node_count
+    error_message = "karpenter_nodepools.gpu.node_count must be a positive whole number."
+  }
+
+  validation {
+    condition     = contains(["on-demand", "spot", "reserved"], var.defaults.karpenter_nodepools.gpu.capacity_type)
+    error_message = "karpenter_nodepools.gpu.capacity_type must be one of: on-demand, spot, reserved."
+  }
+
+  validation {
+    condition = (
+      var.defaults.karpenter_nodepools.gpu.sharing_strategy == "mig"
+      ? contains([1, 2, 3, 4, 7], var.defaults.karpenter_nodepools.gpu.sharing_replicas)
+      : var.defaults.karpenter_nodepools.gpu.sharing_strategy == "mps"
+      ? var.defaults.karpenter_nodepools.gpu.sharing_replicas >= 2 && var.defaults.karpenter_nodepools.gpu.sharing_replicas <= 48 && floor(var.defaults.karpenter_nodepools.gpu.sharing_replicas) == var.defaults.karpenter_nodepools.gpu.sharing_replicas
+      : var.defaults.karpenter_nodepools.gpu.sharing_replicas >= 2 && floor(var.defaults.karpenter_nodepools.gpu.sharing_replicas) == var.defaults.karpenter_nodepools.gpu.sharing_replicas
+    )
+    error_message = "karpenter_nodepools.gpu.sharing_replicas must be a supported MIG partition count (1, 2, 3, 4, or 7), an MPS count from 2 to 48, or a time-slicing count of at least 2."
+  }
 }
 
 variable "extra" {

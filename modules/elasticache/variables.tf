@@ -1,0 +1,166 @@
+variable "partner_name" {
+  description = "Partner identifier, used for resource naming."
+  type        = string
+}
+
+variable "environment" {
+  description = "Deployment environment (e.g. testnet, mainnet)."
+  type        = string
+}
+
+variable "cluster_name" {
+  description = <<-EOT
+    Optional EKS cluster name. When set, the VPC ID and private subnets
+    (subnets with map_public_ip_on_launch = false) are auto-discovered from
+    the cluster, so the module can be deployed as a standalone stack without
+    wiring VPC outputs. Explicitly provided vpc_id / private_subnet_ids /
+    private_subnet_cidr_blocks always take precedence over discovered values.
+
+    EKS discovery only sees subnets in the cluster VPC configuration. When
+    nodes or pods use additional subnets (for example, Karpenter discovery
+    subnets), pass their CIDRs explicitly through private_subnet_cidr_blocks
+    or additional_allowed_cidr_blocks.
+  EOT
+  type        = string
+  default     = null
+}
+
+variable "vpc_id" {
+  description = "VPC ID to deploy ElastiCache into. Overrides the value discovered from cluster_name when set."
+  type        = string
+  default     = null
+}
+
+variable "private_subnet_ids" {
+  description = "List of private subnet IDs for the ElastiCache subnet group. Overrides subnets discovered from cluster_name when non-empty."
+  type        = list(string)
+  default     = []
+}
+
+variable "private_subnet_cidr_blocks" {
+  description = "CIDR blocks of private subnets, merged into ElastiCache security group ingress. Overrides CIDRs discovered from cluster_name when non-empty."
+  type        = list(string)
+  default     = []
+}
+
+variable "elasticache" {
+  description = <<-EOT
+    ElastiCache (Valkey/Redis) replication group configuration.
+    Set enabled = false to skip all ElastiCache resources.
+
+    Two deployment profiles:
+      Testnet: node_type = cache.r7g.large,   data_tiering_enabled = false (default)
+      Mainnet: node_type = cache.r6gd.xlarge,  data_tiering_enabled = true
+  EOT
+
+  type = object({
+    enabled = optional(bool, false)
+
+    # Naming
+    replication_group_id = optional(string, null) # override computed "{partner_name}-{environment}" identifier
+
+    # Engine
+    engine         = optional(string, "valkey")
+    engine_version = optional(string, "7.2")
+
+    # Instance
+    node_type            = optional(string, "cache.r7g.large")
+    num_cache_clusters   = optional(number, 3) # 1 primary + 2 replicas
+    port                 = optional(number, 6379)
+    data_tiering_enabled = optional(bool, false)
+
+    # High availability
+    multi_az_enabled           = optional(bool, true)
+    automatic_failover_enabled = optional(bool, true)
+
+    # Encryption
+    at_rest_encryption_enabled = optional(bool, true)
+    transit_encryption_enabled = optional(bool, true)
+
+    # Auth
+    # NOTE: auth_token is stored in state as the AWS provider does not yet support write-only
+    # auth_token_wo for aws_elasticache_replication_group. Track upstream progress:
+    # https://github.com/hashicorp/terraform-provider-aws/pull/44260
+    auth_token = optional(string, null) # requires transit_encryption_enabled = true
+
+    # Maintenance & backups
+    maintenance_window       = optional(string, "Mon:00:00-Mon:03:00")
+    snapshot_retention_limit = optional(number, 7)
+    snapshot_window          = optional(string, "03:00-05:00")
+
+    # Parameters
+    parameters = optional(list(object({
+      name  = string
+      value = string
+    })), [])
+
+    # Security group
+    additional_allowed_cidr_blocks = optional(list(string), [])
+
+    # ── Kubernetes ExternalName Service ─────────────────────────────────────────
+    # Publishes the replication group primary endpoint as a stable in-cluster DNS
+    # name, so pods connect to <name>.<namespace>.svc.cluster.local instead of the
+    # AWS-generated hostname. One Service is created per namespace, each with its
+    # own name, annotations and labels.
+    #
+    # The target namespaces must already exist. They are created by
+    # modules/k8s-coprocessor-deps (k8s.namespaces), and Terraform has no
+    # dependency edge between that module and this one, so on a greenfield
+    # single-pass apply enable this only once those namespaces are in place.
+    k8s_service = optional(object({
+      enabled = optional(bool, false)
+
+      # Baseline applied to every namespace. A namespace's own values are
+      # merged on top, per key, so an annotation can target one namespace
+      # without appearing in the others.
+      name        = optional(string, "redis")
+      annotations = optional(map(string), {})
+      labels      = optional(map(string), {})
+
+      # Map key = namespace. One ExternalName Service per enabled entry.
+      namespaces = optional(map(object({
+        enabled     = optional(bool, true)
+        name        = optional(string, null) # null keeps the baseline name
+        annotations = optional(map(string), {})
+        labels      = optional(map(string), {})
+      })), { coproc = {} })
+    }), {})
+  })
+
+  default = { enabled = false }
+
+  validation {
+    condition     = !var.elasticache.data_tiering_enabled || startswith(var.elasticache.node_type, "cache.r6gd.")
+    error_message = "data_tiering_enabled = true requires an r6gd node type (e.g. cache.r6gd.xlarge). Only the r6gd family supports data tiering."
+  }
+
+  validation {
+    condition     = !startswith(var.elasticache.node_type, "cache.r6gd.") || var.elasticache.data_tiering_enabled
+    error_message = "r6gd node types require data_tiering_enabled = true."
+  }
+
+  validation {
+    condition     = !(var.elasticache.multi_az_enabled || var.elasticache.automatic_failover_enabled) || var.elasticache.num_cache_clusters >= 2
+    error_message = "multi_az_enabled or automatic_failover_enabled requires at least 2 cache clusters (1 primary + 1 replica)."
+  }
+
+  validation {
+    condition     = !var.elasticache.multi_az_enabled || var.elasticache.automatic_failover_enabled
+    error_message = "multi_az_enabled requires automatic_failover_enabled = true."
+  }
+
+  validation {
+    condition     = var.elasticache.auth_token == null || var.elasticache.transit_encryption_enabled
+    error_message = "auth_token can only be set when transit_encryption_enabled = true."
+  }
+
+  validation {
+    condition     = !var.elasticache.k8s_service.enabled || var.elasticache.enabled
+    error_message = "k8s_service.enabled = true requires elasticache.enabled = true: without a replication group there is no endpoint for the ExternalName Service to point at."
+  }
+
+  validation {
+    condition     = !var.elasticache.k8s_service.enabled || length([for ns, cfg in var.elasticache.k8s_service.namespaces : ns if cfg.enabled]) > 0
+    error_message = "k8s_service.enabled = true requires at least one enabled entry in k8s_service.namespaces."
+  }
+}
