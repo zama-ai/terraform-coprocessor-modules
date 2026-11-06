@@ -1,0 +1,10 @@
+diff --git a/terraform.tfvars b/terraform.tfvars
+index 2234a1b..d6fe4be 100644
+--- a/terraform.tfvars
++++ b/terraform.tfvars
+@@ -101,4 +101,5 @@ k8s_coprocessor_deps = {
+     eth-blockchain     = { enabled = true }
+     polygon-blockchain = { enabled = true }
++    bnb-blockchain     = { enabled = true }
+     monitoring         = { enabled = true }
+   }
