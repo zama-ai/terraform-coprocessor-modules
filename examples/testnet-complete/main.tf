@@ -9,10 +9,8 @@ module "coprocessor" {
   networking           = var.networking
   eks                  = var.eks
   rds                  = var.rds
-  listener_rds         = var.listener_rds
   s3                   = var.s3
   kms                  = var.kms
   k8s_coprocessor_deps = var.k8s_coprocessor_deps
   k8s_system_charts    = var.k8s_system_charts
-  elasticache          = var.elasticache
 }

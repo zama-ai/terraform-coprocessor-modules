@@ -26,18 +26,6 @@ locals {
   #     → "oidc.eks.us-east-1.amazonaws.com/id/EXAMPLE"
   oidc_provider_id = replace(var.oidc_provider_arn, "/^.*oidc-provider\\//", "")
 
-  # In-cluster FQDN of each ExternalName Service, keyed by Service *name*.
-  # The coprocessor ConfigMap looks endpoints up here rather than by map key,
-  # so an entry may be keyed freely once external_name_services[*].name is set.
-  # Grouped because the same name may be published in several namespaces; the
-  # first by map key wins, which is the only deterministic choice available.
-  external_name_fqdns = {
-    for name, services in {
-      for service in values(kubernetes_service.external_name) :
-      service.metadata[0].name => service...
-    } : name => "${name}.${services[0].metadata[0].namespace}.svc.cluster.local"
-  }
-
   # ── Built-in service accounts ──────────────────────────────────────────────
   builtin_coprocessor_sa = {
     name      = "coprocessor"
@@ -171,16 +159,6 @@ locals {
     var.k8s.storage_classes.extra,
   )
 
-  # ── RDS master-user secrets granted by rds_master_secret_access ────────────
-  # Filtering with `if arn != null` (rather than compact()) keeps the list length
-  # known at plan time: the ARNs are unknown-but-non-null module outputs when the
-  # instances are enabled, and plainly null when disabled. A plan-time-known length
-  # is required because it gates the dynamic "statement" block below.
-  rds_master_secret_arns = [
-    for arn in [var.rds_master_secret_arn, var.listener_rds_master_secret_arn] : arn
-    if arn != null
-  ]
-
   # ── Common labels applied to every Kubernetes resource ────────────────────
   common_labels = {
     "app.kubernetes.io/name"       = "coprocessor"
@@ -221,26 +199,8 @@ locals {
     }
   } : {}
 
-  # Same expansion for the dedicated listener database. A separate SG under a
-  # separate label: a pod reaches only the database whose label it carries.
-  listener_rds_client_policies = (
-    var.k8s.enabled
-    && var.k8s.security_group_policies.listener_rds_client.enabled
-    ) ? {
-    for ns in var.k8s.security_group_policies.listener_rds_client.namespaces :
-    "listener-rds-client-${ns}" => {
-      name      = "listener-rds-client"
-      namespace = ns
-      pod_selector = {
-        (var.k8s.security_group_policies.listener_rds_client.pod_label_key) = var.k8s.security_group_policies.listener_rds_client.pod_label_value
-      }
-      security_group_ids = [var.listener_rds_client_security_group_id]
-    }
-  } : {}
-
   security_group_policies = merge(
     local.rds_client_policies,
-    local.listener_rds_client_policies,
     {
       for key, cfg in var.k8s.security_group_policies.extra :
       key => {
@@ -341,16 +301,15 @@ data "aws_iam_policy_document" "service_account" {
   }
 
   # Auto-generated Secrets Manager statement from rds_master_secret_access.
-  # Grants GetSecretValue + DescribeSecret on every RDS master user secret
-  # supplied (coprocessor and, when enabled, listener).
+  # Grants GetSecretValue + DescribeSecret on the RDS master user secret.
   dynamic "statement" {
-    for_each = each.value.rds_master_secret_access && length(local.rds_master_secret_arns) > 0 ? [1] : []
+    for_each = each.value.rds_master_secret_access && var.rds_master_secret_arn != null ? [1] : []
 
     content {
       sid       = "AllowRDSMasterSecretAccess"
       effect    = "Allow"
       actions   = ["secretsmanager:GetSecretValue", "secretsmanager:DescribeSecret"]
-      resources = local.rds_master_secret_arns
+      resources = [var.rds_master_secret_arn]
     }
   }
 
@@ -419,7 +378,7 @@ resource "aws_iam_role_policy_attachment" "service_account" {
 #  Kubernetes ConfigMaps
 # ***************************************
 resource "kubernetes_config_map" "db_admin_config" {
-  count = var.k8s.enabled && var.k8s.config_maps.db_admin.enabled ? 1 : 0
+  count = var.k8s.enabled ? 1 : 0
 
   metadata {
     name      = "db-admin-config"
@@ -432,21 +391,16 @@ resource "kubernetes_config_map" "db_admin_config" {
   }
 
   data = {
-    RDS_ADMIN_SECRET_ID          = var.rds_master_secret_arn
-    LISTENER_RDS_ADMIN_SECRET_ID = var.listener_rds_master_secret_arn
-    AWS_KMS_KEY_ID               = var.kms_key_arn
-    S3_BUCKET_NAME               = lookup(var.s3_bucket_names, var.k8s.service_accounts.s3_migrate.s3_bucket_key, null)
+    RDS_ADMIN_SECRET_ID = var.rds_master_secret_arn
+    AWS_KMS_KEY_ID      = var.kms_key_arn
+    S3_BUCKET_NAME      = lookup(var.s3_bucket_names, var.k8s.service_accounts.s3_migrate.s3_bucket_key, null)
   }
 
   depends_on = [kubernetes_namespace.this]
 }
 
 resource "kubernetes_config_map" "coprocessor_config" {
-  for_each = (
-    var.k8s.enabled && var.k8s.config_maps.coprocessor.enabled
-    ? toset(var.k8s.config_maps.coprocessor.namespaces)
-    : toset([])
-  )
+  for_each = var.k8s.enabled ? local.coprocessor_config_namespaces : toset([])
 
   metadata {
     name      = "coprocessor-config"
@@ -459,9 +413,11 @@ resource "kubernetes_config_map" "coprocessor_config" {
   }
 
   data = merge({
-    DATABASE_ENDPOINT          = lookup(local.external_name_fqdns, "coprocessor-database", null)
-    LISTENER_DATABASE_ENDPOINT = lookup(local.external_name_fqdns, "listener-database", null)
-    S3_BUCKET_NAME             = lookup(var.s3_bucket_names, var.k8s.service_accounts.sns_worker.s3_bucket_key, null)
+    DATABASE_ENDPOINT = try(
+      "${kubernetes_service.external_name["coprocessor-database"].metadata[0].name}.${kubernetes_service.external_name["coprocessor-database"].metadata[0].namespace}.svc.cluster.local",
+      null,
+    )
+    S3_BUCKET_NAME = lookup(var.s3_bucket_names, var.k8s.service_accounts.sns_worker.s3_bucket_key, null)
     }, local.branch_activation_blocks.ethereum != null ? {
     ETH_FHEVM_BRANCH_ACTIVATION_BLOCK = tostring(local.branch_activation_blocks.ethereum)
     } : {}, local.branch_activation_blocks.polygon != null ? {
@@ -544,7 +500,7 @@ resource "kubernetes_service" "external_name" {
   for_each = var.k8s.enabled ? { for key, config in var.k8s.external_name_services : key => config if config.enabled } : {}
 
   metadata {
-    name        = coalesce(each.value.name, each.key)
+    name        = each.key
     namespace   = coalesce(each.value.namespace, local.namespace)
     annotations = each.value.annotations
   }
@@ -592,7 +548,7 @@ resource "kubernetes_manifest" "security_group_policy" {
   lifecycle {
     precondition {
       condition     = alltrue([for sg in each.value.security_group_ids : sg != null])
-      error_message = "All security_group_ids in a SecurityGroupPolicy must be non-null. For the built-in rds_client policy, this means var.rds_client_security_group_id must be supplied (typically wired from module.rds.rds_client_security_group_id) when k8s.security_group_policies.rds_client.enabled = true. Likewise var.listener_rds_client_security_group_id (from module.listener_rds.rds_client_security_group_id) when k8s.security_group_policies.listener_rds_client.enabled = true."
+      error_message = "All security_group_ids in a SecurityGroupPolicy must be non-null. For the built-in rds_client policy, this means var.rds_client_security_group_id must be supplied (typically wired from module.rds.rds_client_security_group_id) when k8s.security_group_policies.rds_client.enabled = true."
     }
   }
 

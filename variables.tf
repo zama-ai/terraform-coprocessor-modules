@@ -303,14 +303,6 @@ variable "rds" {
     monitoring_role_name         = optional(string, null)
     existing_monitoring_role_arn = optional(string, null)
 
-    # Database Insights (formerly Performance Insights)
-    # Standard mode retains 7 days free; advanced mode retains 15 months and is
-    # billed per vCPU. Valid retention values: 7, 31 * n (n = 1..23), or 731.
-    performance_insights_enabled          = optional(bool, false)
-    performance_insights_retention_period = optional(number, 7)
-    performance_insights_kms_key_id       = optional(string, null)
-    database_insights_mode                = optional(string, null)
-
     # Parameters
     # NOTE: rds.force_ssl = 0 is a temporary workaround for binary issues with
     # SSL connections; remove once resolved.
@@ -324,207 +316,6 @@ variable "rds" {
   })
 
   default = { enabled = true }
-}
-
-# ******************************************************
-#  Listener RDS
-# ******************************************************
-variable "listener_rds" {
-  description = <<-EOT
-    Dedicated RDS instance for the listener component. Set enabled = false to skip.
-
-    Schema is identical to var.rds. The instance reuses the coprocessor DB's pod-side
-    client security group (and therefore the same `network/rds-client` pod label), so
-    no second SecurityGroupPolicy or pod label is introduced. When var.rds is disabled,
-    this instance creates and manages its own client security group instead.
-
-    db_name must be set and must differ from rds.db_name: security group names and the
-    RDS identifier both derive from it, and security group names are unique per VPC.
-  EOT
-
-  type = object({
-    enabled = optional(bool, false)
-
-    # Naming
-    db_name             = optional(string, null)
-    identifier_override = optional(string, null)
-
-    # Engine
-    engine         = optional(string, "postgres")
-    engine_version = optional(string, "17")
-
-    # Instance
-    instance_class        = optional(string, "db.m5.4xlarge")
-    allocated_storage     = optional(number, 400)
-    max_allocated_storage = optional(number, 1000)
-    multi_az              = optional(bool, false)
-    port                  = optional(number, 5432)
-
-    # Credentials
-    username                            = optional(string, "postgres")
-    manage_master_user_password         = optional(bool, true)   # true = Secrets Manager managed (recommended)
-    password_wo                         = optional(string, null) # write-only; only used when manage_master_user_password = false
-    password_wo_version                 = optional(number, 1)    # increment to rotate a non-managed password
-    enable_master_password_rotation     = optional(bool, true)
-    master_password_rotation_days       = optional(number, 7)
-    iam_database_authentication_enabled = optional(bool, true)
-
-    # Maintenance & backups
-    maintenance_window      = optional(string, "Mon:00:00-Mon:03:00")
-    backup_retention_period = optional(number, 30)
-    deletion_protection     = optional(bool, true)
-
-    # Monitoring
-    monitoring_interval          = optional(number, 60)
-    create_monitoring_role       = optional(bool, true)
-    monitoring_role_name         = optional(string, null)
-    existing_monitoring_role_arn = optional(string, null)
-
-    # Database Insights (formerly Performance Insights)
-    # Standard mode retains 7 days free; advanced mode retains 15 months and is
-    # billed per vCPU. Valid retention values: 7, 31 * n (n = 1..23), or 731.
-    performance_insights_enabled          = optional(bool, false)
-    performance_insights_retention_period = optional(number, 7)
-    performance_insights_kms_key_id       = optional(string, null)
-    database_insights_mode                = optional(string, null)
-
-    # Parameters
-    # NOTE: rds.force_ssl = 0 is a temporary workaround for binary issues with
-    # SSL connections; remove once resolved.
-    parameters = optional(list(object({
-      name  = string
-      value = string
-    })), [{ name = "rds.force_ssl", value = "0" }])
-
-    # Security group
-    additional_allowed_cidr_blocks = optional(list(string), [])
-  })
-
-  default = { enabled = false }
-
-  validation {
-    condition = (
-      !var.listener_rds.enabled
-      || (
-        var.listener_rds.db_name != null
-        && var.listener_rds.db_name != try(var.rds.db_name, null)
-      )
-    )
-    error_message = "listener_rds.db_name must be set and must differ from rds.db_name: security group names and the RDS identifier derive from db_name, and security group names must be unique per VPC."
-  }
-}
-
-# ******************************************************
-#  ElastiCache
-# ******************************************************
-variable "elasticache" {
-  description = <<-EOT
-    ElastiCache (Valkey/Redis) replication group configuration.
-    Set enabled = false to skip all ElastiCache resources.
-
-    Two deployment profiles:
-      Testnet: node_type = cache.r7g.large,   data_tiering_enabled = false (default)
-      Mainnet: node_type = cache.r6gd.xlarge,  data_tiering_enabled = true
-  EOT
-
-  type = object({
-    enabled = optional(bool, false)
-
-    # Naming
-    replication_group_id = optional(string, null)
-
-    # Engine
-    engine         = optional(string, "valkey")
-    engine_version = optional(string, "7.2")
-
-    # Instance
-    node_type            = optional(string, "cache.r7g.large")
-    num_cache_clusters   = optional(number, 3)
-    port                 = optional(number, 6379)
-    data_tiering_enabled = optional(bool, false)
-
-    # High availability
-    multi_az_enabled           = optional(bool, true)
-    automatic_failover_enabled = optional(bool, true)
-
-    # Encryption
-    at_rest_encryption_enabled = optional(bool, true)
-    transit_encryption_enabled = optional(bool, true)
-
-    # Auth
-    # NOTE: stored in state until AWS provider supports write-only auth_token_wo
-    # https://github.com/hashicorp/terraform-provider-aws/pull/44260
-    auth_token = optional(string, null)
-
-    # Maintenance & backups
-    maintenance_window       = optional(string, "Mon:00:00-Mon:03:00")
-    snapshot_retention_limit = optional(number, 7)
-    snapshot_window          = optional(string, "03:00-05:00")
-
-    # Parameters
-    parameters = optional(list(object({
-      name  = string
-      value = string
-    })), [])
-
-    # Security group
-    additional_allowed_cidr_blocks = optional(list(string), [])
-
-    # Kubernetes ExternalName Service publishing the primary endpoint as
-    # <name>.<namespace>.svc.cluster.local. One Service per namespace, each with
-    # its own name, annotations and labels merged over the baseline; the
-    # namespaces must already exist (see modules/k8s-coprocessor-deps).
-    k8s_service = optional(object({
-      enabled = optional(bool, false)
-
-      # Baseline applied to every namespace. A namespace's own values are
-      # merged on top, per key, so an annotation can target one namespace
-      # without appearing in the others.
-      name        = optional(string, "redis")
-      annotations = optional(map(string), {})
-      labels      = optional(map(string), {})
-
-      # Map key = namespace. One ExternalName Service per enabled entry.
-      namespaces = optional(map(object({
-        enabled     = optional(bool, true)
-        name        = optional(string, null) # null keeps the baseline name
-        annotations = optional(map(string), {})
-        labels      = optional(map(string), {})
-      })), { coproc = {} })
-    }), {})
-  })
-
-  default = { enabled = false }
-
-  validation {
-    condition     = !var.elasticache.data_tiering_enabled || startswith(var.elasticache.node_type, "cache.r6gd.")
-    error_message = "data_tiering_enabled = true requires an r6gd node type (e.g. cache.r6gd.xlarge). Only the r6gd family supports data tiering."
-  }
-
-  validation {
-    condition     = !startswith(var.elasticache.node_type, "cache.r6gd.") || var.elasticache.data_tiering_enabled
-    error_message = "r6gd node types require data_tiering_enabled = true."
-  }
-
-  validation {
-    condition     = !(var.elasticache.multi_az_enabled || var.elasticache.automatic_failover_enabled) || var.elasticache.num_cache_clusters >= 2
-    error_message = "multi_az_enabled or automatic_failover_enabled requires at least 2 cache clusters (1 primary + 1 replica)."
-  }
-
-  validation {
-    condition     = !var.elasticache.multi_az_enabled || var.elasticache.automatic_failover_enabled
-    error_message = "multi_az_enabled requires automatic_failover_enabled = true."
-  }
-
-  validation {
-    condition     = !var.elasticache.k8s_service.enabled || var.elasticache.enabled
-    error_message = "k8s_service.enabled = true requires elasticache.enabled = true: without a replication group there is no endpoint for the ExternalName Service to point at."
-  }
-
-  validation {
-    condition     = !var.elasticache.k8s_service.enabled || length([for ns, cfg in var.elasticache.k8s_service.namespaces : ns if cfg.enabled]) > 0
-    error_message = "k8s_service.enabled = true requires at least one enabled entry in k8s_service.namespaces."
-  }
 }
 
 # ******************************************************
@@ -764,25 +555,6 @@ variable "k8s_coprocessor_deps" {
       })), {})
     }), {})
 
-    # ConfigMaps published for the coprocessor components.
-    #
-    # Both default to enabled, matching the behaviour before these toggles
-    # existed. Turn them off to use this module for a narrower slice — e.g. a
-    # stack that only declares an ExternalName service — without claiming
-    # ConfigMaps another deployment owns.
-    config_maps = optional(object({
-      # db-admin-config in coproc-admin: RDS/listener master secret ARNs, KMS key, migrate bucket.
-      db_admin = optional(object({
-        enabled = optional(bool, true)
-      }), {})
-
-      # coprocessor-config, one per namespace: DB endpoints and the coprocessor bucket.
-      coprocessor = optional(object({
-        enabled    = optional(bool, true)
-        namespaces = optional(list(string), ["coproc", "eth-blockchain", "gw-blockchain", "polygon-blockchain", "bnb-blockchain"])
-      }), {})
-    }), {})
-
     # ExternalName services — map key becomes the Service name.
     # When endpoint is omitted the root module resolves it from the matching module output (see local.module_endpoints).
     external_name_services = optional(map(object({
@@ -791,50 +563,6 @@ variable "k8s_coprocessor_deps" {
       namespace   = optional(string, null)
       annotations = optional(map(string), {})
     })), {})
-
-    # SecurityGroupPolicy resources for EKS Security Groups for Pods (SGP).
-    # The CRD is installed automatically by EKS via the VPC Resource Controller.
-    # Pods opt in by carrying the matching label on their pod template.
-    security_group_policies = optional(object({
-      # rds_client: built-in policy that attaches the rds-client SG to any pod
-      # carrying the configured label. Created once per listed namespace.
-      rds_client = optional(object({
-        enabled = optional(bool, true)
-        namespaces = optional(list(string), [
-          "coproc-admin", "coproc", "gw-blockchain", "eth-blockchain", "polygon-blockchain", "monitoring"
-        ])
-        pod_label_key   = optional(string, "network/rds-client")
-        pod_label_value = optional(string, "true")
-      }), {})
-
-      # listener_rds_client: same shape as rds_client, but for the dedicated
-      # listener database. A separate SG and a separate label mean a pod reaches
-      # only the database whose label it carries; a pod needing both (db-admin,
-      # exporters scraping both) must carry both labels.
-      #
-      # Namespaces default to the *-blockchain namespaces (one listener per
-      # blockchain), plus coproc-admin so db-admin can administer the database
-      # whose master secret it holds, and monitoring for exporters. Deliberately
-      # excludes coproc: keeping the coprocessor out of the listener DB is the
-      # isolation this separate SG exists to provide.
-      # Defaults to false, mirroring listener_rds.enabled: enable it alongside the
-      # listener database, and supply listener_rds_client_security_group_id with it.
-      listener_rds_client = optional(object({
-        enabled = optional(bool, false)
-        namespaces = optional(list(string), [
-          "eth-blockchain", "polygon-blockchain", "gw-blockchain", "coproc-admin", "monitoring"
-        ])
-        pod_label_key   = optional(string, "network/listener-rds-client")
-        pod_label_value = optional(string, "true")
-      }), {})
-
-      # Custom SecurityGroupPolicy resources beyond the built-ins.
-      extra = optional(map(object({
-        namespace          = string
-        pod_selector       = map(string)
-        security_group_ids = list(string)
-      })), {})
-    }), {})
   })
   default = { enabled = false }
 
@@ -896,13 +624,6 @@ variable "k8s_system_charts" {
     defaults = optional(object({
       karpenter_nodepools = optional(object({
         enabled = optional(bool, true)
-        gpu = optional(object({
-          enabled          = optional(bool, false)
-          node_count       = optional(number, 1)
-          capacity_type    = optional(string, "on-demand")
-          sharing_strategy = optional(string, "mig")
-          sharing_replicas = optional(number, 3)
-        }), {})
       }), {})
       prometheus_operator_crds = optional(object({
         enabled    = optional(bool, true)
@@ -922,7 +643,7 @@ variable "k8s_system_charts" {
         enabled              = optional(bool, true)
         repository           = optional(string, "oci://public.ecr.aws/karpenter")
         chart                = optional(string, "karpenter")
-        version              = optional(string, "1.11.0")
+        version              = optional(string, "1.8.2")
         controller_image_tag = optional(string, "v1.11.0")
         values               = optional(string, "")
       }), {})
@@ -1006,30 +727,4 @@ variable "k8s_system_charts" {
     })), {})
   })
   default = { enabled = false }
-
-  validation {
-    condition     = contains(["mig", "mps", "time-slicing"], var.k8s_system_charts.defaults.karpenter_nodepools.gpu.sharing_strategy)
-    error_message = "k8s_system_charts.defaults.karpenter_nodepools.gpu.sharing_strategy must be one of: mig, mps, time-slicing."
-  }
-
-  validation {
-    condition     = var.k8s_system_charts.defaults.karpenter_nodepools.gpu.node_count >= 1 && floor(var.k8s_system_charts.defaults.karpenter_nodepools.gpu.node_count) == var.k8s_system_charts.defaults.karpenter_nodepools.gpu.node_count
-    error_message = "k8s_system_charts.defaults.karpenter_nodepools.gpu.node_count must be a positive whole number."
-  }
-
-  validation {
-    condition     = contains(["on-demand", "spot", "reserved"], var.k8s_system_charts.defaults.karpenter_nodepools.gpu.capacity_type)
-    error_message = "k8s_system_charts.defaults.karpenter_nodepools.gpu.capacity_type must be one of: on-demand, spot, reserved."
-  }
-
-  validation {
-    condition = (
-      var.k8s_system_charts.defaults.karpenter_nodepools.gpu.sharing_strategy == "mig"
-      ? contains([1, 2, 3, 4, 7], var.k8s_system_charts.defaults.karpenter_nodepools.gpu.sharing_replicas)
-      : var.k8s_system_charts.defaults.karpenter_nodepools.gpu.sharing_strategy == "mps"
-      ? var.k8s_system_charts.defaults.karpenter_nodepools.gpu.sharing_replicas >= 2 && var.k8s_system_charts.defaults.karpenter_nodepools.gpu.sharing_replicas <= 48 && floor(var.k8s_system_charts.defaults.karpenter_nodepools.gpu.sharing_replicas) == var.k8s_system_charts.defaults.karpenter_nodepools.gpu.sharing_replicas
-      : var.k8s_system_charts.defaults.karpenter_nodepools.gpu.sharing_replicas >= 2 && floor(var.k8s_system_charts.defaults.karpenter_nodepools.gpu.sharing_replicas) == var.k8s_system_charts.defaults.karpenter_nodepools.gpu.sharing_replicas
-    )
-    error_message = "k8s_system_charts.defaults.karpenter_nodepools.gpu.sharing_replicas must be a supported MIG partition count (1, 2, 3, 4, or 7), an MPS count from 2 to 48, or a time-slicing count of at least 2."
-  }
 }

@@ -98,87 +98,6 @@ output "rds_master_secret_arn" {
 }
 
 # ******************************************************
-#  Listener RDS
-# ******************************************************
-output "listener_rds_db_instance_endpoint" {
-  description = "The listener RDS instance connection endpoint (host:port). Null when listener_rds.enabled = false."
-  value       = module.listener_rds.db_instance_endpoint
-}
-
-output "listener_rds_db_instance_address" {
-  description = "The listener RDS instance hostname (without port). Null when listener_rds.enabled = false."
-  value       = module.listener_rds.db_instance_address
-}
-
-output "listener_rds_db_instance_arn" {
-  description = "The ARN of the listener RDS instance. Null when listener_rds.enabled = false."
-  value       = module.listener_rds.db_instance_arn
-}
-
-output "listener_rds_db_instance_identifier" {
-  description = "The identifier of the listener RDS instance. Null when listener_rds.enabled = false."
-  value       = module.listener_rds.db_instance_identifier
-}
-
-output "listener_rds_db_instance_port" {
-  description = "The port the listener RDS instance is listening on. Null when listener_rds.enabled = false."
-  value       = module.listener_rds.db_instance_port
-}
-
-output "listener_rds_client_security_group_id" {
-  description = "ID of the client SG used to reach the listener RDS instance. Equals rds_client_security_group_id whenever the coprocessor RDS is also enabled, since the listener reuses it."
-  value       = module.listener_rds.rds_client_security_group_id
-}
-
-output "listener_rds_server_security_group_id" {
-  description = "ID of the SG attached to the listener RDS instance. Null when listener_rds.enabled = false."
-  value       = module.listener_rds.rds_server_security_group_id
-}
-
-output "listener_rds_master_secret_arn" {
-  description = "ARN of the Secrets Manager secret containing the listener RDS master user password. Null when manage_master_user_password = false or listener_rds.enabled = false."
-  value       = module.listener_rds.rds_master_secret_arn
-}
-
-# ******************************************************
-#  ElastiCache
-# ******************************************************
-output "elasticache_replication_group_id" {
-  description = "The ID of the ElastiCache replication group."
-  value       = module.elasticache.replication_group_id
-}
-
-output "elasticache_replication_group_arn" {
-  description = "The ARN of the ElastiCache replication group."
-  value       = module.elasticache.replication_group_arn
-}
-
-output "elasticache_primary_endpoint_address" {
-  description = "The primary endpoint address of the ElastiCache replication group."
-  value       = module.elasticache.primary_endpoint_address
-}
-
-output "elasticache_reader_endpoint_address" {
-  description = "The reader endpoint address of the ElastiCache replication group."
-  value       = module.elasticache.reader_endpoint_address
-}
-
-output "elasticache_port" {
-  description = "The port the ElastiCache replication group is listening on."
-  value       = module.elasticache.port
-}
-
-output "elasticache_connection_scheme" {
-  description = "ElastiCache connection URI scheme: rediss when transit encryption is enabled, otherwise redis."
-  value       = module.elasticache.connection_scheme
-}
-
-output "elasticache_security_group_id" {
-  description = "The ID of the ElastiCache security group."
-  value       = module.elasticache.security_group_id
-}
-
-# ******************************************************
 #  S3
 # ******************************************************
 output "s3_bucket_names" {
@@ -222,9 +141,4 @@ output "kms_alias_name" {
 output "kms_alias_arn" {
   description = "KMS alias ARN. Null when kms.enabled = false."
   value       = module.kms.alias_arn
-}
-
-output "elasticache_k8s_service_fqdns" {
-  description = "In-cluster DNS names of the ElastiCache ExternalName Services, keyed by namespace. Empty map when elasticache.k8s_service.enabled = false."
-  value       = module.elasticache.k8s_service_fqdns
 }

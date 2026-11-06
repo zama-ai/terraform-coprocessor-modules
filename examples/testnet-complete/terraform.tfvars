@@ -134,16 +134,7 @@ k8s_system_charts = {
   enabled = true # CHANGE ME: refer to operator documentation regarding order of deployments
 
   defaults = {
-    karpenter_nodepools = {
-      enabled = true # CHANGE ME: refer to operator documentation regarding order of deployments
-      gpu = {
-        enabled          = false
-        node_count       = 1
-        capacity_type    = "on-demand"
-        sharing_strategy = "mig"
-        sharing_replicas = 3
-      }
-    }
+    karpenter_nodepools          = { enabled = true } # CHANGE ME: refer to operator documentation regarding order of deployments
     prometheus_operator_crds     = { enabled = true }
     metrics_server               = { enabled = true }
     karpenter                    = { enabled = true }
@@ -166,11 +157,4 @@ k8s_system_charts = {
 # =============================================================================
 kms = {
   enabled = true
-}
-
-# =============================================================================
-#  ElastiCache (Valkey)
-# =============================================================================
-elasticache = {
-  enabled = false
 }
