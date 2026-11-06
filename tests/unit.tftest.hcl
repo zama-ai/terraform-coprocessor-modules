@@ -475,6 +475,9 @@ run "branch_activation_heights_are_forwarded_to_dependencies" {
   assert {
     condition     = local.k8s_config.branch_activation_blocks.ethereum == 12345678 && local.k8s_config.branch_activation_blocks.polygon == 56789012
     error_message = "Root module must forward explicit activation overrides to k8s dependencies."
+  }
+}
+
 # =============================================================================
 #  Listener RDS
 #

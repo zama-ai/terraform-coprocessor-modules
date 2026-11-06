@@ -1560,13 +1560,13 @@ run "config_maps_enabled_by_default" {
 
   assert {
     condition = alltrue([
-      length(kubernetes_config_map.coprocessor_config) == 4,
+      length(kubernetes_config_map.coprocessor_config) == 5,
       alltrue([
-        for ns in ["coproc", "eth-blockchain", "gw-blockchain", "polygon-blockchain"] :
+        for ns in ["coproc", "eth-blockchain", "gw-blockchain", "polygon-blockchain", "bnb-blockchain"] :
         contains(keys(kubernetes_config_map.coprocessor_config), ns)
       ]),
     ])
-    error_message = "coprocessor-config must default to the four coprocessor namespaces."
+    error_message = "coprocessor-config must default to the five coprocessor namespaces, including BNB."
   }
 }
 
@@ -1586,7 +1586,7 @@ run "config_maps_can_be_disabled_individually" {
   }
 
   assert {
-    condition     = length(kubernetes_config_map.coprocessor_config) == 4
+    condition     = length(kubernetes_config_map.coprocessor_config) == 5
     error_message = "Disabling db_admin must not affect coprocessor-config."
   }
 }

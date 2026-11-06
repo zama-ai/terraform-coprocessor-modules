@@ -779,7 +779,7 @@ variable "k8s_coprocessor_deps" {
       # coprocessor-config, one per namespace: DB endpoints and the coprocessor bucket.
       coprocessor = optional(object({
         enabled    = optional(bool, true)
-        namespaces = optional(list(string), ["coproc", "eth-blockchain", "gw-blockchain", "polygon-blockchain"])
+        namespaces = optional(list(string), ["coproc", "eth-blockchain", "gw-blockchain", "polygon-blockchain", "bnb-blockchain"])
       }), {})
     }), {})
 

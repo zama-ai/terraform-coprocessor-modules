@@ -442,7 +442,11 @@ resource "kubernetes_config_map" "db_admin_config" {
 }
 
 resource "kubernetes_config_map" "coprocessor_config" {
-  for_each = var.k8s.enabled ? local.coprocessor_config_namespaces : toset([])
+  for_each = (
+    var.k8s.enabled && var.k8s.config_maps.coprocessor.enabled
+    ? toset(var.k8s.config_maps.coprocessor.namespaces)
+    : toset([])
+  )
 
   metadata {
     name      = "coprocessor-config"
@@ -455,11 +459,9 @@ resource "kubernetes_config_map" "coprocessor_config" {
   }
 
   data = merge({
-    DATABASE_ENDPOINT = try(
-      "${kubernetes_service.external_name["coprocessor-database"].metadata[0].name}.${kubernetes_service.external_name["coprocessor-database"].metadata[0].namespace}.svc.cluster.local",
-      null,
-    )
-    S3_BUCKET_NAME = lookup(var.s3_bucket_names, var.k8s.service_accounts.sns_worker.s3_bucket_key, null)
+    DATABASE_ENDPOINT          = lookup(local.external_name_fqdns, "coprocessor-database", null)
+    LISTENER_DATABASE_ENDPOINT = lookup(local.external_name_fqdns, "listener-database", null)
+    S3_BUCKET_NAME             = lookup(var.s3_bucket_names, var.k8s.service_accounts.sns_worker.s3_bucket_key, null)
     }, local.branch_activation_blocks.ethereum != null ? {
     ETH_FHEVM_BRANCH_ACTIVATION_BLOCK = tostring(local.branch_activation_blocks.ethereum)
     } : {}, local.branch_activation_blocks.polygon != null ? {
