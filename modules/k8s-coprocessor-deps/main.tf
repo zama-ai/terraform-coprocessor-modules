@@ -4,6 +4,23 @@
 locals {
   namespace = var.k8s.default_namespace
 
+  # Testnet estimates use seven-day block rates observed 2026-11-05; confirm before rollout.
+  # Mainnet values remain mocks.
+  branch_activation_block_defaults = {
+    testnet = {
+      # Estimated around 2026-11-13 12:11 CET (11:11 UTC) on Sepolia.
+      ethereum = 12126200
+      # Estimated around 2026-11-13 12:01 CET (11:01 UTC) on Polygon Amoy.
+      polygon = 52745000
+    }
+    mainnet = { ethereum = 999999999, polygon = 999999999 }
+  }
+  branch_activation_blocks = {
+    for chain, height in var.k8s.branch_activation_blocks : chain => (
+      height != null ? height : try(local.branch_activation_block_defaults[var.environment][chain], null)
+    )
+  }
+
   # Strip the ARN prefix to get the bare issuer hostname used as the OIDC condition key
   # e.g., "arn:aws:iam::123456789012:oidc-provider/oidc.eks.us-east-1.amazonaws.com/id/EXAMPLE"
   #     → "oidc.eks.us-east-1.amazonaws.com/id/EXAMPLE"
@@ -43,29 +60,47 @@ locals {
       (var.k8s.service_accounts.sns_worker.s3_bucket_key) = { actions = ["s3:*Object", "s3:ListBucket"] }
     }
     rds_master_secret_access = false
-    kms_key_access           = false
+    kms_key_access           = var.k8s.service_accounts.sns_worker.kms_key_access
     iam_role_name_override   = null
     iam_policy_statements    = []
     labels                   = {}
     annotations              = {}
   }
 
+  # Defaults are selected centrally, not repeated in each operator's tfvars.
+  db_admin_default_source_bucket_arns = {
+    mainnet = toset(["arn:aws:s3:::zama-mainnet-coprocessor-table-dump"])
+    testnet = toset(["arn:aws:s3:::zama-testnet-coprocessor-table-dump"])
+  }
+  db_admin_source_bucket_arns = (
+    var.k8s.service_accounts.db_admin.source_bucket_arns != null
+    ? var.k8s.service_accounts.db_admin.source_bucket_arns
+    : lookup(local.db_admin_default_source_bucket_arns, var.environment, toset([]))
+  )
+
   builtin_db_admin_sa = {
     name                     = "db-admin"
     namespace                = "coproc-admin"
     s3_bucket_access         = {}
     rds_master_secret_access = true
-    kms_key_access           = true
+    kms_key_access           = false
     iam_role_name_override   = null
-    iam_policy_statements = [
+    iam_policy_statements = length(local.db_admin_source_bucket_arns) > 0 ? [
       {
-        sid        = "AllowPublicS3Download"
+        sid        = "AllowSourceBucketList"
         effect     = "Allow"
-        actions    = ["s3:GetObject", "s3:ListBucket"]
-        resources  = ["*"]
+        actions    = ["s3:ListBucket"]
+        resources  = tolist(local.db_admin_source_bucket_arns)
+        conditions = []
+      },
+      {
+        sid        = "AllowSourceObjectRead"
+        effect     = "Allow"
+        actions    = ["s3:GetObject"]
+        resources  = [for arn in local.db_admin_source_bucket_arns : "${arn}/*"]
         conditions = []
       }
-    ]
+    ] : []
     labels      = {}
     annotations = {}
   }
@@ -153,6 +188,17 @@ locals {
     "app.kubernetes.io/managed-by" = "terraform"
   }
 
+  # ConfigMaps use an explicit namespace list, matching the existing deployments.
+  coprocessor_config_namespaces = toset([
+    "coproc", "eth-blockchain", "gw-blockchain", "polygon-blockchain", "bnb-blockchain",
+  ])
+
+  # RDS policies cover the coprocessor namespaces plus administration and monitoring.
+  rds_client_namespaces = var.k8s.security_group_policies.rds_client.namespaces != null ? toset(var.k8s.security_group_policies.rds_client.namespaces) : setunion(
+    local.coprocessor_config_namespaces,
+    toset(["coproc-admin", "monitoring"]),
+  )
+
   # ── SecurityGroupPolicy expansion ─────────────────────────────────────────
   # Built-in rds_client policy: one SecurityGroupPolicy per listed namespace,
   # attaching the rds-client SG to any pod whose template carries the
@@ -164,7 +210,7 @@ locals {
     var.k8s.enabled
     && var.k8s.security_group_policies.rds_client.enabled
     ) ? {
-    for ns in var.k8s.security_group_policies.rds_client.namespaces :
+    for ns in local.rds_client_namespaces :
     "rds-client-${ns}" => {
       name      = "rds-client"
       namespace = ns
@@ -412,13 +458,15 @@ resource "kubernetes_config_map" "coprocessor_config" {
     )
   }
 
-  data = {
-    DATABASE_ENDPOINT = lookup(local.external_name_fqdns, "coprocessor-database", null)
-    # Null when no listener-database ExternalName service is configured, so the
-    # key is simply absent on deployments without a dedicated listener RDS.
+  data = merge({
+    DATABASE_ENDPOINT          = lookup(local.external_name_fqdns, "coprocessor-database", null)
     LISTENER_DATABASE_ENDPOINT = lookup(local.external_name_fqdns, "listener-database", null)
     S3_BUCKET_NAME             = lookup(var.s3_bucket_names, var.k8s.service_accounts.sns_worker.s3_bucket_key, null)
-  }
+    }, local.branch_activation_blocks.ethereum != null ? {
+    ETH_FHEVM_BRANCH_ACTIVATION_BLOCK = tostring(local.branch_activation_blocks.ethereum)
+    } : {}, local.branch_activation_blocks.polygon != null ? {
+    POLYGON_FHEVM_BRANCH_ACTIVATION_BLOCK = tostring(local.branch_activation_blocks.polygon)
+  } : {})
 
   depends_on = [kubernetes_namespace.this]
 }
@@ -433,6 +481,26 @@ resource "kubernetes_config_map" "coprocessor_tx_sender" {
     labels = merge(
       local.common_labels,
       { "app.kubernetes.io/component" = "coprocessor-tx-sender" },
+    )
+  }
+
+  data = {
+    AWS_KEY_ID = var.kms_key_arn
+  }
+
+  depends_on = [kubernetes_namespace.this]
+}
+
+resource "kubernetes_config_map" "coprocessor_sns_worker" {
+  count = var.k8s.enabled && var.k8s.service_accounts.sns_worker.enabled && var.k8s.service_accounts.sns_worker.kms_key_access ? 1 : 0
+
+  metadata {
+    name      = "coprocessor-sns-worker"
+    namespace = local.namespace
+
+    labels = merge(
+      local.common_labels,
+      { "app.kubernetes.io/component" = "coprocessor-sns-worker" },
     )
   }
 

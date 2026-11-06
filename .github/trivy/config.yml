@@ -1,0 +1,12 @@
+ignorefile: .github/trivy/ignore.yaml
+
+misconfiguration:
+  # Retain built-in AWS checks and inspect raw Helm-provider resources as well.
+  raw-config-scanners:
+    - terraform
+rego:
+  check:
+    - .github/trivy/checks
+  namespaces:
+    - builtin
+    - user

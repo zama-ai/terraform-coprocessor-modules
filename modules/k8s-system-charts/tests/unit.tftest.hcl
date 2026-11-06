@@ -682,6 +682,15 @@ run "defaults_karpenter_nodepools_enabled_creates_three_manifests" {
   }
 
   assert {
+    condition = (
+      kubernetes_manifest.additional["karpenter-nodepools/nodepool-coprocessor"].manifest.spec.disruption.consolidationPolicy == "WhenEmptyOrUnderutilized" &&
+      kubernetes_manifest.additional["karpenter-nodepools/nodepool-coprocessor"].manifest.spec.disruption.consolidateAfter == "12h" &&
+      kubernetes_manifest.additional["karpenter-nodepools/nodepool-coprocessor"].manifest.spec.disruption.budgets[0].nodes == "1"
+    )
+    error_message = "Coprocessor nodes must wait twelve hours after pod placement changes before consolidation, with at most one node disrupted at a time."
+  }
+
+  assert {
     condition     = contains(keys(kubernetes_manifest.additional), "karpenter-nodepools/nodepool-services")
     error_message = "Built-in karpenter-nodepools must include the nodepool-services manifest."
   }
@@ -916,5 +925,30 @@ run "extra_overrides_builtin_with_same_key" {
   assert {
     condition     = length(helm_release.apps) == 1
     error_message = "extra override must not create a duplicate release alongside the built-in."
+  }
+}
+
+run "bnb_monitoring_discovers_metrics_probes_and_logs" {
+  command = plan
+  variables {
+    defaults = {
+      karpenter_nodepools      = { enabled = false }
+      prometheus_operator_crds = { enabled = false }
+      metrics_server           = { enabled = false }
+      karpenter                = { enabled = false }
+      k8s_monitoring           = { enabled = true }
+    }
+  }
+  assert {
+    condition     = contains(yamldecode(helm_release.apps["k8s-monitoring"].values[0]).prometheusOperatorObjects.serviceMonitors.namespaces, "bnb-blockchain")
+    error_message = "BNB ServiceMonitors must be discovered."
+  }
+  assert {
+    condition     = contains(yamldecode(helm_release.apps["k8s-monitoring"].values[0]).prometheusOperatorObjects.podMonitors.namespaces, "bnb-blockchain") && contains(yamldecode(helm_release.apps["k8s-monitoring"].values[0]).prometheusOperatorObjects.probes.namespaces, "bnb-blockchain")
+    error_message = "BNB PodMonitors and probes must be discovered."
+  }
+  assert {
+    condition     = contains(yamldecode(helm_release.apps["k8s-monitoring"].values[0]).podLogsViaLoki.namespaces, "bnb-blockchain")
+    error_message = "BNB pod logs must be collected."
   }
 }

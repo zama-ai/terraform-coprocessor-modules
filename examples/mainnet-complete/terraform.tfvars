@@ -103,6 +103,7 @@ k8s_coprocessor_deps = {
     gw-blockchain      = { enabled = true }
     eth-blockchain     = { enabled = true }
     polygon-blockchain = { enabled = true }
+    bnb-blockchain     = { enabled = true }
     karpenter          = { enabled = true }
   }
 

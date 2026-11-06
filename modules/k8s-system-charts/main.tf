@@ -152,6 +152,7 @@ locals {
           - gw-blockchain
           - eth-blockchain
           - polygon-blockchain
+          - bnb-blockchain
           - kube-system
         extraDiscoveryRules: |
           rule {
@@ -165,12 +166,14 @@ locals {
           - gw-blockchain
           - eth-blockchain
           - polygon-blockchain
+          - bnb-blockchain
       probes:
         namespaces:
           - coproc
           - gw-blockchain
           - eth-blockchain
           - polygon-blockchain
+          - bnb-blockchain
 
     podLogsViaLoki:
       enabled: true
@@ -181,6 +184,7 @@ locals {
         - gw-blockchain
         - eth-blockchain
         - polygon-blockchain
+        - bnb-blockchain
 
     applicationObservability:
       enabled: true
@@ -291,12 +295,6 @@ locals {
       imagePullSecrets:
         - name: registry-credentials
 
-      # Opts the pod into the SecurityGroupPolicy that attaches the rds-client
-      # AWS security group, allowing it to reach RDS. Created in the monitoring
-      # namespace by k8s-coprocessor-deps.
-      podLabels:
-        network/rds-client: "true"
-
       serviceMonitor:
         enabled: true
         interval: 30s
@@ -317,12 +315,6 @@ locals {
       tag: ${var.defaults.prometheus_postgres_exporter.image_tag}
       pullSecrets:
         - registry-credentials
-
-    # Opts the pod into the SecurityGroupPolicy that attaches the rds-client
-    # AWS security group, allowing it to reach RDS. Created in the monitoring
-    # namespace by k8s-coprocessor-deps.
-    podLabels:
-      network/rds-client: "true"
 
     serviceAccount:
       create: true
@@ -486,8 +478,10 @@ locals {
         cpu: "2500"
         memory: 8000Gi
       disruption:
-        consolidationPolicy: WhenEmpty
-        consolidateAfter: 30s
+        # Wait 12 hours after a pod is added to or removed from a node before
+        # considering consolidation. CPU activity does not reset this timer.
+        consolidationPolicy: WhenEmptyOrUnderutilized
+        consolidateAfter: 12h
         budgets:
           - nodes: "1"
   YAML

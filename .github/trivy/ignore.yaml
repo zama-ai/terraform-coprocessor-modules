@@ -1,0 +1,13 @@
+# Local-resource exceptions live immediately above the relevant Terraform block.
+# Upstream source cannot carry local annotations, so scope this exception to its
+# exact reported file and check ID. Keep all other dependency checks enabled.
+misconfigurations:
+  - id: AWS-0104
+    paths:
+      - terraform-aws-modules/eks/aws/node_groups.tf
+    statement: >-
+      Accept the upstream EKS node security group's existing outbound access.
+      Coprocessor nodes need AWS APIs, container registries, and chain/RPC
+      endpoints. Revisit when a destination allowlist is available or the
+      upstream node security-group implementation changes. This exception
+      does not cover ingress rules or other upstream files/checks.

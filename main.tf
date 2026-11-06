@@ -16,11 +16,18 @@ locals {
   private_subnet_ids         = coalesce(try(var.networking.existing_vpc.private_subnet_ids, null), one(module.networking[*].private_subnet_ids))
   private_subnet_cidr_blocks = coalesce(try(var.networking.existing_vpc.private_subnet_cidr_blocks, null), one(module.networking[*].private_subnet_cidr_blocks), [])
 
-  # tx-sender IRSA role ARN — computed as a string from the partner/env naming pattern
+  # tx-sender / sns-worker IRSA role ARNs — computed from the partner/env naming pattern
   # used by k8s-coprocessor-deps. Computing it here (not via module output) breaks the
   # otherwise-circular dependency between kms (consumer_role_arns) and k8s-coprocessor-deps
-  # (kms_key_arn → tx-sender IAM policy).
-  tx_sender_role_arn = "arn:${data.aws_partition.current.partition}:iam::${data.aws_caller_identity.current.account_id}:role/tx-sender-${var.partner_name}-${var.environment}"
+  # (kms_key_arn → signing-role IAM policies).
+  tx_sender_role_arn  = "arn:${data.aws_partition.current.partition}:iam::${data.aws_caller_identity.current.account_id}:role/tx-sender-${var.partner_name}-${var.environment}"
+  sns_worker_role_arn = "arn:${data.aws_partition.current.partition}:iam::${data.aws_caller_identity.current.account_id}:role/sns-worker-${var.partner_name}-${var.environment}"
+
+  kms_consumer_role_arns = distinct(concat(
+    var.kms.consumer_role_arns,
+    var.k8s_coprocessor_deps.enabled && var.k8s_coprocessor_deps.service_accounts.tx_sender.enabled ? [local.tx_sender_role_arn] : [],
+    var.k8s_coprocessor_deps.enabled && var.k8s_coprocessor_deps.service_accounts.sns_worker.enabled ? [local.sns_worker_role_arn] : [],
+  ))
 
   # Additional subnets have no existing_vpc equivalent — only available when networking module ran and additional subnets were enabled
   additional_subnet_ids         = var.networking.enabled && var.networking.additional_subnets.enabled ? module.networking[0].additional_subnet_ids : []
@@ -218,22 +225,33 @@ resource "time_sleep" "wait_for_tx_sender_iam_propagation" {
   }
 }
 
+# Wait for sns-worker IAM role to propagate before KMS validates its key policy.
+resource "time_sleep" "wait_for_sns_worker_iam_propagation" {
+  count = (
+    var.kms.enabled
+    && var.k8s_coprocessor_deps.enabled
+    && var.k8s_coprocessor_deps.service_accounts.sns_worker.enabled
+  ) ? 1 : 0
+
+  create_duration = "30s"
+
+  triggers = {
+    role_arn = try(module.k8s_coprocessor_deps.iam_role_arns["sns-worker"], "")
+  }
+}
+
 module "kms" {
   source = "./modules/kms"
 
   partner_name = var.partner_name
   environment  = var.environment
 
-  # Auto-append the tx-sender IRSA role ARN when the corresponding service account is enabled,
-  # so the KMS key policy grants Sign/Verify to the role created by k8s-coprocessor-deps.
+  # Authorize signing roles in the key policy as well as their IAM policies.
   kms = merge(var.kms, {
-    consumer_role_arns = concat(
-      var.kms.consumer_role_arns,
-      var.k8s_coprocessor_deps.enabled && var.k8s_coprocessor_deps.service_accounts.tx_sender.enabled ? [local.tx_sender_role_arn] : [],
-    )
+    consumer_role_arns = local.kms_consumer_role_arns
   })
 
-  depends_on = [time_sleep.wait_for_tx_sender_iam_propagation]
+  depends_on = [time_sleep.wait_for_tx_sender_iam_propagation, time_sleep.wait_for_sns_worker_iam_propagation]
 }
 
 # ******************************************************

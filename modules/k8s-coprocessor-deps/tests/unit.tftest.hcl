@@ -24,6 +24,7 @@ variables {
   environment                  = "testnet"
   oidc_provider_arn            = "arn:aws:iam::123456789012:oidc-provider/oidc.eks.eu-west-1.amazonaws.com/id/EXAMPLE1234567890"
   rds_client_security_group_id = "sg-0123456789abcdef0"
+  kms_key_arn                  = "arn:aws:kms:eu-west-1:123456789012:key/11111111-2222-3333-4444-555555555555"
 }
 
 # =============================================================================
@@ -256,8 +257,8 @@ run "iam_role_name_override_is_respected" {
       enabled = true
       service_accounts = {
         extra = {
-          sns-worker = {
-            name                   = "sns-worker"
+          event-publisher = {
+            name                   = "event-publisher"
             iam_role_name_override = "my-custom-role-name"
             iam_policy_statements = [
               {
@@ -273,7 +274,7 @@ run "iam_role_name_override_is_respected" {
   }
 
   assert {
-    condition     = aws_iam_role.service_account["sns-worker"].name == "my-custom-role-name"
+    condition     = aws_iam_role.service_account["event-publisher"].name == "my-custom-role-name"
     error_message = "iam_role_name_override must replace the computed role name."
   }
 }
@@ -1029,7 +1030,7 @@ run "coprocessor_config_configmap_is_created_per_target_namespace" {
   }
 
   assert {
-    condition     = length(kubernetes_config_map.coprocessor_config) == 4
+    condition     = toset(keys(kubernetes_config_map.coprocessor_config)) == toset(["coproc", "eth-blockchain", "gw-blockchain", "polygon-blockchain", "bnb-blockchain"])
     error_message = "One coprocessor-config configmap must be created per target namespace."
   }
 
@@ -1559,13 +1560,13 @@ run "config_maps_enabled_by_default" {
 
   assert {
     condition = alltrue([
-      length(kubernetes_config_map.coprocessor_config) == 4,
+      length(kubernetes_config_map.coprocessor_config) == 5,
       alltrue([
-        for ns in ["coproc", "eth-blockchain", "gw-blockchain", "polygon-blockchain"] :
+        for ns in ["coproc", "eth-blockchain", "gw-blockchain", "polygon-blockchain", "bnb-blockchain"] :
         contains(keys(kubernetes_config_map.coprocessor_config), ns)
       ]),
     ])
-    error_message = "coprocessor-config must default to the four coprocessor namespaces."
+    error_message = "coprocessor-config must default to the five coprocessor namespaces, including BNB."
   }
 }
 
@@ -1585,7 +1586,7 @@ run "config_maps_can_be_disabled_individually" {
   }
 
   assert {
-    condition     = length(kubernetes_config_map.coprocessor_config) == 4
+    condition     = length(kubernetes_config_map.coprocessor_config) == 5
     error_message = "Disabling db_admin must not affect coprocessor-config."
   }
 }
